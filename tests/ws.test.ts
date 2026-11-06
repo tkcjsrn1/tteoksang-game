@@ -1,0 +1,176 @@
+/* 실제 HTTP와 WebSocket으로 두 기기 대전을 끝까지 돌립니다. 시계만 테스트에서 넘깁니다. */
+import assert from 'node:assert/strict';
+import { after, before, test } from 'node:test';
+import WebSocket from 'ws';
+import { Hub } from '../server/src/hub';
+import { GameRoom } from '../server/src/room';
+import type { ClientMsg, RoomView, ServerMsg, StockCode } from '../shared/types';
+
+let hub: Hub, port: number, clock = 1_000_000;
+before(async () => { hub = new Hub({ allowTestHooks: true, now: () => clock }); port = await hub.listen(0); });
+after(async () => { await hub.close(); });
+
+class Client {
+  ws!: WebSocket; view: RoomView | null = null; token: string | null = null; role: string | null = null; acks = new Map<string, { ok: boolean; reason?: string }>(); ackCount = 0; errors: string[] = [];
+  async connect() {
+    this.ws = new WebSocket(`ws://localhost:${port}/ws`);
+    await new Promise((r, j) => { this.ws.once('open', r); this.ws.once('error', j); });
+    this.ws.on('message', d => {
+      const m = JSON.parse(d.toString()) as ServerMsg;
+      if (m.t === 'view') this.view = m.view;
+      if (m.t === 'welcome') { this.token = m.token; this.role = m.role; }
+      if (m.t === 'ack') { this.acks.set(m.requestId, { ok: m.ok, reason: m.reason }); this.ackCount++; }
+      if (m.t === 'error') this.errors.push(m.reason);
+    });
+    return this;
+  }
+  send(m: ClientMsg) { this.ws.send(JSON.stringify(m)); }
+  async hello(code: string, token?: string | null) {
+    this.send({ t: 'hello', code, token });
+    await until(() => this.view?.code === code && this.token !== null);
+    return this;
+  }
+  async order(requestId: string, code: StockCode, side: 'buy' | 'sell', qty: number) {
+    this.send({ t: 'order', requestId, code, side, qty });
+    await until(() => this.acks.has(requestId));
+    return this.acks.get(requestId)!;
+  }
+  close() { this.ws.terminate(); }
+}
+async function until(f: () => boolean, ms = 5000) {
+  const t = Date.now();
+  while (!f()) { if (Date.now() - t > ms) throw new Error('시간 초과'); await new Promise(r => setTimeout(r, 5)); }
+}
+async function create(body: object) {
+  const r = await fetch(`http://localhost:${port}/api/rooms`, { method: 'POST', body: JSON.stringify(body) });
+  return r.json() as Promise<{ code: string; operatorToken: string | null }>;
+}
+/** 현재 단계가 끝날 때까지 시계를 넘기고 다음 단계가 보일 때까지 기다립니다. */
+async function advance(room: GameRoom, watchers: Client[]) {
+  const from = `${room.s.round}:${room.s.phase}:${room.s.status}`;
+  clock = room.s.phaseEndsAt! + 1;
+  await until(() => `${room.s.round}:${room.s.phase}:${room.s.status}` !== from && room.s.phase !== 'settling');
+  await until(() => watchers.every(w => w.view?.round === room.s.round && w.view?.phase === room.s.phase && w.view?.status === room.s.status));
+}
+
+test('두 기기가 같은 방에서 뉴스 → 주문 → 체결 → 그래프 → 최종 순위까지 끝낸다', async () => {
+  const { code } = await create({ mode: 'friend', seed: 11, forcedArcs: ['nuvakan', 'heatwave'], forced: { 'nu-1': 'pass', 'nu-2a': 'approved', 'nu-3a': 'short' } });
+  const a = await (await new Client().connect()).hello(code);
+  const b = await (await new Client().connect()).hello(code);
+  await until(() => a.view!.humanCount === 2);
+  assert.equal(a.view!.you.isHost, true);
+  assert.equal(b.view!.you.isHost, false);
+  b.send({ t: 'start' });
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(hub.rooms.get(code)!.s.status, 'lobby', '방장만 시작');
+  a.send({ t: 'start' });
+  await until(() => a.view!.phase === 'news' && b.view!.phase === 'news');
+  const room = hub.rooms.get(code)!;
+  assert.equal(a.view!.news[0].cards[0].result, null);
+  for (let r = 1; r <= 5; r++) {
+    await advance(room, [a, b]);
+    assert.equal(a.view!.phase, 'trade');
+    assert.equal((await a.order(`a${r}`, 'G01', 'buy', 50)).ok, true);
+    assert.equal((await b.order(`b${r}`, 'G03', 'buy', 50)).ok, true);
+    await until(() => a.view!.portfolio!.orders.length === 1);
+    await advance(room, [a, b]);
+    assert.equal(a.view!.phase, 'recap');
+    assert.deepEqual(a.view!.stocks, b.view!.stocks, '같은 종료가');
+    assert.deepEqual(a.view!.news, b.view!.news, '같은 결말');
+    assert.ok(a.view!.lastResult);
+    await advance(room, [a, b]);
+  }
+  assert.equal(a.view!.status, 'finished');
+  const g01 = a.view!.stocks.find(s => s.code === 'G01')!;
+  const fall = g01.history.find(h => h.events.some(e => e.label === '기대에 못 미친 계약 규모'));
+  assert.ok(fall, '하락 근거');
+  assert.ok(fall!.events.some(e => e.bp === -500));
+  assert.equal(a.view!.leaderboard.length, 5);
+  const v = a.view!;
+  const me = v.leaderboard.find(l => l.playerId === v.you.id)!;
+  const holdingValue = v.portfolio!.holdings.reduce((x, h) => x + h.qty * v.stocks.find(s => s.code === h.code)!.price, 0);
+  assert.equal(me.value, v.portfolio!.cash + holdingValue);
+
+  /* 같은 멤버로 한 판 더: 새 대기실, 자산 초기화, 직전에 안 한 사건 */
+  a.send({ t: 'rematch' });
+  await until(() => !!b.view!.nextRoomCode);
+  const nextCode = b.view!.nextRoomCode!;
+  assert.notEqual(nextCode, code);
+  const a2 = await (await new Client().connect()).hello(nextCode, a.token);
+  const b2 = await (await new Client().connect()).hello(nextCode, b.token);
+  await until(() => a2.view!.humanCount === 2);
+  assert.equal(a2.view!.status, 'lobby');
+  assert.equal(a2.view!.portfolio!.cash, 10_000_000);
+  const nr = hub.rooms.get(nextCode)!;
+  assert.equal(nr.s.plan.arcIds.some(x => ['nuvakan', 'heatwave'].includes(x)), false);
+  [a, b, a2, b2].forEach(c => c.close());
+});
+
+test('재접속, 중복 요청, 관전, 방장 이탈', async () => {
+  const { code } = await create({ mode: 'friend', seed: 12 });
+  const a = await (await new Client().connect()).hello(code);
+  const b = await (await new Client().connect()).hello(code);
+  await until(() => b.view!.humanCount === 2);
+  a.close();
+  await until(() => b.view!.you.isHost);
+  b.send({ t: 'start' });
+  const room = hub.rooms.get(code)!;
+  await until(() => room.s.status === 'playing');
+  await until(() => b.view!.phase === 'news');
+  const a2 = await (await new Client().connect()).hello(code, a.token);
+  assert.equal(a2.role, 'player');
+  const spec = await (await new Client().connect()).hello(code);
+  assert.equal(spec.role, 'spectator');
+  assert.equal(spec.view!.portfolio, null);
+  await advance(room, [a2, b, spec]);
+  const r = await a2.order('same', 'G02', 'buy', 10);
+  assert.equal(r.ok, true);
+  a2.send({ t: 'order', requestId: 'same', code: 'G02', side: 'buy', qty: 999 });
+  await until(() => a2.ackCount >= 2);
+  assert.equal(room.player(a2.token)!.orders.G02!.qty, 10);
+  a2.close();
+  await until(() => !room.player(a2.token)!.connected);
+  await advance(room, [b, spec]);
+  assert.equal(room.player(a2.token)!.holdings.G02!.qty, 10, '연결이 끊겨도 체결');
+  const a3 = await (await new Client().connect()).hello(code, a2.token);
+  assert.equal(a3.view!.portfolio!.holdings[0].qty, 10);
+  b.close();
+  await advance(room, [a3, spec]);
+  assert.equal(a3.view!.phase, 'news', '방장이 나가도 진행');
+  [a3, spec].forEach(c => c.close());
+});
+
+test('혼자 연습은 즉시 시작하고 학술제는 운영자만 시작한다', async () => {
+  const solo = await create({ mode: 'solo' });
+  const s = await (await new Client().connect()).hello(solo.code);
+  await until(() => s.view!.status === 'playing');
+  assert.equal(s.view!.leaderboard.length, 4);
+  s.close();
+  const ac = await create({ mode: 'academic' });
+  assert.ok(ac.operatorToken);
+  const p = await (await new Client().connect()).hello(ac.code);
+  p.send({ t: 'start' });
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(hub.rooms.get(ac.code)!.s.status, 'lobby');
+  const screen = await new Client().connect();
+  screen.send({ t: 'hello', code: ac.code, display: true });
+  await until(() => screen.view?.you.role === 'display');
+  assert.equal(screen.view!.portfolio, null);
+  const op = await new Client().connect();
+  op.send({ t: 'hello', code: ac.code, operatorToken: ac.operatorToken });
+  await until(() => op.view?.you.role === 'operator');
+  op.send({ t: 'start' });
+  await until(() => p.view!.status === 'playing' && screen.view!.status === 'playing');
+  assert.equal(p.view!.totalRounds, 10);
+  [p, screen, op].forEach(c => c.close());
+});
+test('없는 방과 정적 경로 방어', async () => {
+  const c = await new Client().connect();
+  c.send({ t: 'hello', code: '000000' });
+  await until(() => c.errors.length > 0);
+  c.close();
+  const r = await fetch(`http://localhost:${port}/api/rooms/999999`);
+  assert.equal(r.status, 404);
+  const h = await (await fetch(`http://localhost:${port}/api/health`)).json() as { ok: boolean };
+  assert.equal(h.ok, true);
+});

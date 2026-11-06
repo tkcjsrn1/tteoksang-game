@@ -1,0 +1,83 @@
+/* 60명 학술제 방 부하 검증. 실제 WebSocket 60개가 마감 직전에 동시에 주문하고, 같은 요청을 재전송하고, 마감 후 주문도 보냅니다. */
+import WebSocket from 'ws';
+import { Hub } from '../server/src/hub';
+import { feeOf } from '../shared/rules';
+import type { ServerMsg } from '../shared/types';
+
+let clock = 1_000_000;
+const PLAYERS = Number(process.argv[2] ?? 60);
+const hub = new Hub({ now: () => clock });
+const port = await hub.listen(0);
+const room = hub.createRoom('academic');
+const code = room.s.code;
+
+interface C { ws: WebSocket; token: string | null; acks: Map<string, { ok: boolean; at: number }>; ackTotal: number; views: number }
+const open = async (): Promise<C> => {
+  const ws = new WebSocket(`ws://localhost:${port}/ws`);
+  await new Promise(r => ws.once('open', r));
+  const c: C = { ws, token: null, acks: new Map(), ackTotal: 0, views: 0 };
+  ws.on('message', d => {
+    const m = JSON.parse(d.toString()) as ServerMsg;
+    if (m.t === 'welcome') c.token = m.token;
+    if (m.t === 'view') c.views++;
+    if (m.t === 'ack') { c.ackTotal++; if (!c.acks.has(m.requestId)) c.acks.set(m.requestId, { ok: m.ok, at: performance.now() }); }
+  });
+  return c;
+};
+const until = async (f: () => boolean, ms = 15000) => { const t = Date.now(); while (!f()) { if (Date.now() - t > ms) throw new Error('시간 초과'); await new Promise(r => setTimeout(r, 5)); } };
+
+const clients: C[] = [];
+for (let i = 0; i < PLAYERS; i++) { const c = await open(); c.ws.send(JSON.stringify({ t: 'hello', code })); clients.push(c); }
+await until(() => clients.every(c => c.token) && room.humans.length === PLAYERS);
+const overflow = await open(); overflow.ws.send(JSON.stringify({ t: 'hello', code }));
+await until(() => !!overflow.token);
+console.log(`입장 ${room.humans.length}명, 61번째는 ${room.player(overflow.token) ? '참가자' : '관전자'}`);
+
+room.start(clock); hub.broadcast(room);
+clock = room.s.phaseEndsAt! + 1;
+await until(() => room.s.phase === 'trade');
+const end = room.s.phaseEndsAt!;
+clock = end - 1;   // 마감 1ms 전
+
+const codes = ['G01', 'G02', 'G03', 'G04', 'G05', 'G06'] as const;
+const t0 = performance.now();
+clients.forEach((c, i) => {
+  const msg = JSON.stringify({ t: 'order', requestId: `r-${i}`, code: codes[i % 6], side: 'buy', qty: 10 + i });
+  c.ws.send(msg); c.ws.send(msg); c.ws.send(msg);   // 같은 요청 3번
+});
+await until(() => clients.every(c => c.ackTotal >= 3));
+const latencies = clients.map(c => c.acks.get(`r-${clients.indexOf(c)}`)!.at - t0).sort((a, b) => a - b);
+const okCount = clients.filter((c, i) => c.acks.get(`r-${i}`)!.ok).length;
+console.log(`마감 직전 주문 ${okCount}/${PLAYERS} 접수, 응답 시간 중앙값 ${latencies[PLAYERS >> 1].toFixed(0)}ms, 최대 ${latencies[PLAYERS - 1].toFixed(0)}ms`);
+
+clock = end;   // 마감 시각 정각
+clients.forEach((c, i) => c.ws.send(JSON.stringify({ t: 'order', requestId: `late-${i}`, code: 'G06', side: 'buy', qty: 1 })));
+await until(() => clients.every((c, i) => c.acks.has(`late-${i}`)));
+const lateAccepted = clients.filter((c, i) => c.acks.get(`late-${i}`)!.ok).length;
+console.log(`마감 시각 주문 접수 ${lateAccepted}/${PLAYERS} (0이어야 함)`);
+
+clock = end + 1;
+await until(() => room.s.phase === 'recap');
+const round = room.s.round;
+let bad = 0;
+const prices = room.s.history;
+clients.forEach((c, i) => {
+  const p = room.player(c.token)!, f = p.fills.filter(x => x.round === round);
+  const code = codes[i % 6], qty = 10 + i, price = prices[code][0].basePrice, gross = price * qty;
+  const expectedCash = 10_000_000 - gross - feeOf(gross);
+  if (f.length !== 1 || f[0].qty !== qty || p.cash !== expectedCash || p.holdings[code]?.qty !== qty) { bad++; console.log('불일치', p.label, f, p.cash, expectedCash); }
+});
+console.log(`체결 검증 불일치 ${bad}건, 정산 라운드 ${JSON.stringify(room.s.settled)}`);
+const again = room.settle(round, clock);
+console.log(`정산 재시도 결과: ${again ? '중복 실행됨(오류)' : '건너뜀'}`);
+await until(() => clients.every(c => c.views > 0));
+
+/* 전체 방 뷰 생성 비용 */
+const t1 = performance.now();
+for (let k = 0; k < 20; k++) hub.broadcast(room);
+console.log(`61개 연결 전체 방송 1회 평균 ${((performance.now() - t1) / 20).toFixed(1)}ms`);
+const pass = okCount === PLAYERS && lateAccepted === 0 && bad === 0 && !again && !room.player(overflow.token);
+console.log(pass ? '결과: 통과' : '결과: 실패');
+clients.forEach(c => c.ws.terminate()); overflow.ws.terminate();
+await hub.close();
+process.exit(pass ? 0 : 1);

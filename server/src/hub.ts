@@ -1,0 +1,227 @@
+/* 방 목록, WebSocket 연결, 타이머를 묶는 서버 본체. HTTP 서버와 분리해 통합 테스트에서 그대로 띄웁니다. */
+import { randomInt } from 'node:crypto';
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import { WebSocketServer, WebSocket } from 'ws';
+import { MODES } from '../../shared/rules';
+import type { ClientMsg, GameMode, Role, ServerMsg, StockCode } from '../../shared/types';
+import type { ForcedOutcomes } from './plan';
+import { GameRoom } from './room';
+import { MemoryStore, type Store } from './store';
+
+interface Conn { ws: WebSocket; room: GameRoom | null; token: string | null; role: Role; operator: boolean; alive: boolean }
+export interface HubOptions { store?: Store; staticDir?: string; port?: number; allowTestHooks?: boolean; speed?: number; now?: () => number }
+
+const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ico': 'image/x-icon' };
+const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
+
+export class Hub {
+  rooms = new Map<string, GameRoom>();
+  conns = new Set<Conn>();
+  store: Store;
+  server: http.Server;
+  wss: WebSocketServer;
+  private timer: NodeJS.Timeout | null = null;
+  private busy = new Set<string>();
+  private dirty = new Set<string>();
+  private lastFlush = 0;
+  now: () => number;
+  constructor(private opts: HubOptions = {}) {
+    this.store = opts.store ?? new MemoryStore();
+    this.now = opts.now ?? Date.now;
+    this.server = http.createServer((req, res) => this.http(req, res));
+    this.wss = new WebSocketServer({ server: this.server, path: '/ws', maxPayload: 16 * 1024 });
+    this.wss.on('connection', ws => this.onConnection(ws));
+  }
+  async listen(port = this.opts.port ?? 8787): Promise<number> {
+    await this.store.init();
+    for (const s of await this.store.loadActive()) this.rooms.set(s.code, new GameRoom(s));
+    await new Promise<void>(r => this.server.listen(port, r));
+    this.timer = setInterval(() => this.loop(), 100);
+    return (this.server.address() as { port: number }).port;
+  }
+  async close() {
+    if (this.timer) clearInterval(this.timer);
+    this.conns.forEach(c => c.ws.terminate());
+    this.wss.close();
+    await new Promise(r => this.server.close(r));
+    await this.flush();
+    await this.store.close();
+  }
+  newCode() {
+    for (;;) { const c = String(randomInt(100000, 1000000)); if (!this.rooms.has(c)) return c; }
+  }
+  createRoom(mode: GameMode, opts: { seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[] } = {}) {
+    const room = GameRoom.create({ code: this.newCode(), mode, now: this.now(), ...opts });
+    this.rooms.set(room.s.code, room);
+    this.dirty.add(room.s.code);
+    return room;
+  }
+
+  /* ---------- 타이머 ---------- */
+  private loop() {
+    const now = this.now();
+    for (const room of this.rooms.values()) {
+      if (this.busy.has(room.s.code)) continue;
+      const r = room.tick(now);
+      if (r === 'changed') { this.dirty.add(room.s.code); this.broadcast(room); }
+      else if (r === 'finished') { this.dirty.add(room.s.code); this.broadcast(room); }
+      else if (r === 'settled') void this.afterSettle(room);
+      else if (now - room.s.updatedAt > ROOM_TTL_MS) this.rooms.delete(room.s.code);
+    }
+    if (now - this.lastFlush > 1000) { this.lastFlush = now; void this.flush(); }
+  }
+  /** 정산을 저장한 뒤에만 결과를 공개합니다. 저장이 실패하면 재시도하고, 그동안 화면은 체결 확인 중입니다. */
+  private async afterSettle(room: GameRoom) {
+    const code = room.s.code;
+    this.busy.add(code);
+    this.broadcast(room);
+    for (let attempt = 0; ; attempt++) {
+      try { await this.store.saveSettlement(code, room.s.round, room.s); break; }
+      catch (e) { console.error('정산 저장 실패, 다시 시도합니다', e); await new Promise(r => setTimeout(r, Math.min(5000, 300 * 2 ** attempt))); }
+    }
+    room.beginRecap(this.now());
+    this.busy.delete(code);
+    this.broadcast(room);
+  }
+  private async flush() {
+    const codes = [...this.dirty]; this.dirty.clear();
+    for (const c of codes) {
+      const room = this.rooms.get(c);
+      if (!room) continue;
+      try { await this.store.saveRoom(room.s); } catch (e) { console.error('저장 실패', e); this.dirty.add(c); }
+    }
+  }
+
+  /* ---------- WebSocket ---------- */
+  private send(c: Conn, m: ServerMsg) { if (c.ws.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify(m)); }
+  broadcast(room: GameRoom) {
+    const now = this.now();
+    for (const c of this.conns) if (c.room === room) this.sendView(c, now);
+  }
+  private sendView(c: Conn, now = this.now()) {
+    if (!c.room) return;
+    const view = c.room.view(c.token, c.role, now);
+    if (c.operator) view.operatorToken = c.room.s.operatorToken ?? undefined;
+    this.send(c, { t: 'view', view });
+  }
+  private onConnection(ws: WebSocket) {
+    const c: Conn = { ws, room: null, token: null, role: 'spectator', operator: false, alive: true };
+    this.conns.add(c);
+    ws.on('message', d => { try { this.onMessage(c, JSON.parse(d.toString())); } catch { this.send(c, { t: 'error', reason: '잘못된 요청입니다' }); } });
+    ws.on('close', () => {
+      this.conns.delete(c);
+      if (c.room && c.token && c.role === 'player') {
+        const stillOn = [...this.conns].some(o => o.room === c.room && o.token === c.token);
+        if (!stillOn) { c.room.disconnect(c.token, this.now()); this.broadcast(c.room); }
+      }
+    });
+    ws.on('error', () => {});
+  }
+  private onMessage(c: Conn, m: ClientMsg) {
+    const now = this.now();
+    if (m.t === 'ping') return this.send(c, { t: 'pong' });
+    if (m.t === 'hello') {
+      const room = this.rooms.get(String(m.code));
+      if (!room) return this.send(c, { t: 'error', reason: '방을 찾을 수 없습니다. 코드를 확인해 주세요' });
+      c.room = room;
+      c.operator = !!m.operatorToken && m.operatorToken === room.s.operatorToken;
+      if (c.operator || m.display) {
+        c.role = c.operator ? 'operator' : 'display'; c.token = null;
+        this.send(c, { t: 'welcome', token: null, role: c.role, label: null, code: room.s.code });
+        this.broadcast(room);
+        return;
+      }
+      const j = room.join(m.token, now);
+      c.token = j.token; c.role = j.role;
+      this.send(c, { t: 'welcome', token: j.token, role: j.role, label: j.label, code: room.s.code });
+      /* 혼자 연습은 입장 즉시 시작합니다. */
+      if (room.s.mode === 'solo' && room.s.status === 'lobby') room.start(now);
+      this.dirty.add(room.s.code);
+      this.broadcast(room);
+      return;
+    }
+    const room = c.room;
+    if (!room) return this.send(c, { t: 'error', reason: '먼저 방에 들어와 주세요' });
+    switch (m.t) {
+      case 'start':
+        if (!room.canStart(c.token, c.operator ? room.s.operatorToken : null)) return this.send(c, { t: 'error', reason: '지금은 시작할 수 없습니다' });
+        room.start(now); this.dirty.add(room.s.code); this.broadcast(room); return;
+      case 'order': {
+        const res = room.placeOrder(c.token ?? '', String(m.requestId), m.code as StockCode, m.side, Number(m.qty), now);
+        this.send(c, { t: 'ack', requestId: m.requestId, ok: res.ok, reason: res.reason });
+        if (res.ok && !res.duplicate) {
+          const p = room.player(c.token)!;
+          void this.store.recordOrder(room.s.code, p.id, m.requestId, { code: m.code, side: m.side, qty: m.qty, round: room.s.round }).catch(e => console.error(e));
+          this.dirty.add(room.s.code);
+          this.sendView(c, now);
+        }
+        return;
+      }
+      case 'cancel': {
+        const res = room.cancelOrder(c.token ?? '', String(m.requestId), m.code as StockCode, now);
+        this.send(c, { t: 'ack', requestId: m.requestId, ok: res.ok, reason: res.reason });
+        if (res.ok && !res.duplicate) { this.dirty.add(room.s.code); this.sendView(c, now); }
+        return;
+      }
+      case 'card': if (room.answerCard(c.token ?? '', m.choice, now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
+      case 'predict': if (room.predict(c.token ?? '', m.choice, Number(m.confidence), now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
+      case 'rematch': {
+        if (room.s.status !== 'finished' || !(room.player(c.token) || c.operator)) return;
+        if (!room.s.nextRoomCode) {
+          const next = this.createRoom(room.s.mode, { excludedArcs: room.s.plan.arcIds });
+          next.s.operatorToken = room.s.operatorToken;   /* 학술제 운영자는 같은 권한으로 다음 판을 엽니다. */
+          room.s.nextRoomCode = next.s.code;
+          this.dirty.add(room.s.code);
+        }
+        this.broadcast(room);
+        return;
+      }
+      case 'leave':
+        if (c.token) { room.leave(c.token, now); }
+        c.room = null; c.token = null;
+        this.dirty.add(room.s.code);
+        this.broadcast(room);
+        return;
+    }
+  }
+
+  /* ---------- HTTP ---------- */
+  private http(req: http.IncomingMessage, res: http.ServerResponse) {
+    const url = new URL(req.url ?? '/', 'http://x');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+    if (url.pathname === '/api/health') return this.json(res, 200, { ok: true, store: this.store.name, rooms: this.rooms.size });
+    if (url.pathname === '/api/rooms' && req.method === 'POST') {
+      let body = '';
+      req.on('data', d => { body += d; if (body.length > 4096) req.destroy(); });
+      req.on('end', () => {
+        let mode: GameMode = 'friend', extra: { seed?: number; forced?: ForcedOutcomes; forcedArcs?: string[] } = {};
+        try { const p = JSON.parse(body || '{}'); if (MODES[p.mode as GameMode]) mode = p.mode; if (this.opts.allowTestHooks) extra = { seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs }; } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
+        const room = this.createRoom(mode, extra);
+        this.json(res, 201, { code: room.s.code, mode, operatorToken: room.s.operatorToken });
+      });
+      return;
+    }
+    const m = url.pathname.match(/^\/api\/rooms\/(\d{6})$/);
+    if (m) {
+      const room = this.rooms.get(m[1]);
+      if (!room) return this.json(res, 404, { error: '방을 찾을 수 없습니다' });
+      return this.json(res, 200, { code: room.s.code, mode: room.s.mode, status: room.s.status, humans: room.humans.length, maxPlayers: room.config.maxPlayers });
+    }
+    if (url.pathname.startsWith('/api/')) return this.json(res, 404, { error: '없는 주소입니다' });
+    this.serveStatic(url.pathname, res);
+  }
+  private json(res: http.ServerResponse, code: number, body: object) { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)); }
+  private serveStatic(p: string, res: http.ServerResponse) {
+    const root = this.opts.staticDir;
+    if (!root || !existsSync(root)) { res.writeHead(404); res.end('클라이언트를 먼저 빌드하세요: npm run build'); return; }
+    const safe = path.normalize(decodeURIComponent(p)).replace(/^([.\\/])+/, '');
+    let file = path.join(root, safe);
+    if (!file.startsWith(path.resolve(root)) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(root, 'index.html');
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': file.endsWith('.html') ? 'no-store' : 'public, max-age=3600' });
+    createReadStream(file).pipe(res);
+  }
+}
