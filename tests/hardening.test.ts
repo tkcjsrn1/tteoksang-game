@@ -75,3 +75,17 @@ test('주문 요청 기록은 라운드당 상한이 있고, 지난 라운드 �
   for (let r = 0; r < 2; r++) { step(); while (room.s.phase !== 'trade') step(); }
   assert.equal(Object.keys(p.requests).length, 0);
 });
+
+test('QR용 와이파이 주소: 같은 PC 요청에만 알려 주고, 프록시를 거친 요청은 거절한다', async () => {
+  const { isLoopback } = await import('../server/src/hub');
+  assert.equal(isLoopback('127.0.0.1'), true);
+  assert.equal(isLoopback('::1'), true);
+  assert.equal(isLoopback('::ffff:127.0.0.1'), true);
+  assert.equal(isLoopback('192.168.0.5'), false);
+  assert.equal(isLoopback(undefined), false);
+  const ok = await fetch(`http://127.0.0.1:${port}/api/lan`);
+  assert.equal(ok.status, 200);
+  assert.ok(Array.isArray((await ok.json()).addrs));
+  const proxied = await fetch(`http://127.0.0.1:${port}/api/lan`, { headers: { 'x-forwarded-for': '1.2.3.4' } });
+  assert.equal(proxied.status, 404);
+});

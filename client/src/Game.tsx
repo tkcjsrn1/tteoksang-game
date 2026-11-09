@@ -7,7 +7,7 @@ import { navigate } from './App';
 import { coachStep, type CoachStep } from './coach';
 import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
-import { joinUrl, store, useRoom, useSecondsLeft, type OrderOutcome } from './net';
+import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
 import { arrow, BreakdownPanel, bpText, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
 
 type Tab = 'market' | 'assets' | 'news';
@@ -23,7 +23,7 @@ export function Game({ code }: { code: string }) {
 
 function Lobby({ view, send, error }: { view: RoomView; send: (m: never) => void; error: string | null }) {
   const [qr, setQr] = useState('');
-  const url = joinUrl(view.code);
+  const { url, note } = useJoinUrl(view.code);
   useEffect(() => { QRCode.toDataURL(url, { margin: 1, width: 220 }).then(setQr).catch(() => setQr('')); }, [url]);
   const humans = view.leaderboard.filter(p => p.kind === 'human');
   const copy = () => navigator.clipboard?.writeText(url);
@@ -35,6 +35,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: never) => void
       <h1 className="code-big num">{view.code}</h1>
       <p className="lede">친구에게 코드나 링크를 보내 주세요. 이름은 받지 않고 참가 코드를 자동으로 드립니다.</p>
       {qr && <img className="qr" src={qr} alt="입장 QR 코드" width="180" height="180" />}
+      {note !== 'ok' && <p className="hint">{joinNote(note)}</p>}
       <button className="ghost" onClick={copy}>초대 링크 복사</button>
       <dl className="kv">
         <dt>내 참가 코드</dt><dd>{view.you.label ?? '관전 중'}</dd>

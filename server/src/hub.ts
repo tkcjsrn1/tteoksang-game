@@ -1,3 +1,4 @@
+import os from 'node:os';
 /* 방 목록, WebSocket 연결, 타이머를 묶는 서버 본체. HTTP 서버와 분리해 통합 테스트에서 그대로 띄웁니다. */
 import { randomInt } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
@@ -205,6 +206,8 @@ export class Hub {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
     if (url.pathname === '/api/health') return this.json(res, 200, { ok: true, store: this.store.name, rooms: this.rooms.size });
+    /* PC에서 localhost로 열었을 때 QR에 넣을 와이파이 주소. 같은 PC에서 온 요청에만 알려 줍니다. */
+    if (url.pathname === '/api/lan') return isLoopback(req.socket.remoteAddress) && !req.headers['x-forwarded-for'] ? this.json(res, 200, { addrs: lanAddresses() }) : this.json(res, 404, { error: '없음' });
     if (url.pathname === '/api/rooms' && req.method === 'POST') {
       let body = '';
       req.on('data', d => { body += d; if (body.length > 4096) req.destroy(); });
@@ -251,4 +254,18 @@ export class Hub {
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': file.endsWith('.html') ? 'no-store' : 'public, max-age=3600' });
     createReadStream(file).pipe(res);
   }
+}
+
+/** 요청이 같은 컴퓨터에서 왔는지 */
+export function isLoopback(addr: string | undefined) {
+  return !!addr && (addr === '::1' || addr.startsWith('127.') || addr.startsWith('::ffff:127.'));
+}
+/** 이 컴퓨터의 사설망 IPv4 주소(와이파이·유선). 공유기 안의 주소(192.168·10·172.16~31)를 앞에 둡니다. */
+export function lanAddresses(): string[] {
+  const out: string[] = [];
+  for (const list of Object.values(os.networkInterfaces())) for (const a of list ?? []) {
+    if (a.family === 'IPv4' && !a.internal) out.push(a.address);
+  }
+  const priv = (ip: string) => /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+  return out.sort((a, b) => Number(priv(b)) - Number(priv(a)));
 }

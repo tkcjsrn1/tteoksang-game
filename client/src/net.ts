@@ -29,6 +29,30 @@ export async function roomInfo(code: string) {
 }
 export const joinUrl = (code: string) => `${BASE || location.origin + location.pathname}#/room/${code}`;
 
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+/** 초대 주소. PC에서 localhost로 열었다면 휴대폰이 들어올 수 있도록 PC의 와이파이 주소로 바꿉니다.
+    note: 'lan'이면 같은 와이파이 안내, 'none'이면 휴대폰으로는 못 들어오는 주소라는 안내를 띄웁니다. */
+export function useJoinUrl(code: string): { url: string; note: 'ok' | 'lan' | 'none' } {
+  const local = !BASE && LOCAL_HOSTS.includes(location.hostname);
+  const [state, setState] = useState<{ url: string; note: 'ok' | 'lan' | 'none' }>({ url: joinUrl(code), note: local ? 'none' : 'ok' });
+  useEffect(() => {
+    if (!local) { setState({ url: joinUrl(code), note: 'ok' }); return; }
+    let alive = true;
+    fetch('/api/lan').then(r => r.ok ? r.json() : { addrs: [] }).then((d: { addrs: string[] }) => {
+      if (!alive) return;
+      const ip = d.addrs[0];
+      if (ip) setState({ url: `${location.protocol}//${ip}${location.port ? `:${location.port}` : ''}${location.pathname}#/room/${code}`, note: 'lan' });
+      else setState({ url: joinUrl(code), note: 'none' });
+    }).catch(() => { if (alive) setState({ url: joinUrl(code), note: 'none' }); });
+    return () => { alive = false; };
+  }, [code, local]);
+  return state;
+}
+/** 초대 주소 아래에 붙이는 안내 문구 */
+export const joinNote = (note: 'ok' | 'lan' | 'none') => note === 'lan'
+  ? '휴대폰이 이 PC와 같은 와이파이에 있어야 들어올 수 있어요. 안 열리면 Windows 방화벽에서 Node.js의 "개인 네트워크" 접근을 허용해 주세요.'
+  : note === 'none' ? '지금 주소(localhost)로는 다른 기기가 들어올 수 없어요. PC의 와이파이 주소나 배포된 주소로 열어 주세요.' : '';
+
 export interface OrderOutcome { ok: boolean; reason?: string }
 export function useRoom(code: string, opts: { display?: boolean; operatorToken?: string | null } = {}) {
   const [view, setView] = useState<RoomView | null>(null);
