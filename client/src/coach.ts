@@ -26,8 +26,8 @@ export function coachStep(view: RoomView, openStock: StockCode | null): CoachSte
   const name = view.stocks.find(s => s.code === target)?.name ?? '뉴스에 나온 종목';
   const hasOrder = (view.portfolio?.orders.length ?? 0) > 0;
   const step = (no: number, title: string, text: string): CoachStep => ({ no, total: COACH_TOTAL, title, text, target });
-  if (view.phase === 'news') return step(1, '뉴스를 네 칸으로 읽어요',
-    '“시장의 기대치”가 기준점입니다. 실제 결과가 이보다 좋으면 오르고, 나쁘면 내립니다. “주문 전 단서”는 결과가 어느 쪽일지 알려 주는 힌트예요. 밑줄 친 낱말을 누르면 뜻이 나옵니다.');
+  if (view.phase === 'news') return step(1, '시장 기대와 단서를 읽어요',
+    '“시장 기대”가 기준점입니다. 실제 결과가 이보다 좋으면 오르고, 나쁘면 내립니다. “단서”는 결과가 어느 쪽일지 알려 주는 힌트예요. 밑줄 친 낱말을 누르면 뜻이 나옵니다.');
   if (view.phase === 'trade' && hasOrder) return step(4, '예약 완료! 마감을 기다려요',
     '주문은 마감 때 지금 가격(기준가)으로 한꺼번에 체결됩니다. 마감 전까지는 바꾸거나 취소할 수 있어요.');
   if (view.phase === 'trade' && openStock) return step(3, '수량을 넣고 매수 예약',

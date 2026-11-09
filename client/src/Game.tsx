@@ -8,7 +8,7 @@ import { coachStep, type CoachStep } from './coach';
 import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { joinUrl, store, useRoom, useSecondsLeft, type OrderOutcome } from './net';
-import { arrow, BreakdownPanel, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, useToast, won } from './ui';
+import { arrow, BreakdownPanel, bpText, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
 
 type Tab = 'market' | 'assets' | 'news';
 
@@ -58,7 +58,8 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: never) => void
   );
 }
 
-const PHASE_LABEL: Record<string, string> = { news: '뉴스 확인', trade: '주문 가능', settling: '체결 확인 중', recap: '라운드 결과' };
+const PHASE_LABEL: Record<string, string> = { news: '뉴스 확인', trade: '주문 시간', settling: '체결 확인 중', recap: '라운드 결과' };
+const CLOCK_LABEL: Record<string, string> = { news: '주문 시작까지', trade: '주문 마감', settling: '', recap: '다음 라운드' };
 
 interface PlayProps { view: RoomView; offset: number; online: boolean; send: (m: never) => void; placeOrder: (c: StockCode, s: Side, q: number) => Promise<OrderOutcome>; cancelOrder: (c: StockCode) => Promise<OrderOutcome> }
 function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayProps) {
@@ -81,11 +82,13 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
     <div className="game">
       <header className="topbar">
         <div className="status">
-          <b className="num">R{String(view.round).padStart(2, '0')}/{view.totalRounds}</b>
-          <span> · {PHASE_LABEL[view.phase ?? 'news']}</span>
-          {view.phase !== 'settling' && <span className="num"> · 00:{String(seconds).padStart(2, '0')}</span>}
-          {soon && <span className="soon"> 곧 마감</span>}
+          <b>{PHASE_LABEL[view.phase ?? 'news']}</b>
+          <span className="num">{view.round} / {view.totalRounds} 라운드</span>
         </div>
+        {view.phase !== 'settling' && <span className={`clock${soon ? ' soon' : ''}`} role="timer" aria-label={`${CLOCK_LABEL[view.phase ?? 'news']} ${seconds}초`}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
+          {CLOCK_LABEL[view.phase ?? 'news']} 0:{String(seconds).padStart(2, '0')}
+        </span>}
         <button className="help-btn" aria-label="도움말" onClick={() => setHelp(true)}>?</button>
         <div className="timer"><i style={{ width: `${view.phaseSeconds ? Math.min(100, left / view.phaseSeconds * 100) : 0}%` }} /></div>
       </header>
@@ -95,19 +98,21 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
       <main className="game-body">
         {view.phase === 'recap' && <Recap view={view} onOpen={c => { setDetail(c); setTab('market'); }} />}
         {view.phase === 'settling' && <div className="panel"><p className="headline">시장 결과 집계 중</p><p className="hint">체결을 확인하고 있습니다. 잠시만 기다려 주세요.</p></div>}
-        {tab === 'market' && <>
+        {tab === 'market' && view.phase !== 'recap' && <>
+          <Standing view={view} />
           {(view.phase === 'news' || view.phase === 'trade') && <CurrentNews view={view} />}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send2} />}
           {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send2} />}
-          <Standing view={view} />
-          <h2 className="h">시장</h2>
-          <div className="board">{view.stocks.map(s => <StockRow key={s.code} s={s} view={view} hint={coach?.no === 2 && coach.target === s.code} onOpen={() => setDetail(s.code)} />)}</div>
+          <div className="panel flush">
+            <div className="list-head"><span>종목</span><span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span></div>
+            <div className="board">{view.stocks.map(s => <StockRow key={s.code} s={s} view={view} hint={coach?.no === 2 && coach.target === s.code} onOpen={() => setDetail(s.code)} />)}</div>
+          </div>
         </>}
         {tab === 'assets' && <Assets view={view} cancel={cancelOrder} toast={toast.show} />}
         {tab === 'news' && <NewsLog view={view} />}
       </main>
       <nav className="tabs">
-        {(['market', 'assets', 'news'] as Tab[]).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t === 'market' ? '시장' : t === 'assets' ? '내 자산' : '뉴스'}</button>)}
+        {(['market', 'assets', 'news'] as Tab[]).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{TAB_ICON[t]}{t === 'market' ? '시장' : t === 'assets' ? '내 자산' : '뉴스'}</button>)}
       </nav>
       <div className="foot"><Disclaimer /></div>
       {stock && <StockSheet stock={stock} view={view} left={left} coach={coach} onClose={() => setDetail(null)} place={placeOrder} cancel={cancelOrder} toast={toast.show} />}
@@ -116,6 +121,13 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
     </div>
   );
 }
+
+const icon = (d: React.ReactNode) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
+const TAB_ICON: Record<Tab, React.ReactNode> = {
+  market: icon(<><path d="M3 17l5-5 4 4 8-8" /><path d="M14 8h6v6" /></>),
+  assets: icon(<><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /></>),
+  news: icon(<><path d="M5 4h11l3 3v13H5z" /><path d="M8 10h8M8 14h8" /></>)
+};
 
 /** 첫 판 따라 하기 안내. 단계 판단은 coach.ts에 있습니다. */
 function Coach({ step, onSkip }: { step: CoachStep; onSkip?: () => void }) {
@@ -147,10 +159,24 @@ function HelpSheet({ phase, onClose, onReplayTutorial }: { phase: RoomView['phas
     </Sheet>
   );
 }
-function NewsBody({ card, result }: { card: NewsCard; result: NewsResult | null }) {
+/** 뉴스 카드. compact면 시장 기대와 단서만 보이고 나머지는 '자세히'에 접어 둡니다. */
+function NewsBody({ card, result, compact = false }: { card: NewsCard; result: NewsResult | null; compact?: boolean }) {
+  if (compact) return (
+    <article className="news">
+      <p className="news-meta">{card.breaking ? <span className="chip alert">속보</span> : <span className="chip">이번 뉴스</span>}<span className="chip soft">{card.arcTitle}</span></p>
+      <h3 className="headline"><Rich text={card.headline} /></h3>
+      <dl className="facts">
+        <dt><TermLink id="expectation">시장 기대</TermLink></dt><dd className="expect"><Rich text={card.expectation} /></dd>
+        <dt>단서</dt><dd><Rich text={card.clue} /></dd>
+      </dl>
+      <details className="more"><summary>자세히: 확인된 사실 · 남은 변수</summary>
+        <dl className="facts"><dt>확인된 사실</dt><dd><Rich text={card.facts} /></dd><dt>남은 변수</dt><dd><Rich text={card.remaining} /></dd></dl>
+      </details>
+    </article>
+  );
   return (
     <article className="news">
-      <p className="news-meta">{card.breaking && <span className="chip alert">속보</span>}<span className="chip">{card.arcTitle}</span></p>
+      <p className="news-meta">{card.breaking && <span className="chip alert">속보</span>}<span className="chip soft">{card.arcTitle}</span></p>
       <h3 className="headline"><Rich text={card.headline} /></h3>
       <dl className="facts">
         <dt>확인된 사실</dt><dd><Rich text={card.facts} /></dd>
@@ -172,7 +198,7 @@ function NewsBody({ card, result }: { card: NewsCard; result: NewsResult | null 
 function CurrentNews({ view }: { view: RoomView }) {
   const now = view.news[view.news.length - 1];
   if (!now) return null;
-  return <div className="panel">{now.cards.map(c => <NewsBody key={c.card.stageId} card={c.card} result={null} />)}</div>;
+  return <div className="panel">{now.cards.map(c => <NewsBody key={c.card.stageId} card={c.card} result={null} compact />)}</div>;
 }
 function Card({ view, send }: { view: RoomView; send: (m: object) => void }) {
   const c = view.card!;
@@ -200,13 +226,22 @@ function Prediction({ view, send }: { view: RoomView; send: (m: object) => void 
     </div>
   );
 }
+/** 내 평가액 구역. 관전자에게는 상위 순위만 보여 줍니다. */
 function Standing({ view }: { view: RoomView }) {
   const me = view.leaderboard.find(l => l.playerId === view.you.id);
-  const top = view.leaderboard.slice(0, 4);
+  if (!me) return <div className="panel"><ol className="mini-rank">{view.leaderboard.slice(0, 5).map(l => <li key={l.playerId}>{l.rank}위 {l.label} <span className={dir(l.returnPct)}>{pct(l.returnPct)}</span></li>)}</ol></div>;
+  const value = view.portfolio?.value ?? me.value;
+  const other = view.leaderboard.find(l => l.playerId !== me.playerId && (me.rank === 1 ? l.rank >= 1 : l.rank === 1));
+  const gap = other ? value - other.value : 0;
   return (
-    <div className="standing">
-      {me && <p className="me-line"><b>{me.rank}위</b> · <TermLink id="portfolio-value">평가액</TermLink> <b className="num">{won(view.portfolio?.value ?? me.value)}</b> <span className={dir(me.returnPct)}>{pct(me.returnPct)}</span> · <TermLink id="cash">주문 가능</TermLink> <b className="num">{won(view.portfolio?.available ?? 0)}</b></p>}
-      <ol className="mini-rank">{top.map(l => <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''}>{l.rank}위 {l.label} <span className={dir(l.returnPct)}>{pct(l.returnPct)}</span></li>)}</ol>
+    <div className="panel standing">
+      <p className="wallet-label"><TermLink id="portfolio-value">내 평가액</TermLink> · {view.leaderboard.length}명 중 {me.rank}위</p>
+      <p className="wallet-value">{won(value)}</p>
+      <p className={`wallet-change ${dir(value - view.startCash)}`}>{signedWon(value - view.startCash)} ({pct(me.returnPct)})</p>
+      <div className="stat-pair">
+        <div className="stat"><small><TermLink id="cash">주문 가능</TermLink></small><b>{won(view.portfolio?.available ?? 0)}</b></div>
+        <div className="stat"><small>{me.rank === 1 ? '2위보다' : '1위와 차이'}</small><b className={dir(gap)}>{signedWon(gap)}</b></div>
+      </div>
     </div>
   );
 }
@@ -214,10 +249,13 @@ function StockRow({ s, view, onOpen, hint = false }: { s: StockView; view: RoomV
   const held = view.portfolio?.holdings.find(h => h.code === s.code);
   const ord = view.portfolio?.orders.find(o => o.code === s.code);
   const ch = s.lastChangeBp;
+  const inNews = (view.phase === 'news' || view.phase === 'trade') && !!view.news[view.news.length - 1]?.cards.some(c => c.card.targets[0] === s.code);
+  const sub = [s.sector, inNews ? '이번 뉴스' : '', held ? `${held.qty.toLocaleString('ko-KR')}주 보유` : '', ord ? `${ord.side === 'buy' ? '매수' : '매도'} ${ord.qty.toLocaleString('ko-KR')}주 예약` : ''].filter(Boolean).join(' · ');
   return (
-    <button className={`row${hint ? ' hint-pulse' : ''}`} onClick={onOpen}>
-      <span className="row-main"><b>{s.name}</b><small>{s.code} · {s.sector}{held ? ` · ${held.qty.toLocaleString('ko-KR')}주 보유` : ''}{ord ? ` · ${ord.side === 'buy' ? '매수' : '매도'} 예약` : ''}</small></span>
-      <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}</b>
+    <button className={`row${inNews ? ' is-news' : ''}${hint ? ' hint-pulse' : ''}`} onClick={onOpen}>
+      <StockAvatar code={s.code} name={s.name} />
+      <span className="row-main"><b>{s.name}</b><small>{sub}</small></span>
+      <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b>
         <small className={ch === null ? 'flat' : dir(ch)}>{ch === null ? '—' : `${arrow(ch)} ${pctBp(ch)}`}</small></span>
     </button>
   );
@@ -226,7 +264,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
   return (
     <div className="sheet-wrap" onClick={onClose}>
       <section className="sheet" role="dialog" aria-label={title} onClick={e => e.stopPropagation()}>
-        <div className="sheet-head"><h2>{title}</h2><button className="ghost small" onClick={onClose}>닫기</button></div>
+        <div className="sheet-head"><h2>{title}</h2><button className="help-btn" aria-label="닫기" onClick={onClose}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
         {children}
       </section>
     </div>
@@ -286,16 +324,21 @@ function OrderPanel({ stock, view, left, place, cancel, toast, onDone }: { stock
   return (
     <div className="order">
       <div className="seg side"><button data-s="buy" aria-pressed={side === 'buy'} onClick={() => { setSide('buy'); setQty(''); }}>매수</button><button data-s="sell" aria-pressed={side === 'sell'} onClick={() => { setSide('sell'); setQty(''); }}>매도</button></div>
-      <p className="hint"><TermLink id={side}>{side === 'buy' ? '매수' : '매도'}</TermLink>는 마감 때 <TermLink id="reference-price">기준가</TermLink>로 전량 <TermLink id="execution">체결</TermLink>됩니다.</p>
-      <dl className="kv"><dt>기준가</dt><dd className="num">{won(stock.price)}</dd><dt>{side === 'buy' ? '최대 매수' : '라운드 시작 보유'}</dt><dd className="num">{max.toLocaleString('ko-KR')}주</dd></dl>
+      <label htmlFor="order-qty" className="hint">수량 · {side === 'buy' ? '최대' : '라운드 시작 보유'} {max.toLocaleString('ko-KR')}주</label>
       <div className="stepper">
-        <button aria-label="수량 줄이기" onClick={() => setQty(String(Math.max(0, n - 1)))}>−</button>
-        <input aria-label="수량" inputMode="numeric" value={qty} placeholder="수량" onChange={e => setQty(e.target.value.replace(/\D/g, ''))} />
-        <button aria-label="수량 늘리기" onClick={() => setQty(String(n + 1))}>+</button>
-        <button className="max" onClick={() => setQty(String(max))}>최대</button>
+        <button aria-label="1주 빼기" onClick={() => setQty(String(Math.max(0, n - 1)))}>−</button>
+        <input id="order-qty" inputMode="numeric" value={qty} placeholder="0" onChange={e => setQty(e.target.value.replace(/\D/g, ''))} />
+        <button aria-label="1주 더하기" onClick={() => setQty(String(n + 1))}>+</button>
       </div>
-      {n > 0 && <p className="hint"><TermLink id="fee">수수료</TermLink> {won(fee)} · {side === 'buy' ? `총 차감액 ${won(gross + fee)}` : `수령액 ${won(gross - fee)}`}{n > max ? ' · 가능한 수량을 넘었어요' : ''}</p>}
-      <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 주문 시작` : busy ? '요청 중' : `${side === 'buy' ? '매수 예약' : '매도 예약'}${existing ? ' 변경' : ''}`}</button>
+      <div className="pcts">{([[0.1, '10%'], [0.25, '25%'], [0.5, '50%'], [1, '최대']] as const).map(([r, label]) => <button key={label} onClick={() => setQty(String(Math.floor(max * r)))}>{label}</button>)}</div>
+      <dl className="kv">
+        <dt>주문 금액</dt><dd>{won(gross)}</dd>
+        <dt><TermLink id="fee">수수료</TermLink> 0.20%</dt><dd>{won(fee)}</dd>
+        <dt className="total">{side === 'buy' ? '총 빠져나갈 돈' : '받을 돈(다음 라운드부터)'}</dt><dd className="total">{won(side === 'buy' ? gross + fee : Math.max(0, gross - fee))}</dd>
+      </dl>
+      {n > max && <p className="error">가능한 수량을 넘었어요</p>}
+      <p className="hint">마감 때 지금 가격(<TermLink id="reference-price">기준가</TermLink>)으로 전부 <TermLink id="execution">체결</TermLink>돼요. 마감 전까지 바꿀 수 있어요.</p>
+      <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 주문 시작` : busy ? '요청 중' : `${n > 0 ? `${n.toLocaleString('ko-KR')}주 ` : ''}${side === 'buy' ? '매수' : '매도'} 예약${existing ? ' 변경' : ''}`}</button>
     </div>
   );
 }
@@ -332,24 +375,63 @@ function lessonLink(view: RoomView, code?: StockCode) {
   const q = new URLSearchParams({ name: stock.name, summary: b?.summary ?? '', base: String(b?.basePrice ?? ''), close: String(b?.closePrice ?? ''), reason: b?.events[0]?.reason ?? '시장·종목 변동' });
   return `/lessons/news?${q.toString()}`;
 }
+/** 라운드 결과: 내 변화 → 기대 vs 실제 → 왜 움직였나(막대) → 종목별 결과 */
 function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => void }) {
   const r = view.lastResult;
   const now = view.news[view.news.length - 1];
   const movers = view.stocks.slice().sort((a, b) => Math.abs(b.lastChangeBp ?? 0) - Math.abs(a.lastChangeBp ?? 0));
+  return (<>
+    {r && <div className="panel recap-top">
+      <p className="wallet-label">내 평가액 변화 {r.rankBefore !== r.rankAfter && <span className={`pill ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
+      <p className={`delta-big ${dir(r.delta)}`}>{signedWon(r.delta)}</p>
+      <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료 −${won(r.fees)}` : ''}</p>
+    </div>}
+    {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
+    {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
+    {view.prediction?.correct !== null && view.prediction?.correct !== undefined && <div className="panel"><p className="hint strong">결과 예측: {view.prediction.correct ? '맞혔어요' : '빗나갔어요'} (확신도 {view.prediction.confidence}%)</p></div>}
+    <div className="panel flush">
+      <div className="list-head"><span>종목별 결과 · 눌러서 이유 보기</span></div>
+      <div className="board">{movers.map(s => <button key={s.code} className="row" onClick={() => onOpen(s.code)}>
+        <StockAvatar code={s.code} name={s.name} />
+        <span className="row-main"><b>{s.name}</b><small>{s.history[s.history.length - 1]?.summary}</small></span>
+        <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.lastChangeBp ?? 0)}>{s.lastChangeBp === null ? '—' : `${arrow(s.lastChangeBp)} ${pctBp(s.lastChangeBp)}`}</small></span>
+      </button>)}</div>
+    </div>
+    <div className="panel"><button className="ghost" onClick={() => navigate(lessonLink(view))}>이 변동을 읽는 법 (차트 연습실)</button></div>
+  </>);
+}
+/** 사건 하나의 결과: 기대와 실제를 나란히, 주인공 종목의 등락을 막대로 나눠 보여 줍니다. */
+function RecapNews({ card, result, stock }: { card: NewsCard; result: NewsResult; stock: StockView }) {
+  const b = stock.history[stock.history.length - 1];
+  const mainBp = result.impacts.find(i => i.code === stock.code)?.bp ?? 0;
+  const parts = b ? [
+    { label: '사건 결과', bp: b.eventBp },
+    { label: '시장 전체', bp: b.marketBp },
+    { label: '종목 변동', bp: b.stockBp }
+  ] : [];
+  const scale = Math.max(100, ...parts.map(p => Math.abs(p.bp)));
   return (
-    <div className="panel recap">
-      {r && <div className="recap-top">
-        <p className="rank-move num">{r.rankBefore}위 → {r.rankAfter}위</p>
-        <p>이번 라운드 평가액 변화 <b className={dir(r.delta)}>{signedWon(r.delta)}</b></p>
-        <p>가장 큰 기여 종목 {r.best ? <><b>{r.best.name}</b> <span className={dir(r.best.won)}>{signedWon(r.best.won)}</span></> : '없음'}</p>
-        <p className="hint">{r.fills.length ? `체결 ${r.fills.length}건 · 수수료 ${won(r.fees)} 별도` : '이번 라운드 체결 없음'}</p>
+    <div className="panel">
+      <p className="news-meta"><span className="chip soft">{card.arcTitle}</span></p>
+      <p className="headline"><Rich text={result.actual} /></p>
+      <div className="vs">
+        <div><small>시장 기대</small><b><Rich text={card.expectation.replace(/^시장(은| 기대치는| 기대)\s*/, '')} /></b></div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--chev)" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+        <div className={mainBp >= 0 ? 'hit' : 'miss'}><small>실제 결과</small><b className={dir(mainBp)}><Rich text={result.gap} /></b></div>
+      </div>
+      {b && <div className="bars" aria-label={`${stock.name} 등락 ${pctBp(b.changeBp)}의 구성`}>
+        <p className="hint">{stock.name} {pctBp(b.changeBp)}는 이렇게 만들어졌어요</p>
+        {parts.map(p => {
+          const w = Math.abs(p.bp) / scale * 48;
+          return <div key={p.label} className="bar-row"><span>{p.label}</span>
+            <span className="bar"><i style={{ left: `${p.bp >= 0 ? 50 : 50 - w}%`, width: `${Math.max(w, 1)}%`, background: p.bp >= 0 ? 'var(--up)' : 'var(--down)' }} /></span>
+            <span className={dir(p.bp)}>{bpText(p.bp)}</span></div>;
+        })}
       </div>}
-      {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
-      {view.prediction?.correct !== null && view.prediction?.correct !== undefined && <p className="hint strong">결과 예측: {view.prediction.correct ? '맞혔어요' : '빗나갔어요'} (확신도 {view.prediction.confidence}%)</p>}
-      {now?.cards.map(c => <NewsBody key={c.card.stageId} card={c.card} result={c.result} />)}
-      <h3 className="h small">종목별 결과</h3>
-      <ul className="list">{movers.map(s => <li key={s.code}><button className="plain" onClick={() => onOpen(s.code)}><span>{s.name}<small>{s.history[s.history.length - 1]?.summary}</small></span><span className={`num ${dir(s.lastChangeBp ?? 0)}`}>{s.price.toLocaleString('ko-KR')}</span></button></li>)}</ul>
-      <button className="ghost" onClick={() => navigate(lessonLink(view))}>이 변동을 읽는 법</button>
+      <p className="lesson-box"><b>배운 점</b> <Rich text={result.concept} /></p>
+      <details className="more"><summary>기업별 영향 자세히</summary>
+        <ul className="impact">{result.impacts.map((i, k) => <li key={k}><span className={dir(i.bp)}>{i.code} {arrow(i.bp)} {pctBp(i.bp)}</span> <Rich text={i.reason} /></li>)}</ul>
+      </details>
     </div>
   );
 }
@@ -370,30 +452,39 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
   }, [rep, view.code, view.mode, view.you.id, view.you.role, view.leaderboard]);
   return (
     <main className="final">
-      <p className="course">최종 결과 · 방 {view.code}</p>
-      {rep ? <><h1 className="rank-big num">{rep.rank}위</h1><p className="lede">최종 평가액 <b className="num">{won(rep.value)}</b> <span className={dir(rep.returnPct)}>{pct(rep.returnPct)}</span></p></> : <h1 className="logo small">결과 발표</h1>}
-      <h2 className="h">순위</h2>
-      <table className="rank-table"><thead><tr><th>순위</th><th>참가자</th><th>수익률</th></tr></thead><tbody>
-        {view.leaderboard.map(l => <tr key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''}><td className="num">{l.rank}</td><td>{l.label}{l.npcRule && <small className="npc-rule">{l.npcRule}</small>}</td><td className={`num ${dir(l.returnPct)}`}>{pct(l.returnPct)}</td></tr>)}
-      </tbody></table>
-      {rep && <>
-        <h2 className="h">주요 거래</h2>
-        {rep.majorTrades.length ? <ul className="list">{rep.majorTrades.map((t, i) => <li key={i}><span>R{t.round} {t.name}<small>{t.side === 'buy' ? '매수' : '매도'} {t.qty.toLocaleString('ko-KR')}주 · {won(t.price)}</small></span></li>)}</ul> : <p className="hint">이번 판에는 거래가 없었습니다.</p>}
-        <p className="hint">낸 수수료 {won(rep.fees)}</p>
-        {rep.judgments.length > 0 && <><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></>}
-        {rep.metrics && <><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></>}
-      </>}
+      <section className="sec final-head">
+        <p className="course">{MODES[view.mode].label} · {view.totalRounds}라운드 끝</p>
+        {rep ? <>
+          <div className="trophy" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={rep.rank === 1 ? 'var(--gold)' : 'var(--faint)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg></div>
+          <h1 className="rank-big">{view.leaderboard.length}명 중 {rep.rank}위</h1>
+          <p className="num">{won(rep.value)} <b className={dir(rep.returnPct)}>{pct(rep.returnPct)}</b></p>
+        </> : <h1 className="rank-big">결과 발표</h1>}
+      </section>
+      <section className="sec tight">
+        <ol className="rank-list">{view.leaderboard.map(l => <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''}>
+          <span className={`r${l.rank === 1 ? ' first' : ''}`}>{l.rank}</span>
+          <span className="who"><b>{l.playerId === view.you.id ? `나 · ${l.label}` : l.label}</b>{l.npcRule && <small>{l.npcRule}</small>}</span>
+          <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
+        </li>)}</ol>
+      </section>
+      {rep && <section className="sec">
+        <h2 className="h">주요 거래 <small className="hint">· 낸 수수료 {won(rep.fees)}</small></h2>
+        {rep.majorTrades.length ? <ul className="list">{rep.majorTrades.map((t, i) => <li key={i}><span>{t.round}라운드 {t.name}<small>{t.side === 'buy' ? '매수' : '매도'} {t.qty.toLocaleString('ko-KR')}주 · {won(t.price)}</small></span></li>)}</ul> : <p className="hint">이번 판에는 거래가 없었습니다.</p>}
+      </section>}
+      {rep && rep.judgments.length > 0 && <section className="sec"><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></section>}
+      {rep?.metrics && <section className="sec"><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></section>}
       <GameTerms view={view} />
-      <h2 className="h">종목 그래프 다시 보기</h2>
-      <div className="board">{view.stocks.map(s => <button key={s.code} className="row" onClick={() => { setOpen(s.code); setPoint(s.history[s.history.length - 1]?.round ?? null); }}><span className="row-main"><b>{s.name}</b><small>{s.code}</small></span><span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}</b><small className={dir(s.price - s.startPrice)}>{pct((s.price / s.startPrice - 1) * 100)}</small></span></button>)}</div>
+      <section className="sec tight">
+        <div className="list-head"><span>종목 그래프 다시 보기</span><span>처음 대비</span></div>
+        <div className="board">{view.stocks.map(s => <button key={s.code} className="row" onClick={() => { setOpen(s.code); setPoint(s.history[s.history.length - 1]?.round ?? null); }}><StockAvatar code={s.code} name={s.name} /><span className="row-main"><b>{s.name}</b><small>{s.sector}</small></span><span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.price - s.startPrice)}>{pct((s.price / s.startPrice - 1) * 100)}</small></span></button>)}</div>
+      </section>
       {stock && <Sheet title={stock.name} onClose={() => setOpen(null)}><PriceChart stock={stock} totalRounds={view.totalRounds} selected={point} onSelect={setPoint} />{pointData && <BreakdownPanel b={pointData} />}</Sheet>}
       <div className="final-actions">
+        <button className="ghost" onClick={() => navigate('/records')}>내 기록</button>
         {view.nextRoomCode
-          ? <button className="cta" onClick={() => navigate(`/${view.you.role === 'operator' ? 'display' : 'room'}/${view.nextRoomCode}`)}>다음 판 대기실로 가기</button>
-          : <button className="cta" onClick={() => send2({ t: 'rematch' })}>같은 멤버로 한 판 더</button>}
-        <button className="ghost" onClick={() => navigate('/records')}>내 기록 보기</button>
-        <button className="ghost" onClick={() => navigate('/lessons')}>차트 연습실</button>
-        <button className="link" onClick={() => navigate('/')}>처음으로</button>
+          ? <button className="cta" onClick={() => navigate(`/${view.you.role === 'operator' ? 'display' : 'room'}/${view.nextRoomCode}`)}>다음 판 대기실로</button>
+          : <button className="cta" onClick={() => send2({ t: 'rematch' })}>{view.mode === 'solo' ? '한 판 더' : '같은 멤버로 한 판 더'}</button>}
+        <button className="link full" onClick={() => navigate('/')}>처음으로</button>
       </div>
       <Disclaimer />
     </main>
@@ -413,11 +504,11 @@ function GameTerms({ view }: { view: RoomView }) {
   if (!ids.length) return null;
   const learned = ids.filter(id => seen.has(id)).length;
   return (
-    <section className="game-terms">
+    <section className="sec game-terms">
       <h2 className="h">이번 판에 나온 용어</h2>
       <p className="hint">{ids.length}개 중 {learned}개를 열어 봤어요. 눌러서 뜻을 확인하세요.</p>
       <div className="term-chips">{ids.map(id => <button key={id} className={`term-chip${seen.has(id) ? ' seen' : ''}`} onClick={() => open(id)}>{termById.get(id)!.term}</button>)}</div>
-      <button className="ghost" onClick={() => navigate(`/glossary?quiz=1&pool=${ids.join(',')}`)}>이번 판 용어로 퀴즈 풀기</button>
+      <button className="ghost blue" onClick={() => navigate(`/glossary?quiz=1&pool=${ids.join(',')}`)}>이 용어들로 퀴즈 5문제</button>
     </section>
   );
 }
