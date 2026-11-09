@@ -1,5 +1,7 @@
 # 배포·출시 가이드
 
+무료로 올리려면 먼저 [`DEPLOY-FREE.md`](DEPLOY-FREE.md)를 보세요(Render + Neon). 이 문서는 직접 서버를 운영할 때의 일반 절차입니다.
+
 서버 하나가 화면(정적 파일), API, WebSocket을 모두 제공합니다. 운영에는 **HTTPS 주소 하나와 PostgreSQL 하나**가 필요합니다.
 
 ## 1. 서버 이미지

@@ -92,7 +92,7 @@ Windows 관리자 계정에서는 임시 DB가 뜨지 않으므로 `TEST_DATABAS
 
 ## 배포
 
-`Dockerfile`로 서버 이미지를 만들 수 있습니다. HTTPS, PostgreSQL, 학술제 리허설, 스토어 출시 점검표는 [`docs/DEPLOY.md`](docs/DEPLOY.md)에 있습니다. PR마다 GitHub Actions(`.github/workflows/ci.yml`)가 타입 검사·테스트·빌드·부하·PostgreSQL 통합 테스트를 돌립니다.
+무료로 올리는 방법(Render + Neon, `render.yaml` 포함)은 [`docs/DEPLOY-FREE.md`](docs/DEPLOY-FREE.md)에 있습니다. `Dockerfile`로 서버 이미지를 만들 수 있습니다. HTTPS, PostgreSQL, 학술제 리허설, 스토어 출시 점검표는 [`docs/DEPLOY.md`](docs/DEPLOY.md)에 있습니다. PR마다 GitHub Actions(`.github/workflows/ci.yml`)가 타입 검사·테스트·빌드·부하·PostgreSQL 통합 테스트를 돌립니다.
 
 ## Android 패키징
 
