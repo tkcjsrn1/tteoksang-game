@@ -16,6 +16,7 @@ npm run build        # 타입 검사 + 클라이언트 빌드(dist/)
 npm run dev          # 서버 + Vite 개발 서버 (화면 http://localhost:5173)
 npm run load         # 60명 동시 주문 부하 검증 (서버·주문 로직을 바꿨다면)
 npm run balance      # 사건 기대값과 NPC 성적 (content.ts나 npc.ts를 바꿨다면)
+npm run smoke -- <주소>   # 배포한 서버 점검: 화면·API·WebSocket·두 사람 입장·게임 시작
 TIME_DIVISOR=6 npm start   # 단계 시간을 6배 빠르게 해서 직접 플레이 확인
 ```
 

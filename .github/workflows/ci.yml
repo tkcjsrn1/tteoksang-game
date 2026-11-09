@@ -25,6 +25,13 @@ jobs:
       - run: npm run build
       - run: npm run load
       - run: npm run balance
+      # 빌드한 서버를 실제로 켜고, 배포 점검과 같은 스크립트로 화면·API·WebSocket·게임 시작을 확인합니다.
+      - name: smoke
+        if: runner.os == 'Linux'
+        run: |
+          PORT=8787 npm start > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8787/api/health && break; sleep 1; done
+          npm run smoke -- http://localhost:8787 || (cat server.log; exit 1)
 
   postgres:
     runs-on: ubuntu-latest
