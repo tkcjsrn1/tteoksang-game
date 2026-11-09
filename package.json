@@ -43,5 +43,6 @@
     "embedded-postgres": "17.2.0-beta.15",
     "typescript": "5.7.2",
     "vite": "5.4.11"
-  }
+  },
+  "license": "MIT"
 }

@@ -1,7 +1,7 @@
 /* 가격과 주문 규칙. 정수만 사용합니다. 100bp = 1%p */
 import type { EventImpact, GameMode, Holding, Order, PriceBreakdown, Side, StockCode } from './types';
 
-export const DISCLAIMER = '게임용 가상 정보이며 투자 조언이 아니다';
+export const DISCLAIMER = '게임용 가상 정보이며 투자 조언이 아닙니다';
 export const START_CASH = 10_000_000;
 export const MAX_RETURN_BP = 2000;
 export const MARKET_MAX_BP = 50;
