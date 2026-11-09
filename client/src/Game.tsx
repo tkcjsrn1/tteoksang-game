@@ -5,6 +5,7 @@ import type { NewsCard, NewsResult, Order, RoomView, Side, StockCode, StockView 
 import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
 import { coachStep, type CoachStep } from './coach';
+import { play, revealTone, useCountUp, useSoundSetting } from './fx';
 import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
@@ -72,24 +73,38 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
   const send2 = send as unknown as (m: object) => void;
   const isPlayer = view.you.role === 'player';
   const soon = view.phase === 'trade' && left <= 10;
+  const seconds = Math.ceil(left);
   const [tutorialOff, setTutorialOff] = useState(() => store.get('tutorial') === '1');
   const coach = tutorialOff ? null : coachStep(view, detail);
   const skipTutorial = () => { store.set('tutorial', '1'); setTutorialOff(true); };
   useEffect(() => { if (view.mode === 'solo' && view.round >= 2) store.set('tutorial', '1'); }, [view.mode, view.round]);
   useEffect(() => { if (view.phase === 'recap') setDetail(null); }, [view.phase]);
+  /* 효과음: 주문 마감 5초 전부터 째깍, 결과 공개 때 오름·내림, 상·하한가가 나오면 도장 소리 */
+  useEffect(() => { if (view.phase === 'trade' && seconds > 0 && seconds <= 5) play('tick'); }, [view.phase, seconds]);
+  const revealKey = view.phase === 'recap' ? `${view.round}` : '';
+  useEffect(() => {
+    if (!revealKey) return;
+    window.scrollTo({ top: 0 });
+    play(revealTone(view.lastResult?.delta ?? 0));
+    const hit = view.stocks.some(s => s.history[s.history.length - 1]?.round === view.round && s.history[s.history.length - 1]?.limit);
+    if (hit) { const t = setTimeout(() => play('stamp'), 700); return () => clearTimeout(t); }
+  }, [revealKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [soundOn, setSoundOn] = useSoundSetting();
   const stock = detail ? view.stocks.find(s => s.code === detail)! : null;
-  const seconds = Math.ceil(left);
   return (
     <div className="game">
       <header className="topbar">
         <div className="status">
           <b>{PHASE_LABEL[view.phase ?? 'news']}</b>
-          <span className="num">{view.round} / {view.totalRounds} 라운드</span>
+          <span className="num" aria-label={`${view.round}라운드, 전체 ${view.totalRounds}라운드`}>{view.round}/{view.totalRounds}</span>
         </div>
         {view.phase !== 'settling' && <span className={`clock${soon ? ' soon' : ''}`} role="timer" aria-label={`${CLOCK_LABEL[view.phase ?? 'news']} ${seconds}초`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
           {CLOCK_LABEL[view.phase ?? 'news']} 0:{String(seconds).padStart(2, '0')}
         </span>}
+        <button className="help-btn" aria-label={soundOn ? '효과음 끄기' : '효과음 켜기'} aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z" />{soundOn ? <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /> : <path d="M16 9l5 6M21 9l-5 6" />}</svg>
+        </button>
         <button className="help-btn" aria-label="도움말" onClick={() => setHelp(true)}>?</button>
         <div className="timer"><i style={{ width: `${view.phaseSeconds ? Math.min(100, left / view.phaseSeconds * 100) : 0}%` }} /></div>
       </header>
@@ -306,7 +321,7 @@ function OrderPanel({ stock, view, left, place, cancel, toast, onDone }: { stock
     setBusy(true);
     const res = await place(stock.code, side, n);
     setBusy(false);
-    if (res.ok) { toast('예약 완료 · 마감 때 체결'); onDone(); }
+    if (res.ok) { play('book'); toast('예약 완료 · 마감 때 체결'); onDone(); }
     else toast(res.reason ?? '주문하지 못했습니다');
   };
   const doCancel = async () => {
@@ -381,10 +396,11 @@ function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => voi
   const r = view.lastResult;
   const now = view.news[view.news.length - 1];
   const movers = view.stocks.slice().sort((a, b) => Math.abs(b.lastChangeBp ?? 0) - Math.abs(a.lastChangeBp ?? 0));
+  const delta = useCountUp(r?.delta ?? 0, 900);
   return (<>
     {r && <div className="panel recap-top">
-      <p className="wallet-label">내 평가액 변화 {r.rankBefore !== r.rankAfter && <span className={`pill ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
-      <p className={`delta-big ${dir(r.delta)}`}>{signedWon(r.delta)}</p>
+      <p className="wallet-label">내 평가액 변화 {r.rankBefore !== r.rankAfter && <span className={`pill pop ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
+      <p className={`delta-big ${dir(r.delta)}`} aria-label={signedWon(r.delta)}>{signedWon(delta)}</p>
       <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료 −${won(r.fees)}` : ''}</p>
     </div>}
     {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
@@ -394,7 +410,7 @@ function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => voi
       <div className="list-head"><span>종목별 결과 · 눌러서 이유 보기</span></div>
       <div className="board">{movers.map(s => <button key={s.code} className="row" onClick={() => onOpen(s.code)}>
         <StockAvatar code={s.code} name={s.name} />
-        <span className="row-main"><b>{s.name}</b><small>{s.history[s.history.length - 1]?.summary}</small></span>
+        <span className="row-main"><b>{s.name}{s.history[s.history.length - 1]?.limit && <span className={`stamp ${s.history[s.history.length - 1]!.limit === 'upper' ? 'up' : 'down'}`}>{s.history[s.history.length - 1]!.limit === 'upper' ? '상한가' : '하한가'}</span>}</b><small>{s.history[s.history.length - 1]?.summary}</small></span>
         <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.lastChangeBp ?? 0)}>{s.lastChangeBp === null ? '—' : `${arrow(s.lastChangeBp)} ${pctBp(s.lastChangeBp)}`}</small></span>
       </button>)}</div>
     </div>
@@ -425,7 +441,7 @@ function RecapNews({ card, result, stock }: { card: NewsCard; result: NewsResult
         {parts.map(p => {
           const w = Math.abs(p.bp) / scale * 48;
           return <div key={p.label} className="bar-row"><span>{p.label}</span>
-            <span className="bar"><i style={{ left: `${p.bp >= 0 ? 50 : 50 - w}%`, width: `${Math.max(w, 1)}%`, background: p.bp >= 0 ? 'var(--up)' : 'var(--down)' }} /></span>
+            <span className="bar"><i style={{ left: `${p.bp >= 0 ? 50 : 50 - w}%`, width: `${Math.max(w, 1)}%`, background: p.bp >= 0 ? 'var(--up)' : 'var(--down)', transformOrigin: p.bp >= 0 ? 'left' : 'right' }} /></span>
             <span className={dir(p.bp)}>{bpText(p.bp)}</span></div>;
         })}
       </div>}
@@ -443,6 +459,8 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
   const send2 = send as unknown as (m: object) => void;
   const stock = open ? view.stocks.find(s => s.code === open)! : null;
   const pointData = stock?.history.find(h => h.round === point);
+  const shownValue = useCountUp(rep?.value ?? 0, 1200, rep ? rep.value - Math.round(rep.value * 0.02) : 0);
+  useEffect(() => { if (rep) play(rep.rank === 1 ? 'win' : revealTone(rep.returnPct)); }, [!!rep]); // eslint-disable-line react-hooks/exhaustive-deps
   /* 끝난 판을 이 기기의 개인 기록에 한 번만 남깁니다. */
   useEffect(() => {
     if (!rep || view.you.role !== 'player') return;
@@ -456,9 +474,9 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
       <section className="sec final-head">
         <p className="course">{MODES[view.mode].label} · {view.totalRounds}라운드 끝</p>
         {rep ? <>
-          <div className="trophy" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={rep.rank === 1 ? 'var(--gold)' : 'var(--faint)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg></div>
-          <h1 className="rank-big">{view.leaderboard.length}명 중 {rep.rank}위</h1>
-          <p className="num">{won(rep.value)} <b className={dir(rep.returnPct)}>{pct(rep.returnPct)}</b></p>
+          <div className={`trophy${rep.rank === 1 ? ' shine' : ''}`} aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={rep.rank === 1 ? 'var(--gold)' : 'var(--faint)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg></div>
+          <h1 className="rank-big pop">{view.leaderboard.length}명 중 {rep.rank}위</h1>
+          <p className="num" aria-label={`${won(rep.value)} ${pct(rep.returnPct)}`}>{won(shownValue)} <b className={dir(rep.returnPct)}>{pct(rep.returnPct)}</b></p>
         </> : <h1 className="rank-big">결과 발표</h1>}
       </section>
       <section className="sec tight">
