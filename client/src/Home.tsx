@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { navigate } from './App';
 import { createRoom, roomInfo, store } from './net';
+import { TERMS } from '../../shared/glossary';
+import { TermLink } from './glossary/GlossaryContext';
 import { Disclaimer } from './ui';
+
+/** 날짜마다 바뀌는 오늘의 용어. 같은 날에는 누구에게나 같은 용어가 나옵니다. */
+function todayTerm() {
+  const d = new Date();
+  const day = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
+  return TERMS[day % TERMS.length];
+}
 
 export function Home() {
   const [panel, setPanel] = useState<'none' | 'solo' | 'join'>('none');
@@ -39,8 +48,23 @@ export function Home() {
         </form>}
       </div>
       {error && <p className="error" role="alert">{error}</p>}
+      <TodayTerm />
+      <div className="sub-actions two">
+        <button className="ghost" onClick={() => navigate('/glossary')}>주식 용어 사전</button>
+        <button className="ghost" onClick={() => navigate('/lessons')}>차트 연습실</button>
+      </div>
       <button className="link" disabled={busy} onClick={academic}>학술제 운영자: 대형 화면과 QR 열기</button>
       <Disclaimer />
     </main>
+  );
+}
+
+function TodayTerm() {
+  const t = todayTerm();
+  return (
+    <section className="today-term" aria-label="오늘의 용어">
+      <p className="hint">오늘의 용어</p>
+      <p><TermLink id={t.id} /> <span className="hint">· {t.short}</span></p>
+    </section>
   );
 }

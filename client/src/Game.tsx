@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { feeOf, maxBuyQty, MODES } from '../../shared/rules';
 import type { NewsCard, NewsResult, Order, RoomView, Side, StockCode, StockView } from '../../shared/types';
+import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
+import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { joinUrl, store, useRoom, useSecondsLeft, type OrderOutcome } from './net';
 import { arrow, BreakdownPanel, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, useToast, won } from './ui';
 
@@ -126,11 +128,13 @@ function HelpSheet({ phase, onClose }: { phase: RoomView['phase']; onClose: () =
         {phase === 'news' && <li>지금은 뉴스 시간입니다. 곧 주문 시간이 시작됩니다.</li>}
         {phase === 'trade' && <li>종목을 눌러 매수나 매도를 예약하세요. 마감 전까지 바꾸거나 취소할 수 있습니다.</li>}
         {phase === 'recap' && <li>그래프의 점을 누르면 가격이 움직인 이유가 나옵니다.</li>}
-        <li>체결가는 지금 화면의 기준가, 즉 직전 라운드 종료가입니다.</li>
-        <li>수수료는 매수와 매도 모두 거래대금의 0.20%입니다.</li>
-        <li>매도 대금은 다음 라운드부터 쓸 수 있습니다.</li>
-        <li>1bp는 0.01%입니다. 100bp가 1%입니다.</li>
+        <li><TermLink id="execution">체결</TermLink>가는 지금 화면의 <TermLink id="reference-price">기준가</TermLink>, 즉 직전 라운드 종료가입니다.</li>
+        <li><TermLink id="fee">수수료</TermLink>는 매수와 매도 모두 <TermLink id="turnover">거래대금</TermLink>의 0.20%입니다.</li>
+        <li><TermLink id="sell">매도</TermLink> 대금은 다음 라운드부터 쓸 수 있습니다(<TermLink id="settlement">결제일</TermLink>을 단순화).</li>
+        <li>1<TermLink id="bp">bp</TermLink>는 0.01%입니다. 100bp가 1%입니다.</li>
+        <li>밑줄 친 낱말을 누르면 뜻이 나옵니다.</li>
       </ul>
+      <button className="ghost" onClick={() => { onClose(); navigate('/glossary'); }}>주식 용어 사전 열기</button>
     </Sheet>
   );
 }
@@ -138,19 +142,19 @@ function NewsBody({ card, result }: { card: NewsCard; result: NewsResult | null 
   return (
     <article className="news">
       <p className="news-meta">{card.breaking && <span className="chip alert">속보</span>}<span className="chip">{card.arcTitle}</span></p>
-      <h3 className="headline">{card.headline}</h3>
+      <h3 className="headline"><Rich text={card.headline} /></h3>
       <dl className="facts">
-        <dt>확인된 사실</dt><dd>{card.facts}</dd>
-        <dt>시장의 기대치</dt><dd className="expect">{card.expectation}</dd>
-        <dt>아직 남은 변수</dt><dd>{card.remaining}</dd>
-        <dt>주문 전 단서</dt><dd>{card.clue}</dd>
+        <dt>확인된 사실</dt><dd><Rich text={card.facts} /></dd>
+        <dt><TermLink id="expectation">시장의 기대치</TermLink></dt><dd className="expect"><Rich text={card.expectation} /></dd>
+        <dt>아직 남은 변수</dt><dd><Rich text={card.remaining} /></dd>
+        <dt>주문 전 단서</dt><dd><Rich text={card.clue} /></dd>
       </dl>
       {result && <div className="result">
         <dl className="facts">
-          <dt>실제 결과</dt><dd className="actual">{result.actual}</dd>
-          <dt>기대와의 차이</dt><dd>{result.gap}</dd>
-          <dt>기업별 영향 이유</dt><dd><ul className="impact">{result.impacts.map((i, k) => <li key={k}><span className={dir(i.bp)}>{i.code} {arrow(i.bp)} {pctBp(i.bp)}</span> {i.reason}</li>)}</ul></dd>
-          <dt>배운 점</dt><dd>{result.concept}</dd>
+          <dt>실제 결과</dt><dd className="actual"><Rich text={result.actual} /></dd>
+          <dt>기대와의 차이</dt><dd><Rich text={result.gap} /></dd>
+          <dt>기업별 영향 이유</dt><dd><ul className="impact">{result.impacts.map((i, k) => <li key={k}><span className={dir(i.bp)}>{i.code} {arrow(i.bp)} {pctBp(i.bp)}</span> <Rich text={i.reason} /></li>)}</ul></dd>
+          <dt>배운 점</dt><dd><Rich text={result.concept} /></dd>
         </dl>
       </div>}
     </article>
@@ -165,7 +169,7 @@ function Card({ view, send }: { view: RoomView; send: (m: object) => void }) {
   const c = view.card!;
   return (
     <div className="card-box">
-      <h3>{c.title}</h3><p>{c.body}</p>
+      <h3>{c.title}</h3><p><Rich text={c.body} /></p>
       <div className="seg">{c.options.map(o => <button key={o.key} aria-pressed={c.answered === o.key} onClick={() => send({ t: 'card', choice: o.key })}>{o.key}. {o.label}</button>)}</div>
       <p className="hint">{c.answered ? '판단을 저장했습니다. 마감 전까지 바꿀 수 있습니다. 주문은 주문 패널에서 따로 확정합니다.' : '응답은 판단 기록으로만 저장됩니다. 주문은 주문 패널에서 따로 확정합니다.'}</p>
     </div>
@@ -192,7 +196,7 @@ function Standing({ view }: { view: RoomView }) {
   const top = view.leaderboard.slice(0, 4);
   return (
     <div className="standing">
-      {me && <p className="me-line"><b>{me.rank}위</b> · 평가액 <b className="num">{won(view.portfolio?.value ?? me.value)}</b> <span className={dir(me.returnPct)}>{pct(me.returnPct)}</span> · 주문 가능 <b className="num">{won(view.portfolio?.available ?? 0)}</b></p>}
+      {me && <p className="me-line"><b>{me.rank}위</b> · <TermLink id="portfolio-value">평가액</TermLink> <b className="num">{won(view.portfolio?.value ?? me.value)}</b> <span className={dir(me.returnPct)}>{pct(me.returnPct)}</span> · <TermLink id="cash">주문 가능</TermLink> <b className="num">{won(view.portfolio?.available ?? 0)}</b></p>}
       <ol className="mini-rank">{top.map(l => <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''}>{l.rank}위 {l.label} <span className={dir(l.returnPct)}>{pct(l.returnPct)}</span></li>)}</ol>
     </div>
   );
@@ -231,7 +235,7 @@ function StockSheet({ stock, view, left, onClose, place, cancel, toast }: { stoc
       <PriceChart stock={stock} totalRounds={view.totalRounds} selected={point} onSelect={setPoint} />
       {pointData ? <BreakdownPanel b={pointData} /> : <p className="hint">가격은 라운드 마감 때만 바뀝니다. 첫 결과가 나오면 점을 눌러 이유를 볼 수 있어요.</p>}
       {related.length > 0 && view.phase !== 'recap' && <p className="hint">관련 뉴스: {related.map(r => r.card.headline).join(', ')}</p>}
-      {held && <p className="hint">보유 {held.qty.toLocaleString('ko-KR')}주 · 평균 {won(held.avgCost)} · 평가손익 <span className={dir(held.pnl)}>{signedWon(held.pnl)}</span></p>}
+      {held && <p className="hint">보유 {held.qty.toLocaleString('ko-KR')}주 · <TermLink id="avg-cost">평균</TermLink> {won(held.avgCost)} · <TermLink id="unrealized-pnl">평가손익</TermLink> <span className={dir(held.pnl)}>{signedWon(held.pnl)}</span></p>}
       {view.you.role === 'player' && <OrderPanel stock={stock} view={view} left={left} place={place} cancel={cancel} toast={toast} onDone={onClose} />}
     </Sheet>
   );
@@ -272,6 +276,7 @@ function OrderPanel({ stock, view, left, place, cancel, toast, onDone }: { stock
   return (
     <div className="order">
       <div className="seg side"><button data-s="buy" aria-pressed={side === 'buy'} onClick={() => { setSide('buy'); setQty(''); }}>매수</button><button data-s="sell" aria-pressed={side === 'sell'} onClick={() => { setSide('sell'); setQty(''); }}>매도</button></div>
+      <p className="hint"><TermLink id={side}>{side === 'buy' ? '매수' : '매도'}</TermLink>는 마감 때 <TermLink id="reference-price">기준가</TermLink>로 전량 <TermLink id="execution">체결</TermLink>됩니다.</p>
       <dl className="kv"><dt>기준가</dt><dd className="num">{won(stock.price)}</dd><dt>{side === 'buy' ? '최대 매수' : '라운드 시작 보유'}</dt><dd className="num">{max.toLocaleString('ko-KR')}주</dd></dl>
       <div className="stepper">
         <button aria-label="수량 줄이기" onClick={() => setQty(String(Math.max(0, n - 1)))}>−</button>
@@ -279,7 +284,7 @@ function OrderPanel({ stock, view, left, place, cancel, toast, onDone }: { stock
         <button aria-label="수량 늘리기" onClick={() => setQty(String(n + 1))}>+</button>
         <button className="max" onClick={() => setQty(String(max))}>최대</button>
       </div>
-      {n > 0 && <p className="hint">수수료 {won(fee)} · {side === 'buy' ? `총 차감액 ${won(gross + fee)}` : `수령액 ${won(gross - fee)}`}{n > max ? ' · 가능한 수량을 넘었어요' : ''}</p>}
+      {n > 0 && <p className="hint"><TermLink id="fee">수수료</TermLink> {won(fee)} · {side === 'buy' ? `총 차감액 ${won(gross + fee)}` : `수령액 ${won(gross - fee)}`}{n > max ? ' · 가능한 수량을 넘었어요' : ''}</p>}
       <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 주문 시작` : busy ? '요청 중' : `${side === 'buy' ? '매수 예약' : '매도 예약'}${existing ? ' 변경' : ''}`}</button>
     </div>
   );
@@ -291,13 +296,13 @@ function Assets({ view, cancel, toast }: { view: RoomView; cancel: PlayProps['ca
     <div className="panel">
       <h2 className="h">내 자산</h2>
       <dl className="kv">
-        <dt>평가액</dt><dd className="num">{won(p.value)}</dd>
-        <dt>수익률</dt><dd className={`num ${dir(p.returnPct)}`}>{pct(p.returnPct)}</dd>
-        <dt>보유 현금</dt><dd className="num">{won(p.cash)}</dd>
-        <dt>매수 예약금</dt><dd className="num">{won(p.reserved)}</dd>
-        <dt>낸 수수료</dt><dd className="num">{won(p.fees)}</dd>
+        <dt><TermLink id="portfolio-value">평가액</TermLink></dt><dd className="num">{won(p.value)}</dd>
+        <dt><TermLink id="return-rate">수익률</TermLink></dt><dd className={`num ${dir(p.returnPct)}`}>{pct(p.returnPct)}</dd>
+        <dt><TermLink id="cash">보유 현금</TermLink></dt><dd className="num">{won(p.cash)}</dd>
+        <dt><TermLink id="deposit-reserved">매수 예약금</TermLink></dt><dd className="num">{won(p.reserved)}</dd>
+        <dt>낸 <TermLink id="fee">수수료</TermLink></dt><dd className="num">{won(p.fees)}</dd>
       </dl>
-      <h3 className="h small">보유 종목</h3>
+      <h3 className="h small">보유 종목 <small className="hint">· 오른쪽 숫자는 <TermLink id="unrealized-pnl">평가손익</TermLink></small></h3>
       {p.holdings.length ? <ul className="list">{p.holdings.map(h => <li key={h.code}><span>{h.name}<small>{h.qty.toLocaleString('ko-KR')}주 · 평균 {won(h.avgCost)}</small></span><span className={dir(h.pnl)}>{signedWon(h.pnl)}</span></li>)}</ul> : <p className="hint">아직 보유 종목이 없습니다.</p>}
       <h3 className="h small">이번 라운드 예약</h3>
       {p.orders.length ? <ul className="list">{p.orders.map(o => <li key={o.code}><span>{view.stocks.find(s => s.code === o.code)!.name}<small>{o.side === 'buy' ? '매수' : '매도'} {o.qty.toLocaleString('ko-KR')}주 · {won(o.price)}</small></span><button className="ghost small" disabled={view.phase !== 'trade'} onClick={async () => { const r = await cancel(o.code); toast(r.ok ? '예약을 취소했습니다' : r.reason ?? '취소하지 못했습니다'); }}>취소</button></li>)}</ul> : <p className="hint">예약한 주문이 없습니다.</p>}
@@ -329,7 +334,7 @@ function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => voi
         <p>가장 큰 기여 종목 {r.best ? <><b>{r.best.name}</b> <span className={dir(r.best.won)}>{signedWon(r.best.won)}</span></> : '없음'}</p>
         <p className="hint">{r.fills.length ? `체결 ${r.fills.length}건 · 수수료 ${won(r.fees)} 별도` : '이번 라운드 체결 없음'}</p>
       </div>}
-      {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p>{view.card.feedback}</p><p className="hint">학습 개념: {view.card.concept}</p></div>}
+      {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
       {view.prediction?.correct !== null && view.prediction?.correct !== undefined && <p className="hint strong">결과 예측: {view.prediction.correct ? '맞혔어요' : '빗나갔어요'} (확신도 {view.prediction.confidence}%)</p>}
       {now?.cards.map(c => <NewsBody key={c.card.stageId} card={c.card} result={c.result} />)}
       <h3 className="h small">종목별 결과</h3>
@@ -351,7 +356,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
       {rep ? <><h1 className="rank-big num">{rep.rank}위</h1><p className="lede">최종 평가액 <b className="num">{won(rep.value)}</b> <span className={dir(rep.returnPct)}>{pct(rep.returnPct)}</span></p></> : <h1 className="logo small">결과 발표</h1>}
       <h2 className="h">순위</h2>
       <table className="rank-table"><thead><tr><th>순위</th><th>참가자</th><th>수익률</th></tr></thead><tbody>
-        {view.leaderboard.map(l => <tr key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''}><td className="num">{l.rank}</td><td>{l.label}{l.npcType ? '' : ''}</td><td className={`num ${dir(l.returnPct)}`}>{pct(l.returnPct)}</td></tr>)}
+        {view.leaderboard.map(l => <tr key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''}><td className="num">{l.rank}</td><td>{l.label}{l.npcRule && <small className="npc-rule">{l.npcRule}</small>}</td><td className={`num ${dir(l.returnPct)}`}>{pct(l.returnPct)}</td></tr>)}
       </tbody></table>
       {rep && <>
         <h2 className="h">주요 거래</h2>
@@ -360,6 +365,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
         {rep.judgments.length > 0 && <><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></>}
         {rep.metrics && <><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></>}
       </>}
+      <GameTerms view={view} />
       <h2 className="h">종목 그래프 다시 보기</h2>
       <div className="board">{view.stocks.map(s => <button key={s.code} className="row" onClick={() => { setOpen(s.code); setPoint(s.history[s.history.length - 1]?.round ?? null); }}><span className="row-main"><b>{s.name}</b><small>{s.code}</small></span><span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}</b><small className={dir(s.price - s.startPrice)}>{pct((s.price / s.startPrice - 1) * 100)}</small></span></button>)}</div>
       {stock && <Sheet title={stock.name} onClose={() => setOpen(null)}><PriceChart stock={stock} totalRounds={view.totalRounds} selected={point} onSelect={setPoint} />{pointData && <BreakdownPanel b={pointData} />}</Sheet>}
@@ -372,5 +378,27 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
       </div>
       <Disclaimer />
     </main>
+  );
+}
+
+/** 이번 판 뉴스·돌발 카드에 나온 용어를 모아 복습하게 합니다. 열어 본 용어는 ✓로 표시합니다. */
+function GameTerms({ view }: { view: RoomView }) {
+  const { open, seen } = useGlossary();
+  /* 모든 뉴스 카드에 '시장의 기대치' 칸이 있으므로 항상 맨 앞에 넣습니다. */
+  const ids = useMemo(() => termsIn([
+    '시장의 기대치',
+    ...view.news.flatMap(r => r.cards.flatMap(c => [c.card.headline, c.card.facts, c.card.expectation, c.card.remaining, c.card.clue,
+      ...(c.result ? [c.result.actual, c.result.gap, c.result.concept, ...c.result.impacts.map(i => i.reason)] : [])])),
+    ...(view.report?.judgments.map(j => j.concept) ?? [])
+  ]), [view.news, view.report]);
+  if (!ids.length) return null;
+  const learned = ids.filter(id => seen.has(id)).length;
+  return (
+    <section className="game-terms">
+      <h2 className="h">이번 판에 나온 용어</h2>
+      <p className="hint">{ids.length}개 중 {learned}개를 열어 봤어요. 눌러서 뜻을 확인하세요.</p>
+      <div className="term-chips">{ids.map(id => <button key={id} className={`term-chip${seen.has(id) ? ' seen' : ''}`} onClick={() => open(id)}>{termById.get(id)!.term}</button>)}</div>
+      <button className="ghost" onClick={() => navigate(`/glossary?quiz=1&pool=${ids.join(',')}`)}>이번 판 용어로 퀴즈 풀기</button>
+    </section>
   );
 }

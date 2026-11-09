@@ -61,6 +61,8 @@ export interface PredictionView {
 }
 export interface LeaderRow {
   playerId: string; label: string; kind: 'human' | 'npc'; npcType: string | null; connected: boolean;
+  /** NPC의 주문 규칙 설명. 사람은 null */
+  npcRule: string | null;
   value: number; returnPct: number; rank: number;
 }
 export interface Contribution { code: StockCode; name: string; qty: number; won: number }

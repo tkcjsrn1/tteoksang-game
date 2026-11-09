@@ -11,7 +11,8 @@ const store = createStore();
 const hub = new Hub({
   store,
   staticDir: path.resolve(process.cwd(), 'dist'),
-  allowTestHooks: process.env.ALLOW_TEST_HOOKS === '1'
+  allowTestHooks: process.env.ALLOW_TEST_HOOKS === '1',
+  trustProxy: process.env.TRUST_PROXY === '1'
 });
 const port = await hub.listen(Number(process.env.PORT ?? 8787));
 console.log(`서버 실행 중: http://localhost:${port} (저장소: ${store.name})`);

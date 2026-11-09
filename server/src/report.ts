@@ -1,5 +1,5 @@
 /* 판이 끝난 뒤 개인에게만 보내는 리포트. 지표는 해당 판에서 관찰한 행동만 설명합니다. */
-import { stockOf } from '../../shared/rules';
+import { START_CASH, stockOf } from '../../shared/rules';
 import type { FinalReport, Metric } from '../../shared/types';
 import { cardById } from './content';
 import type { GameRoom, Player } from './room';
@@ -55,5 +55,5 @@ export function buildReport(room: GameRoom, p: Player): FinalReport {
     const c = cardById.get(room.s.plan.rounds[Number(r) - 1].cardId!)!;
     return { title: c.title, choice: c.options.find(o => o.key === choice)!.label, concept: c.concept };
   });
-  return { rank: room.rankOf(p), value, returnPct: (value / 10_000_000 - 1) * 100, fees: p.fees, majorTrades, metrics: room.config.report ? buildMetrics(p) : null, judgments };
+  return { rank: room.rankOf(p), value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees, majorTrades, metrics: room.config.report ? buildMetrics(p) : null, judgments };
 }

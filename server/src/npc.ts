@@ -32,7 +32,7 @@ export const NPC_RULES: Record<NpcType, { label: string; rule: string; decide: (
     decide: ({ lastChangeBp, prices, ctx }) => {
       const out: NpcOrder[] = [];
       for (const [code, bp] of Object.entries(lastChangeBp) as [StockCode, number][]) {
-        if (bp >= 300) out.push({ code, side: 'buy', qty: Math.floor(ctx.cash * .25 / prices[code]) });
+        if (bp >= 300) out.push({ code, side: 'buy', qty: Math.min(Math.floor(ctx.cash * .25 / prices[code]), maxBuyQty(ctx, code, prices[code])) });
         else if (bp <= -300 && ctx.holdings[code]?.qty) out.push({ code, side: 'sell', qty: Math.ceil(ctx.holdings[code]!.qty / 2) });
       }
       return out;

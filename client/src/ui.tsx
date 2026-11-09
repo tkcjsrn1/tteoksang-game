@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DISCLAIMER, formatPct } from '../../shared/rules';
 import type { PriceBreakdown, StockView } from '../../shared/types';
+import { Rich, TermLink } from './glossary/GlossaryContext';
 
 export const won = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 export const signedWon = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n)).toLocaleString('ko-KR')}원`;
@@ -19,20 +20,20 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
     <div className="breakdown">
       <p className="bd-title">R{String(b.round).padStart(2, '0')} · {b.summary}</p>
       <dl className="kv">
-        <dt>이전가</dt><dd className="num">{won(b.basePrice)}</dd>
-        <dt>종료가</dt><dd className="num">{won(b.closePrice)}</dd>
-        <dt>실제 등락률</dt><dd className={`num ${dir(b.changeBp)}`}>{arrow(b.changeBp)} {pctBp(b.changeBp)}</dd>
+        <dt><TermLink id="reference-price">이전가</TermLink></dt><dd className="num">{won(b.basePrice)}</dd>
+        <dt><TermLink id="close-price">종료가</TermLink></dt><dd className="num">{won(b.closePrice)}</dd>
+        <dt>실제 <TermLink id="change-rate">등락률</TermLink></dt><dd className={`num ${dir(b.changeBp)}`}>{arrow(b.changeBp)} {pctBp(b.changeBp)}</dd>
       </dl>
       <h4>변동 근거</h4>
       <ul className="bd-list">
-        {b.events.map((e, i) => <li key={i}><span><b>{e.label}</b><small>{e.reason}</small></span><span className={`num ${dir(e.bp)}`}>{bpText(e.bp)}</span></li>)}
+        {b.events.map((e, i) => <li key={i}><span><b>{e.label}</b><small><Rich text={e.reason} /></small></span><span className={`num ${dir(e.bp)}`}>{bpText(e.bp)}</span></li>)}
         {!b.events.length && <li><span>이 종목에 직접 영향을 준 사건은 없었습니다</span></li>}
-        <li><span>공통 시장 변동</span><span className={`num ${dir(b.marketBp)}`}>{bpText(b.marketBp)}</span></li>
-        <li><span>종목 변동</span><span className={`num ${dir(b.stockBp)}`}>{bpText(b.stockBp)}</span></li>
+        <li><span><TermLink id="systematic-risk">공통 시장 변동</TermLink></span><span className={`num ${dir(b.marketBp)}`}>{bpText(b.marketBp)}</span></li>
+        <li><span><TermLink id="volatility">종목 변동</TermLink></span><span className={`num ${dir(b.stockBp)}`}>{bpText(b.stockBp)}</span></li>
         <li className="bd-sum"><span>합계</span><span className={`num ${dir(b.rawBp)}`}>{bpText(b.rawBp)}</span></li>
       </ul>
-      {b.capped && <p className="note">±2,000bp 제한이 적용되어 합계 {bpText(b.rawBp)} 대신 {bpText(b.cappedBp)}을 썼습니다.</p>}
-      {b.limit && <p className="note">{b.limit === 'upper' ? `상한가 ${won(b.upperLimit)}` : `하한가 ${won(b.lowerLimit)}`}가 적용되었습니다.</p>}
+      {b.capped && <p className="note">±2,000<TermLink id="bp">bp</TermLink> 제한이 적용되어 합계 {bpText(b.rawBp)} 대신 {bpText(b.cappedBp)}을 썼습니다.</p>}
+      {b.limit && <p className="note"><TermLink id="price-limit">{b.limit === 'upper' ? '상한가' : '하한가'}</TermLink> {won(b.limit === 'upper' ? b.upperLimit : b.lowerLimit)}가 적용되었습니다.</p>}
       {b.roundingWon !== 0 && <p className="note">10원 단위 반올림으로 가격이 {signedWon(b.roundingWon)} 조정되어, 실제 등락률이 합계와 조금 다를 수 있습니다.</p>}
     </div>
   );
@@ -40,7 +41,7 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
 
 /** 라운드 종료가 선 그래프. 가격은 마감 때만 찍히고, 점을 누르면 이유를 봅니다. */
 export function PriceChart({ stock, totalRounds, selected, onSelect }: { stock: StockView; totalRounds: number; selected: number | null; onSelect: (round: number) => void }) {
-  const W = 340, H = 170, L = 8, R = 58, T = 14, B = 22;
+  const W = 340, H = 170, L = 8, R = 78, T = 14, B = 22;   /* R: 오른쪽 가격 라벨 자리. 좁으면 '시작 12,400'이 잘립니다 */
   const pts = [{ round: 0, price: stock.startPrice }, ...stock.history.map(h => ({ round: h.round, price: h.closePrice }))];
   const lo0 = Math.min(...pts.map(p => p.price)), hi0 = Math.max(...pts.map(p => p.price));
   const pad = Math.max((hi0 - lo0) * .12, stock.startPrice * .02);

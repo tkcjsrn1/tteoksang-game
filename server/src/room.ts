@@ -18,7 +18,7 @@ export interface Player {
   id: string; token: string; label: string; kind: 'human' | 'npc'; npcType: NpcType | null; joinedAt: number; connected: boolean;
   cash: number; holdings: Partial<Record<StockCode, Holding>>; orders: Partial<Record<StockCode, Order>>;
   /** 요청 ID별 응답. 같은 요청이 다시 와도 새 주문을 만들지 않습니다. */
-  requests: Record<string, { ok: boolean; reason?: string }>;
+  requests: Record<string, { ok: boolean; reason?: string; round?: number }>;
   fills: Fill[]; fees: number; valueHist: number[]; rankHist: number[]; results: RoundResult[];
   cards: Record<number, 'A' | 'B'>; predictions: Record<number, { stageId: string; choice: 'A' | 'B'; confidence: number; correct: boolean | null }>;
   observations: Observation[];
@@ -32,6 +32,8 @@ export interface RoomState {
   settled: number[]; nextRoomCode: string | null;
 }
 export type OrderResult = { ok: boolean; reason?: string; duplicate?: boolean };
+/** 한 라운드에 참가자 한 명이 보낼 수 있는 주문·취소 요청 수. 넘으면 거절해 저장 상태가 무한히 커지지 않게 합니다. */
+export const MAX_REQUESTS_PER_ROUND = 200;
 
 const ANIMALS = ['사슴', '수달', '고래', '너구리', '판다', '여우', '참새', '두루미', '해달', '토끼', '다람쥐', '거북'];
 const token = () => randomBytes(18).toString('base64url');
@@ -128,6 +130,10 @@ export class GameRoom {
   }
   private beginRound(r: number, now: number) {
     this.s.round = r;
+    /* 중복 확인용 요청 기록은 직전 라운드까지만 남깁니다. 클라이언트 재전송은 6초 안에 끝나므로 충분합니다. */
+    this.s.players.forEach(p => {
+      for (const [id, v] of Object.entries(p.requests)) if ((v.round ?? 0) < r - 1) delete p.requests[id];
+    });
     this.s.secondRevealed = false;
     this.s.newsStartedAt = now;
     this.setPhase('news', this.config.news, now);
@@ -182,12 +188,16 @@ export class GameRoom {
     if (!p) return { ok: false, reason: '참가자만 주문할 수 있습니다' };
     if (!requestId) return { ok: false, reason: '요청 ID가 없습니다' };
     const seen = p.requests[requestId];
-    if (seen) return { ...seen, duplicate: true };
+    if (seen) return { ok: seen.ok, reason: seen.reason, duplicate: true };
+    if (this.tooManyRequests(p)) return { ok: false, reason: '이번 라운드 요청이 너무 많습니다' };
     if (!stockOf(code)) return { ok: false, reason: '없는 종목입니다' };
     if (side !== 'buy' && side !== 'sell') return { ok: false, reason: '잘못된 주문입니다' };
     const res = this.applyOrder(p, requestId, code, side, qty, now);
-    p.requests[requestId] = res;
+    p.requests[requestId] = { ...res, round: this.s.round };
     return res;
+  }
+  private tooManyRequests(p: Player) {
+    return Object.values(p.requests).filter(v => v.round === this.s.round).length >= MAX_REQUESTS_PER_ROUND;
   }
   private tradeOpen(now: number) { return this.s.status === 'playing' && this.s.phase === 'trade' && this.s.phaseEndsAt !== null && now < this.s.phaseEndsAt; }
   private applyOrder(p: Player, requestId: string, code: StockCode, side: Side, qty: number, now: number): OrderResult {
@@ -203,12 +213,13 @@ export class GameRoom {
     const p = this.player(tokenValue);
     if (!p) return { ok: false, reason: '참가자만 취소할 수 있습니다' };
     const seen = p.requests[requestId];
-    if (seen) return { ...seen, duplicate: true };
+    if (seen) return { ok: seen.ok, reason: seen.reason, duplicate: true };
+    if (this.tooManyRequests(p)) return { ok: false, reason: '이번 라운드 요청이 너무 많습니다' };
     let res: OrderResult;
     if (!this.tradeOpen(now)) res = { ok: false, reason: '이번 라운드 주문 마감' };
     else if (!p.orders[code]) res = { ok: false, reason: '취소할 주문이 없습니다' };
     else { delete p.orders[code]; res = { ok: true }; }
-    p.requests[requestId] = res;
+    p.requests[requestId] = { ...res, round: this.s.round };
     return res;
   }
   answerCard(tokenValue: string, choice: 'A' | 'B', now: number) {
@@ -328,7 +339,7 @@ export class GameRoom {
 
   leaderboard(): LeaderRow[] {
     return this.s.players.map(p => ({
-      playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, connected: p.connected,
+      playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected,
       value: this.value(p), returnPct: (this.value(p) / START_CASH - 1) * 100, rank: this.rankOf(p)
     })).sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
   }
@@ -403,7 +414,7 @@ export class GameRoom {
   private prevLeaderboard(): LeaderRow[] {
     return this.s.players.map(p => {
       const v = p.valueHist[p.valueHist.length - 2] ?? START_CASH;
-      return { playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, connected: p.connected, value: v, returnPct: (v / START_CASH - 1) * 100, rank: p.rankHist[p.rankHist.length - 2] ?? 1 };
+      return { playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected, value: v, returnPct: (v / START_CASH - 1) * 100, rank: p.rankHist[p.rankHist.length - 2] ?? 1 };
     }).sort((a, b) => a.rank - b.rank);
   }
 }

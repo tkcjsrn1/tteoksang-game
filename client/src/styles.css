@@ -147,6 +147,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .rank-table th:nth-child(2), .rank-table td:nth-child(2) { text-align: left; }
 .rank-table th:first-child, .rank-table td:first-child { text-align: left; }
 .rank-table tr.me td { color: var(--led); font-weight: 700; }
+.rank-table .npc-rule { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 2px; }
 .metrics { display: grid; gap: 10px; }
 .metric { background: var(--panel); padding: 12px 14px; border-radius: 8px; display: grid; gap: 4px; }
 .metric h3 { font-weight: 700; font-size: 15px; }
@@ -204,3 +205,37 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   .d-qr { width: min(80vw, 320px); justify-self: center; }
 }
 @media (prefers-reduced-motion: reduce) { .timer i { transition: none; } }
+
+/* 용어 사전 */
+.gl-term { display: inline; background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; text-decoration: underline dotted var(--led); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; }
+.gl-term:hover { color: var(--led); }
+.sheet-wrap.top { z-index: 25; }
+.term-sheet .term-short { color: var(--led); font-weight: 700; }
+.term-game { background: var(--panel-2); border-left: 3px solid var(--led); padding: 8px 10px; border-radius: 4px; font-size: 14px; }
+.term-game b { color: var(--led); margin-right: 4px; }
+.term-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.term-chip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13.5px; }
+.term-chip.seen { border-color: var(--good); }
+.term-chip.seen::after { content: " ✓"; color: var(--good); }
+.today-term { background: var(--panel); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; }
+.sub-actions.two { grid-template-columns: 1fr 1fr; background: none; padding: 0; }
+.progress { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--good); }
+.cat-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.cat-row button { flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13.5px; }
+.cat-row button[aria-pressed=true] { background: var(--led); color: var(--led-ink); border-color: var(--led); font-weight: 700; }
+.term-list { display: grid; gap: 2px; }
+.term-list li { background: var(--panel); border-radius: 6px; }
+.term-list li.open { box-shadow: inset 0 0 0 1px var(--led); }
+.term-row { width: 100%; text-align: left; background: none; border: 0; padding: 10px 12px; }
+.term-row b { font-weight: 700; }
+.term-row small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+.term-row .seen { display: inline; color: var(--good); }
+.term-detail { padding: 0 12px 12px; display: grid; gap: 8px; }
+.quiz-opts { display: grid; gap: 8px; }
+.quiz-opts button { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.quiz-opts button:disabled { opacity: 1; cursor: default; }
+.quiz-opts button.right { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.quiz-opts button.wrong { border-color: var(--up); box-shadow: inset 0 0 0 1px var(--up); }
+.game-terms { display: grid; gap: 8px; }
+input[type=search] { -webkit-appearance: none; appearance: none; }
