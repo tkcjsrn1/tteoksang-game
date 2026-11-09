@@ -6,6 +6,13 @@ export interface CoachStep { no: number; total: number; title: string; text: str
 
 export const COACH_TOTAL = 5;
 
+/** 받침이 있으면 '을', 없으면 '를'. 한글로 끝나지 않으면 '을(를)'을 씁니다. */
+export function eulReul(word: string): string {
+  const c = word.charCodeAt(word.length - 1);
+  if (c < 0xac00 || c > 0xd7a3) return `${word}을(를)`;
+  return `${word}${(c - 0xac00) % 28 ? '을' : '를'}`;
+}
+
 /** 첫 라운드 뉴스가 가리키는 종목. 따라 하기에서 강조합니다. */
 export function coachTarget(view: RoomView): StockCode | null {
   const cards = view.news.find(r => r.round === 1)?.cards ?? [];
@@ -25,7 +32,7 @@ export function coachStep(view: RoomView, openStock: StockCode | null): CoachSte
     '주문은 마감 때 지금 가격(기준가)으로 한꺼번에 체결됩니다. 마감 전까지는 바꾸거나 취소할 수 있어요.');
   if (view.phase === 'trade' && openStock) return step(3, '수량을 넣고 매수 예약',
     '처음이니 10주만 사 볼까요? 수량 칸에 10을 넣고 “매수 예약”을 누르세요. 단서가 나쁜 쪽을 가리킨다면 사지 않는 것도 판단입니다.');
-  if (view.phase === 'trade') return step(2, `${name}을(를) 눌러 보세요`,
+  if (view.phase === 'trade') return step(2, `${eulReul(name)} 눌러 보세요`,
     '아래 시장 목록에서 빛나는 종목이 이번 뉴스의 주인공입니다. 눌러서 가격과 주문 창을 여세요.');
   if (view.phase === 'settling' || view.phase === 'recap') return step(5, '기대와 결과를 비교해요',
     '실제 결과가 기대치보다 좋았는지 확인하세요. 종목을 누르고 그래프의 점을 누르면 가격이 왜 움직였는지 bp 단위로 나옵니다. 다음 라운드부터는 혼자 해 보세요!');

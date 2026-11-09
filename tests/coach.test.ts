@@ -1,7 +1,7 @@
 /* 첫 판 따라 하기 안내가 화면 상태에 맞는 단계를 고르는지 확인합니다. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { coachStep, coachTarget } from '../client/src/coach';
+import { coachStep, coachTarget, eulReul } from '../client/src/coach';
 import { GameRoom } from '../server/src/room';
 
 const T0 = 1_000_000;
@@ -41,4 +41,12 @@ test('친구 대전과 관전자에게는 안내하지 않는다', () => {
   assert.equal(coachStep(room.view(a, 'player', T0), null), null);
   const { room: s } = solo();
   assert.equal(coachStep(s.view(null, 'spectator', T0), null), null);
+});
+
+test('조사: 받침에 따라 을/를을 고른다', () => {
+  assert.equal(eulReul('타르멜 물순환'), '타르멜 물순환을');
+  assert.equal(eulReul('피노벡 소리극장'), '피노벡 소리극장을');
+  assert.equal(eulReul('아보튠 배양소재'), '아보튠 배양소재를');
+  assert.equal(eulReul('누바칸 미세전력'), '누바칸 미세전력을');
+  assert.equal(eulReul('ABC'), 'ABC을(를)');
 });
