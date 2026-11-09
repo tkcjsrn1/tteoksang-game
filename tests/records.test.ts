@@ -1,7 +1,7 @@
 /* 개인 기록 저장 규칙 */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { addRecord, MAX_RECORDS, parseRecords, summarize, type GameRecord } from '../client/src/records';
+import { addRecord, MAX_RECORDS, parseRecords, summarize, type GameRecord } from '../client/src/recordStore';
 
 const rec = (code: string, ret: number, rank = 2, at = 1_000_000_000): GameRecord => ({ code, mode: 'solo', at, rank, players: 4, returnPct: ret, fees: 1000, bestHuman: rank === 1 });
 

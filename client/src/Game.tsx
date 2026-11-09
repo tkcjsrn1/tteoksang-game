@@ -5,7 +5,7 @@ import type { NewsCard, NewsResult, Order, RoomView, Side, StockCode, StockView 
 import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
 import { coachStep, type CoachStep } from './coach';
-import { addRecord, parseRecords, RECORDS_KEY } from './records';
+import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { joinUrl, store, useRoom, useSecondsLeft, type OrderOutcome } from './net';
 import { arrow, BreakdownPanel, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, useToast, won } from './ui';

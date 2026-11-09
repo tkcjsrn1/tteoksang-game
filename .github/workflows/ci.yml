@@ -7,7 +7,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Windows에서만 깨지는 문제(파일 이름 대소문자 등)를 잡으려고 두 OS에서 돌립니다.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

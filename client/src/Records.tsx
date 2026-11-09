@@ -5,7 +5,7 @@ import { TERMS } from '../../shared/glossary';
 import { navigate } from './App';
 import { useGlossary } from './glossary/GlossaryContext';
 import { store } from './net';
-import { parseRecords, RECORDS_KEY, summarize } from './records';
+import { parseRecords, RECORDS_KEY, summarize } from './recordStore';
 import { dir, Disclaimer, pct, won } from './ui';
 
 export function Records() {
