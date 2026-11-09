@@ -1,14 +1,14 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, MODES, START_CASH, stockOf, STOCKS } from '../../shared/rules';
+import { checkOrder, computeClose, GROUPS, LEGACY_CODES, MODES, stagedWicks, START_CASH, stockOf, type OrderFlow, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, EventImpact, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, PredictionView, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
 import { buildPlan, type ForcedOutcomes, type GamePlan } from './plan';
 import { buildReport } from './report';
 
-export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string }
+export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; refPrice?: number; fee: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string }
 export interface Observation {
   round: number;
   paperGain: number; paperLoss: number; realizedGain: number; realizedLoss: number;
@@ -18,7 +18,7 @@ export interface Player {
   id: string; token: string; label: string; kind: 'human' | 'npc'; npcType: NpcType | null; joinedAt: number; connected: boolean;
   cash: number; holdings: Partial<Record<StockCode, Holding>>; orders: Partial<Record<StockCode, Order>>;
   /** 요청 ID별 응답. 같은 요청이 다시 와도 새 주문을 만들지 않습니다. */
-  requests: Record<string, { ok: boolean; reason?: string }>;
+  requests: Record<string, { ok: boolean; reason?: string; round?: number }>;
   fills: Fill[]; fees: number; valueHist: number[]; rankHist: number[]; results: RoundResult[];
   cards: Record<number, 'A' | 'B'>; predictions: Record<number, { stageId: string; choice: 'A' | 'B'; confidence: number; correct: boolean | null }>;
   observations: Observation[];
@@ -32,11 +32,15 @@ export interface RoomState {
   settled: number[]; nextRoomCode: string | null;
 }
 export type OrderResult = { ok: boolean; reason?: string; duplicate?: boolean };
+/** 한 라운드에 참가자 한 명이 보낼 수 있는 주문·취소 요청 수. 넘으면 거절해 저장 상태가 무한히 커지지 않게 합니다. */
+export const MAX_REQUESTS_PER_ROUND = 200;
 
 const ANIMALS = ['사슴', '수달', '고래', '너구리', '판다', '여우', '참새', '두루미', '해달', '토끼', '다람쥐', '거북'];
 const token = () => randomBytes(18).toString('base64url');
 const npcId = (t: NpcType) => `npc-${t}`;
-const initialPrices = () => Object.fromEntries(STOCKS.map(s => [s.code, s.start])) as Record<StockCode, number>;
+/** 이번 판에 나오는 종목. 예전에 저장된 방(stockCodes 없음)은 처음 6종목으로 봅니다. */
+export const gameCodes = (plan: GamePlan): StockCode[] => plan.stockCodes ?? LEGACY_CODES;
+const initialPrices = (codes: StockCode[]) => Object.fromEntries(codes.map(c => [c, stockOf(c).start])) as Record<StockCode, number>;
 
 function newPlayer(kind: 'human' | 'npc', label: string, now: number, npcType: NpcType | null = null, id?: string): Player {
   return { id: id ?? token().slice(0, 10), token: kind === 'human' ? token() : '', label, kind, npcType, joinedAt: now, connected: kind === 'human', cash: START_CASH, holdings: {}, orders: {}, requests: {}, fills: [], fees: 0, valueHist: [START_CASH], rankHist: [], results: [], cards: {}, predictions: {}, observations: [] };
@@ -54,11 +58,13 @@ export class GameRoom {
     return new GameRoom({
       code: opts.code, mode: opts.mode, seed, status: 'lobby', hostId: null, operatorToken: opts.mode === 'academic' ? token() : null,
       createdAt: opts.now, updatedAt: opts.now, plan, excludedArcs: excluded, round: 0, phase: null, phaseEndsAt: null, phaseSeconds: 0, newsStartedAt: 0, secondRevealed: false,
-      players: npcs, spectators: [], prices: initialPrices(), history: Object.fromEntries(STOCKS.map(s => [s.code, []])) as unknown as Record<StockCode, PriceBreakdown[]>,
+      players: npcs, spectators: [], prices: initialPrices(gameCodes(plan)), history: Object.fromEntries(gameCodes(plan).map(c => [c, []])) as unknown as Record<StockCode, PriceBreakdown[]>,
       settled: [], nextRoomCode: null
     });
   }
 
+  /** 이번 판 종목 정의(업종 순서). */
+  get stocks(): StockDef[] { return gameCodes(this.s.plan).map(stockOf); }
   get humans() { return this.s.players.filter(p => p.kind === 'human'); }
   get config() { return MODES[this.s.mode]; }
   player(tokenValue: string | null | undefined) { return tokenValue ? this.s.players.find(p => p.token === tokenValue) ?? null : null; }
@@ -128,6 +134,10 @@ export class GameRoom {
   }
   private beginRound(r: number, now: number) {
     this.s.round = r;
+    /* 중복 확인용 요청 기록은 직전 라운드까지만 남깁니다. 클라이언트 재전송은 6초 안에 끝나므로 충분합니다. */
+    this.s.players.forEach(p => {
+      for (const [id, v] of Object.entries(p.requests)) if ((v.round ?? 0) < r - 1) delete p.requests[id];
+    });
     this.s.secondRevealed = false;
     this.s.newsStartedAt = now;
     this.setPhase('news', this.config.news, now);
@@ -168,7 +178,7 @@ export class GameRoom {
     const signals: Partial<Record<StockCode, 1 | -1>> = {};
     r.stages.forEach(st => Object.assign(signals, stageById.get(st.stageId)!.signal));
     const lastChangeBp: Partial<Record<StockCode, number>> = {};
-    STOCKS.forEach(st => { const h = this.s.history[st.code]; if (h.length) lastChangeBp[st.code] = h[h.length - 1].changeBp; });
+    this.stocks.forEach(st => { const h = this.s.history[st.code]; if (h.length) lastChangeBp[st.code] = h[h.length - 1].changeBp; });
     this.s.players.filter(p => p.kind === 'npc').forEach(p => {
       NPC_RULES[p.npcType!].decide({ round: this.s.round, signals, prices: this.s.prices, lastChangeBp, ctx: p }).forEach((o, i) => {
         if (o.qty >= 1) this.applyOrder(p, `npc-${this.s.round}-${i}`, o.code, o.side, o.qty, now);
@@ -182,20 +192,24 @@ export class GameRoom {
     if (!p) return { ok: false, reason: '참가자만 주문할 수 있습니다' };
     if (!requestId) return { ok: false, reason: '요청 ID가 없습니다' };
     const seen = p.requests[requestId];
-    if (seen) return { ...seen, duplicate: true };
-    if (!stockOf(code)) return { ok: false, reason: '없는 종목입니다' };
+    if (seen) return { ok: seen.ok, reason: seen.reason, duplicate: true };
+    if (this.tooManyRequests(p)) return { ok: false, reason: '이번 라운드 요청이 너무 많습니다' };
+    if (!stockOf(code) || !gameCodes(this.s.plan).includes(code)) return { ok: false, reason: '없는 종목입니다' };
     if (side !== 'buy' && side !== 'sell') return { ok: false, reason: '잘못된 주문입니다' };
     const res = this.applyOrder(p, requestId, code, side, qty, now);
-    p.requests[requestId] = res;
+    p.requests[requestId] = { ...res, round: this.s.round };
     return res;
+  }
+  private tooManyRequests(p: Player) {
+    return Object.values(p.requests).filter(v => v.round === this.s.round).length >= MAX_REQUESTS_PER_ROUND;
   }
   private tradeOpen(now: number) { return this.s.status === 'playing' && this.s.phase === 'trade' && this.s.phaseEndsAt !== null && now < this.s.phaseEndsAt; }
   private applyOrder(p: Player, requestId: string, code: StockCode, side: Side, qty: number, now: number): OrderResult {
     if (!this.tradeOpen(now)) return { ok: false, reason: '이번 라운드 주문 마감' };
-    const price = this.s.prices[code];
-    const chk = checkOrder(p, code, side, qty, price);
+    const ref = this.s.prices[code];
+    const chk = checkOrder(p, code, side, qty, ref);
     if (!chk.ok) return { ok: false, reason: chk.reason };
-    p.orders[code] = { code, side, qty, price, gross: chk.gross, fee: chk.fee, reserve: chk.reserve, requestId, placedAt: now };
+    p.orders[code] = { code, side, qty, price: chk.price, refPrice: ref, slipBp: chk.slipBp, gross: chk.gross, fee: chk.fee, reserve: chk.reserve, requestId, placedAt: now };
     this.touch(now);
     return { ok: true };
   }
@@ -203,12 +217,13 @@ export class GameRoom {
     const p = this.player(tokenValue);
     if (!p) return { ok: false, reason: '참가자만 취소할 수 있습니다' };
     const seen = p.requests[requestId];
-    if (seen) return { ...seen, duplicate: true };
+    if (seen) return { ok: seen.ok, reason: seen.reason, duplicate: true };
+    if (this.tooManyRequests(p)) return { ok: false, reason: '이번 라운드 요청이 너무 많습니다' };
     let res: OrderResult;
     if (!this.tradeOpen(now)) res = { ok: false, reason: '이번 라운드 주문 마감' };
     else if (!p.orders[code]) res = { ok: false, reason: '취소할 주문이 없습니다' };
     else { delete p.orders[code]; res = { ok: true }; }
-    p.requests[requestId] = res;
+    p.requests[requestId] = { ...res, round: this.s.round };
     return res;
   }
   answerCard(tokenValue: string, choice: 'A' | 'B', now: number) {
@@ -227,7 +242,7 @@ export class GameRoom {
     return true;
   }
 
-  value(p: Player) { return p.cash + STOCKS.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * this.s.prices[st.code], 0); }
+  value(p: Player) { return p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * this.s.prices[st.code], 0); }
   rankOf(p: Player) { const v = this.value(p); return 1 + this.s.players.filter(x => this.value(x) > v).length; }
   private recordRanks() { this.s.players.forEach(p => p.rankHist.push(this.rankOf(p))); }
 
@@ -260,11 +275,11 @@ export class GameRoom {
         p.cash += order.gross - order.fee; p.fees += order.fee;
         h.qty -= order.qty;
         sold.add(order.code);
-        fills.push({ round, code: order.code, side: 'sell', qty: order.qty, price: order.price, fee: order.fee, gross: order.gross, realized: gain ? 'gain' : 'loss', requestId: order.requestId });
+        fills.push({ round, code: order.code, side: 'sell', qty: order.qty, price: order.price, refPrice: order.refPrice ?? order.price, fee: order.fee, gross: order.gross, realized: gain ? 'gain' : 'loss', requestId: order.requestId });
         if (h.qty === 0) delete p.holdings[order.code];
       });
       /* 팔 수 있었지만 계속 들고 있는 종목은 평가이익·평가손실로 셉니다(Odean의 PGR/PLR). 매도한 라운드만 셉니다. */
-      if (sold.size) STOCKS.forEach(st => {
+      if (sold.size) this.stocks.forEach(st => {
         const h = p.holdings[st.code];
         if (!h || sold.has(st.code)) return;
         if (this.s.prices[st.code] > h.avgCost) obs.paperGain++; else obs.paperLoss++;
@@ -276,9 +291,9 @@ export class GameRoom {
         h.avgCost = Math.round((h.avgCost * h.qty + order.gross) / (h.qty + order.qty));
         h.qty += order.qty;
         const others = (buyCounts[order.code] ?? 0) - 1;
-        const maxOthers = Math.max(0, ...STOCKS.map(st => (buyCounts[st.code] ?? 0) - (st.code === order.code ? 1 : 0)));
+        const maxOthers = Math.max(0, ...this.stocks.map(st => (buyCounts[st.code] ?? 0) - (st.code === order.code ? 1 : 0)));
         obs.buys.push({ code: order.code, gross: order.gross, followedHeadline: headline[order.code] === 1, herd: humanBuyers ? others > 0 && others === maxOthers : null, beat: beatOf[order.code] ?? null });
-        fills.push({ round, code: order.code, side: 'buy', qty: order.qty, price: order.price, fee: order.fee, gross: order.gross, realized: null, requestId: order.requestId });
+        fills.push({ round, code: order.code, side: 'buy', qty: order.qty, price: order.price, refPrice: order.refPrice ?? order.price, fee: order.fee, gross: order.gross, realized: null, requestId: order.requestId });
       });
       p.orders = {};
       p.fills.push(...fills);
@@ -286,15 +301,29 @@ export class GameRoom {
       fillsByPlayer.set(p.id, fills);
     });
 
-    /* 2. 종료가 계산 */
+    /* 2. 종료가 계산. 주문 흐름(체결 수량)은 종료가를 바꾸지 않고 거래량과 봉 꼬리(연출)에만 씁니다. */
     const bases = { ...this.s.prices };
-    STOCKS.forEach(st => {
+    const flow: Partial<Record<StockCode, OrderFlow>> = {};
+    fillsByPlayer.forEach(fs => fs.forEach(f => {
+      const fl = flow[f.code] ?? (flow[f.code] = { buyQty: 0, sellQty: 0, turnover: 0 });
+      if (f.side === 'buy') fl.buyQty += f.qty; else fl.sellQty += f.qty;
+      fl.turnover += f.gross;
+    }));
+    this.stocks.forEach(st => {
       const events: EventImpact[] = [];
       plan.stages.forEach(ps => {
         const out = stageById.get(ps.stageId)!.outcomes.find(o => o.id === ps.outcomeId)!;
         out.impacts.filter(i => i.code === st.code).forEach(i => events.push({ stageId: ps.stageId, label: out.label, bp: i.bp, reason: i.reason }));
+        /* 업종 동조화: 같은 업종 대장주에 사건이 나면 함께 움직입니다(linkBeta배). */
+        const leader = GROUPS[st.group].leader;
+        if (leader !== st.code) out.impacts.filter(i => i.code === leader).forEach(i => {
+          const bp = Math.round(i.bp * st.linkBeta);
+          if (bp) events.push({ stageId: ps.stageId, label: `업종 동반 · ${out.label}`, bp, reason: `같은 업종(${GROUPS[st.group].label}) ${stockOf(leader).name} 소식에 함께 움직였습니다` });
+        });
       });
-      const b = computeClose(round, bases[st.code], events, plan.marketBp, plan.stockBp[st.code]);
+      const c = computeClose(round, bases[st.code], events, plan.marketBp, plan.stockBp[st.code]);
+      const fl = flow[st.code] ?? { buyQty: 0, sellQty: 0, turnover: 0 };
+      const b = { ...c, ...stagedWicks(st.code, c, fl), volume: fl.buyQty + fl.sellQty, buyQty: fl.buyQty, sellQty: fl.sellQty };
       this.s.history[st.code].push(b);
       this.s.prices[st.code] = b.closePrice;
     });
@@ -312,14 +341,14 @@ export class GameRoom {
       p.valueHist.push(valueAfter);
       const prev = before.get(p.id)!, fills = fillsByPlayer.get(p.id)!;
       const contributions: Contribution[] = [];
-      STOCKS.forEach(st => {
+      this.stocks.forEach(st => {
         const qty = p.holdings[st.code]?.qty ?? 0;
         if (qty) contributions.push({ code: st.code, name: st.name, qty, won: qty * (this.s.prices[st.code] - bases[st.code]) });
       });
       contributions.sort((a, b) => Math.abs(b.won) - Math.abs(a.won));
       p.results.push({
         round, rankBefore: prev.rank, rankAfter: this.rankOf(p), valueBefore: prev.value, valueAfter, delta: valueAfter - prev.value,
-        fees: fills.reduce((a, f) => a + f.fee, 0), contributions, best: contributions[0] ?? null,
+        fees: fills.reduce((a, f) => a + f.fee, 0), slippage: fills.reduce((a, f) => a + Math.abs(f.price - (f.refPrice ?? f.price)) * f.qty, 0), contributions, best: contributions[0] ?? null,
         fills: fills.map(f => ({ code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee }))
       });
     });
@@ -328,7 +357,7 @@ export class GameRoom {
 
   leaderboard(): LeaderRow[] {
     return this.s.players.map(p => ({
-      playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, connected: p.connected,
+      playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected,
       value: this.value(p), returnPct: (this.value(p) / START_CASH - 1) * 100, rank: this.rankOf(p)
     })).sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
   }
@@ -354,7 +383,7 @@ export class GameRoom {
   /** 결과 공개 시점 전에는 이번 라운드 가격을 숨깁니다. 'settling' 동안 새 종료가는 나가지 않습니다. */
   private stocksView(): StockView[] {
     const hideLast = this.s.phase === 'settling';
-    return STOCKS.map(st => {
+    return this.stocks.map(st => {
       const all = this.s.history[st.code];
       const history = hideLast ? all.slice(0, -1) : all;
       const last = history[history.length - 1];
@@ -380,7 +409,7 @@ export class GameRoom {
     const stocks = this.stocksView();
     const priceOf = (c: StockCode) => stocks.find(x => x.code === c)!.price;
     const reserved = p ? Object.values(p.orders).reduce((a, o) => a + (o?.reserve ?? 0), 0) : 0;
-    const value = p ? p.cash + STOCKS.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * priceOf(st.code), 0) : 0;
+    const value = p ? p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * priceOf(st.code), 0) : 0;
     return {
       code: this.s.code, mode: this.s.mode, status: this.s.status, phase: this.s.phase, round: this.s.round, totalRounds: cfg.rounds,
       phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now,
@@ -391,7 +420,7 @@ export class GameRoom {
       stocks, news: this.newsView(), card: this.cardView(p), prediction: this.predictionView(p),
       portfolio: p ? {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
-        holdings: STOCKS.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost) }; }),
+        holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost) }; }),
         orders: Object.values(p.orders) as Order[],
         fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee }))
       } : null,
@@ -403,7 +432,7 @@ export class GameRoom {
   private prevLeaderboard(): LeaderRow[] {
     return this.s.players.map(p => {
       const v = p.valueHist[p.valueHist.length - 2] ?? START_CASH;
-      return { playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, connected: p.connected, value: v, returnPct: (v / START_CASH - 1) * 100, rank: p.rankHist[p.rankHist.length - 2] ?? 1 };
+      return { playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected, value: v, returnPct: (v / START_CASH - 1) * 100, rank: p.rankHist[p.rankHist.length - 2] ?? 1 };
     }).sort((a, b) => a.rank - b.rank);
   }
 }

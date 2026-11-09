@@ -1,7 +1,7 @@
 /* 학술제 대형 화면. 최신 뉴스, 종목 등락, 남은 시간, 상위 5명만 보여 줍니다. 개인 주문과 자산은 나오지 않습니다. */
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { joinUrl, store, useRoom, useSecondsLeft } from './net';
+import { joinNote, store, useJoinUrl, useRoom, useSecondsLeft } from './net';
 import { arrow, dir, Disclaimer, pct, pctBp } from './ui';
 
 export function Display({ code }: { code: string }) {
@@ -9,7 +9,7 @@ export function Display({ code }: { code: string }) {
   const opts = operatorToken ? { operatorToken } : { display: true };
   const { view, offset, send, error } = useRoom(code, opts);
   const [qr, setQr] = useState('');
-  const url = joinUrl(code);
+  const { url, note } = useJoinUrl(code);
   useEffect(() => { QRCode.toDataURL(url, { margin: 1, width: 420 }).then(setQr).catch(() => setQr('')); }, [url]);
   const left = useSecondsLeft(view?.phaseEndsAt, offset);
   if (!view) return <main className="center"><p>{error ?? '대형 화면을 준비하는 중입니다'}</p><Disclaimer /></main>;
@@ -21,6 +21,7 @@ export function Display({ code }: { code: string }) {
         <p className="d-count">입장 {view.humanCount}/{view.maxPlayers}명 + NPC 3명</p>
         {isOp && <button className="cta" disabled={view.humanCount < view.minToStart} onClick={() => send({ t: 'start' })}>{view.humanCount < view.minToStart ? '참가자를 기다리는 중' : '게임 시작'}</button>}
         {isOp && <p className="hint">이 화면을 대형 화면에 띄우세요. 운영자 권한은 이 기기에만 있습니다.</p>}
+        {note !== 'ok' && <p className="hint">{joinNote(note)}</p>}
       </div>
       {qr && <img className="d-qr" src={qr} alt="입장 QR 코드" />}
       <Disclaimer />

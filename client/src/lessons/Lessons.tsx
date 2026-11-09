@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { buildCandle, movingAverage, type Candle } from '../../../shared/candles';
 import { navigate } from '../App';
-import { bpText, dir, Disclaimer, won } from '../ui';
-import { candleExample, candleParts, candleQuestion, compareQuestion, dailyCloses, fiveMinute, LESSONS, newsCase, newsQuestion, oneMinute, type CandlePart } from './data';
+import { bpText, dir, Disclaimer, signedWon, won } from '../ui';
+import { candleExample, candleParts, candleQuestion, compareQuestion, dailyCloses, earningsCase, earningsQuestion, fiveMinute, LESSONS, marketBuy, newsCase, newsQuestion, oneMinute, operatingMargin, orderBook, orderQuestion, riskCase, riskQuestion, riskSummary, type CandlePart, type ChoiceQuestion } from './data';
+import { TermLink } from '../glossary/GlossaryContext';
+import type { ReactNode } from 'react';
 
 const n = (x: number) => Math.round(x).toLocaleString('ko-KR');
 
@@ -16,6 +18,9 @@ export function Lessons({ lessonId, review }: { lessonId: string | null; review:
       {lesson.id === 'candle' && <CandleLesson />}
       {lesson.id === 'compare' && <CompareLesson />}
       {lesson.id === 'news' && <NewsLesson review={review} />}
+      {lesson.id === 'orders' && <OrdersLesson />}
+      {lesson.id === 'earnings' && <EarningsLesson />}
+      {lesson.id === 'risk' && <RiskLesson />}
       <Disclaimer />
     </main>
   );
@@ -280,4 +285,80 @@ function NewsLesson({ review }: { review: URLSearchParams }) {
       </div>}
     </>
   );
+}
+
+/* ---------- 수업 4~6 공통: 예시를 보고 하나 고르기 ---------- */
+function ChoiceLesson({ id, q, example, answer }: { id: string; q: ChoiceQuestion; example: ReactNode; answer: ReactNode }) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const sel = q.options.find(o => o.id === picked);
+  const done = !!sel?.correct;
+  return (
+    <>
+      <StepBar step={done ? 3 : picked ? 2 : 1} />
+      {example}
+      <p className="q">{q.prompt}</p>
+      <div className="options">{q.options.map(o => <button key={o.id} className={`opt ${picked === o.id ? (o.correct ? 'right' : 'bad') : ''}`} disabled={done} onClick={() => setPicked(o.id)}>{o.label}</button>)}</div>
+      {sel && <p className={sel.correct ? 'correct' : 'error'} role="status">{sel.feedback}</p>}
+      {done && <div className="answer">
+        {answer}
+        <p>{q.takeaway}</p>
+        <NextLesson id={id} />
+      </div>}
+    </>
+  );
+}
+
+/* ---------- 수업 4 ---------- */
+function OrdersLesson() {
+  const r = marketBuy(orderBook.asks, orderBook.buyQty);
+  const best = Math.min(...orderBook.asks.map(a => a.price));
+  const maxQty = Math.max(...[...orderBook.asks, ...orderBook.bids].map(x => x.qty));
+  const bar = (q: number) => ({ width: `${Math.round(q / maxQty * 100)}%` });
+  return <ChoiceLesson id="orders" q={orderQuestion}
+    example={<>
+      <p className="lede"><TermLink id="order-book">호가</TermLink>창은 지금 걸려 있는 주문입니다. 위(파랑)는 팔려는 주문, 아래(빨강)는 사려는 주문이에요. <TermLink id="market-order">시장가 주문</TermLink>은 가격을 정하지 않고 지금 있는 주문과 바로 <TermLink id="execution">체결</TermLink>합니다.</p>
+      <table className="book" aria-label={`${orderBook.company} 가상 호가창`}>
+        <thead><tr><th>팔려는 수량</th><th>가격</th><th>사려는 수량</th></tr></thead>
+        <tbody>
+          {orderBook.asks.map(a => <tr key={a.price} className="ask"><td><i style={bar(a.qty)} />{n(a.qty)}</td><td className="num">{n(a.price)}</td><td /></tr>)}
+          {orderBook.bids.map(b => <tr key={b.price} className="bid"><td /><td className="num">{n(b.price)}</td><td><i style={bar(b.qty)} />{n(b.qty)}</td></tr>)}
+        </tbody>
+      </table>
+      <p className="hint">가상 예시입니다. 가격 한 칸은 10원으로 두었습니다.</p>
+    </>}
+    answer={<>
+      <table className="rank-table"><thead><tr><th>체결 가격</th><th>수량</th><th>금액</th></tr></thead>
+        <tbody>{r.fills.map(f => <tr key={f.price}><td className="num">{n(f.price)}원</td><td className="num">{n(f.qty)}주</td><td className="num">{n(f.price * f.qty)}원</td></tr>)}
+          <tr><td><b>평균 {n(r.avg)}원</b></td><td className="num">{n(r.filled)}주</td><td className="num">{n(r.total)}원</td></tr></tbody></table>
+      <p className="hint">가장 싼 호가 {n(best)}원으로 샀다면 {n(best * r.filled)}원. 차이 {n(r.total - best * r.filled)}원이 <TermLink id="slippage">슬리피지</TermLink>입니다. 여기에 <TermLink id="fee">수수료</TermLink>가 따로 붙습니다.</p>
+      <p className="hint">이 게임에는 호가창이 없습니다. 대신 주문 금액이 200만 원을 넘으면 정해진 표대로 슬리피지가 붙습니다.</p>
+    </>} />;
+}
+
+/* ---------- 수업 5 ---------- */
+function EarningsLesson() {
+  const cs = earningsCase.companies;
+  return <ChoiceLesson id="earnings" q={earningsQuestion}
+    example={<>
+      <p className="lede">매출은 판 돈 전체, <TermLink id="operating-profit">영업이익</TermLink>은 그중 본업으로 남긴 돈입니다. 두 가상 회사의 지난해 실적을 보세요.</p>
+      <table className="rank-table"><thead><tr><th>회사</th><th>매출</th><th>영업이익</th></tr></thead>
+        <tbody>{cs.map(c => <tr key={c.name}><td>{c.name}</td><td className="num">{n(c.revenue)}억 원</td><td className="num">{n(c.operatingProfit)}억 원</td></tr>)}</tbody></table>
+    </>}
+    answer={<table className="rank-table"><thead><tr><th>회사</th><th>계산</th><th>영업이익률</th></tr></thead>
+      <tbody>{cs.map(c => <tr key={c.name}><td>{c.name}</td><td className="num">{c.operatingProfit} ÷ {c.revenue}</td><td className="num"><b>{operatingMargin(c).toFixed(0)}%</b></td></tr>)}</tbody></table>} />;
+}
+
+/* ---------- 수업 6 ---------- */
+function RiskLesson() {
+  const r = riskSummary(riskCase);
+  return <ChoiceLesson id="risk" q={riskQuestion}
+    example={<>
+      <p className="lede">가상 계좌입니다. <TermLink id="portfolio-value">평가액</TermLink>은 현금 + 보유 주식 × 현재가, <TermLink id="unrealized-pnl">평가손익</TermLink>은 (현재가 − <TermLink id="avg-cost">평균 단가</TermLink>) × 수량입니다.</p>
+      <table className="rank-table"><thead><tr><th>종목(업종)</th><th>평가금액</th><th>평가손익</th></tr></thead>
+        <tbody>{r.rows.map(h => <tr key={h.name}><td>{h.name}<br /><small className="hint">{h.sector} · {n(h.qty)}주 · 평균 {n(h.avgCost)} → {n(h.price)}</small></td><td className="num">{n(h.value)}원</td><td className={`num ${dir(h.pnl)}`}>{signedWon(h.pnl)}</td></tr>)}
+          <tr><td>현금</td><td className="num">{n(riskCase.cash)}원</td><td /></tr>
+          <tr><td><b>합계</b></td><td className="num"><b>{n(r.total)}원</b></td><td className={`num ${dir(r.pnl)}`}><b>{signedWon(r.pnl)}</b></td></tr></tbody></table>
+    </>}
+    answer={<div className="sector-bars">{r.sectors.map(sc => <div key={sc.sector} className="bar-row"><span>{sc.sector}</span><i style={{ width: `${sc.pct.toFixed(0)}%` }} /><b className="num">{sc.pct.toFixed(0)}%</b></div>)}
+      <p className="hint">나머지는 현금입니다. 관련 용어: <TermLink id="co-movement">동조화</TermLink>, <TermLink id="diversification">분산 투자</TermLink>, <TermLink id="concentration">집중 투자</TermLink></p></div>} />;
 }

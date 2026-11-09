@@ -1,5 +1,6 @@
 /* 서버와 클라이언트가 함께 쓰는 공개 타입. 미래 결말과 시드는 여기에 없습니다. */
-export type StockCode = 'G01' | 'G02' | 'G03' | 'G04' | 'G05' | 'G06';
+/** 종목 코드 G01~G24. 목록과 업종은 shared/rules.ts STOCKS */
+export type StockCode = `G${number}`;
 export type GameMode = 'friend' | 'solo' | 'academic';
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
@@ -28,10 +29,19 @@ export interface PriceBreakdown {
   limit: 'upper' | 'lower' | null;
   upperLimit: number;
   lowerLimit: number;
+  /** 봉 차트용 고가·저가. 라운드 안 가격 움직임은 계산하지 않으므로 '연출'입니다(stagedWicks). 예전 저장 데이터에는 없습니다. */
+  high?: number;
+  low?: number;
+  /** 이번 라운드에 체결된 수량(참가자 + NPC). 매수·매도 합계와 그 차이가 꼬리 길이에 반영됩니다. 예전 저장 데이터에는 없습니다. */
+  volume?: number;
+  buyQty?: number;
+  sellQty?: number;
 }
 
 export interface Order {
-  code: StockCode; side: Side; qty: number; price: number;
+  code: StockCode; side: Side; qty: number;
+  /** 체결 예정가(슬리피지 반영). refPrice는 주문 때 기준가 */
+  price: number; refPrice?: number; slipBp?: number;
   gross: number; fee: number; reserve: number; requestId: string; placedAt: number;
 }
 export interface Holding { qty: number; avgCost: number; sinceRound: number }
@@ -61,12 +71,17 @@ export interface PredictionView {
 }
 export interface LeaderRow {
   playerId: string; label: string; kind: 'human' | 'npc'; npcType: string | null; connected: boolean;
+  /** NPC의 주문 규칙 설명. 사람은 null */
+  npcRule: string | null;
   value: number; returnPct: number; rank: number;
 }
 export interface Contribution { code: StockCode; name: string; qty: number; won: number }
 export interface RoundResult {
   round: number; rankBefore: number; rankAfter: number; valueBefore: number; valueAfter: number;
-  delta: number; fees: number; contributions: Contribution[]; best: Contribution | null;
+  delta: number; fees: number;
+  /** 슬리피지로 손해 본 금액(기준가와 체결가 차이 × 수량). 예전 기록에는 없습니다 */
+  slippage?: number;
+  contributions: Contribution[]; best: Contribution | null;
   fills: { code: StockCode; side: Side; qty: number; price: number; fee: number }[];
 }
 export interface Metric {

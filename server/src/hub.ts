@@ -1,3 +1,4 @@
+import os from 'node:os';
 /* 방 목록, WebSocket 연결, 타이머를 묶는 서버 본체. HTTP 서버와 분리해 통합 테스트에서 그대로 띄웁니다. */
 import { randomInt } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
@@ -10,11 +11,17 @@ import type { ForcedOutcomes } from './plan';
 import { GameRoom } from './room';
 import { MemoryStore, type Store } from './store';
 
-interface Conn { ws: WebSocket; room: GameRoom | null; token: string | null; role: Role; operator: boolean; alive: boolean }
-export interface HubOptions { store?: Store; staticDir?: string; port?: number; allowTestHooks?: boolean; speed?: number; now?: () => number }
+interface Conn { ws: WebSocket; room: GameRoom | null; token: string | null; role: Role; operator: boolean; alive: boolean; windowStart: number; msgCount: number }
+export interface HubOptions { store?: Store; staticDir?: string; port?: number; allowTestHooks?: boolean; speed?: number; now?: () => number;
+  /** 리버스 프록시 뒤에서 X-Forwarded-For의 첫 주소를 접속 주소로 씁니다. 프록시가 없을 때 켜면 주소를 속일 수 있습니다. */
+  trustProxy?: boolean }
 
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ico': 'image/x-icon' };
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
+/* 남용 방지. 게임 시계가 아니라 실제 시간(Date.now)으로 셉니다. */
+export const MSG_LIMIT_PER_SEC = 30;       // 연결 하나가 1초에 보낼 수 있는 메시지 수
+export const MAX_ROOMS = 1000;             // 서버 전체 방 수 상한
+export const ROOMS_PER_IP_PER_MIN = 20;    // 같은 주소에서 1분에 만들 수 있는 방 수
 
 export class Hub {
   rooms = new Map<string, GameRoom>();
@@ -26,6 +33,7 @@ export class Hub {
   private busy = new Set<string>();
   private dirty = new Set<string>();
   private lastFlush = 0;
+  private createLog = new Map<string, number[]>();
   now: () => number;
   constructor(private opts: HubOptions = {}) {
     this.store = opts.store ?? new MemoryStore();
@@ -107,9 +115,13 @@ export class Hub {
     this.send(c, { t: 'view', view });
   }
   private onConnection(ws: WebSocket) {
-    const c: Conn = { ws, room: null, token: null, role: 'spectator', operator: false, alive: true };
+    const c: Conn = { ws, room: null, token: null, role: 'spectator', operator: false, alive: true, windowStart: Date.now(), msgCount: 0 };
     this.conns.add(c);
-    ws.on('message', d => { try { this.onMessage(c, JSON.parse(d.toString())); } catch { this.send(c, { t: 'error', reason: '잘못된 요청입니다' }); } });
+    ws.on('message', d => {
+      const t = Date.now();
+      if (t - c.windowStart >= 1000) { c.windowStart = t; c.msgCount = 0; }
+      if (++c.msgCount > MSG_LIMIT_PER_SEC) { if (c.msgCount === MSG_LIMIT_PER_SEC + 1) this.send(c, { t: 'error', reason: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요' }); return; }
+      try { this.onMessage(c, JSON.parse(d.toString())); } catch { this.send(c, { t: 'error', reason: '잘못된 요청입니다' }); } });
     ws.on('close', () => {
       this.conns.delete(c);
       if (c.room && c.token && c.role === 'player') {
@@ -194,12 +206,15 @@ export class Hub {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
     if (url.pathname === '/api/health') return this.json(res, 200, { ok: true, store: this.store.name, rooms: this.rooms.size });
+    /* PC에서 localhost로 열었을 때 QR에 넣을 와이파이 주소. 같은 PC에서 온 요청에만 알려 줍니다. */
+    if (url.pathname === '/api/lan') return isLoopback(req.socket.remoteAddress) && !req.headers['x-forwarded-for'] ? this.json(res, 200, { addrs: lanAddresses() }) : this.json(res, 404, { error: '없음' });
     if (url.pathname === '/api/rooms' && req.method === 'POST') {
       let body = '';
       req.on('data', d => { body += d; if (body.length > 4096) req.destroy(); });
       req.on('end', () => {
         let mode: GameMode = 'friend', extra: { seed?: number; forced?: ForcedOutcomes; forcedArcs?: string[] } = {};
         try { const p = JSON.parse(body || '{}'); if (MODES[p.mode as GameMode]) mode = p.mode; if (this.opts.allowTestHooks) extra = { seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs }; } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
+        if (!this.allowCreate(req)) return this.json(res, 429, { error: '방을 너무 많이 만들었습니다. 잠시 후 다시 시도해 주세요' });
         const room = this.createRoom(mode, extra);
         this.json(res, 201, { code: room.s.code, mode, operatorToken: room.s.operatorToken });
       });
@@ -214,14 +229,43 @@ export class Hub {
     if (url.pathname.startsWith('/api/')) return this.json(res, 404, { error: '없는 주소입니다' });
     this.serveStatic(url.pathname, res);
   }
+  /** 서버 전체 방 수와 주소별 생성 속도를 제한합니다. */
+  private allowCreate(req: http.IncomingMessage) {
+    if (this.rooms.size >= MAX_ROOMS) return false;
+    const fwd = this.opts.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() : '';
+    const ip = fwd || req.socket.remoteAddress || '?', t = Date.now();
+    const recent = (this.createLog.get(ip) ?? []).filter(x => t - x < 60_000);
+    if (recent.length >= ROOMS_PER_IP_PER_MIN) { this.createLog.set(ip, recent); return false; }
+    recent.push(t);
+    this.createLog.set(ip, recent);
+    if (this.createLog.size > 5000) this.createLog.clear();
+    return true;
+  }
   private json(res: http.ServerResponse, code: number, body: object) { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)); }
   private serveStatic(p: string, res: http.ServerResponse) {
     const root = this.opts.staticDir;
     if (!root || !existsSync(root)) { res.writeHead(404); res.end('클라이언트를 먼저 빌드하세요: npm run build'); return; }
-    const safe = path.normalize(decodeURIComponent(p)).replace(/^([.\\/])+/, '');
+    /* 잘못된 % 인코딩은 decodeURIComponent가 예외를 던져 서버 전체가 죽습니다. 400으로 끝냅니다. */
+    let decoded: string;
+    try { decoded = decodeURIComponent(p); } catch { res.writeHead(400); res.end('잘못된 주소입니다'); return; }
+    const safe = path.normalize(decoded).replace(/^([.\\/])+/, '');
     let file = path.join(root, safe);
     if (!file.startsWith(path.resolve(root)) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(root, 'index.html');
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': file.endsWith('.html') ? 'no-store' : 'public, max-age=3600' });
     createReadStream(file).pipe(res);
   }
+}
+
+/** 요청이 같은 컴퓨터에서 왔는지 */
+export function isLoopback(addr: string | undefined) {
+  return !!addr && (addr === '::1' || addr.startsWith('127.') || addr.startsWith('::ffff:127.'));
+}
+/** 이 컴퓨터의 사설망 IPv4 주소(와이파이·유선). 공유기 안의 주소(192.168·10·172.16~31)를 앞에 둡니다. */
+export function lanAddresses(): string[] {
+  const out: string[] = [];
+  for (const list of Object.values(os.networkInterfaces())) for (const a of list ?? []) {
+    if (a.family === 'IPv4' && !a.internal) out.push(a.address);
+  }
+  const priv = (ip: string) => /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+  return out.sort((a, b) => Number(priv(b)) - Number(priv(a)));
 }

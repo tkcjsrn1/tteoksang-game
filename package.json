@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "친구와 함께하는 가상 주식 멀티플레이 게임",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -n server,client \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "tsx watch server/src/index.ts",
@@ -15,7 +17,8 @@
     "test:pg": "node --import tsx --test tests/postgres.integration.ts",
     "load": "tsx scripts/load-test.ts",
     "balance": "tsx scripts/balance.ts",
-    "cap:sync": "vite build && cap sync android"
+    "cap:sync": "vite build && cap sync android",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@capacitor/android": "7.4.3",
@@ -25,7 +28,7 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "tsx": "4.19.2",
-    "ws": "8.18.0"
+    "ws": "8.21.3"
   },
   "devDependencies": {
     "@capacitor/cli": "7.4.3",

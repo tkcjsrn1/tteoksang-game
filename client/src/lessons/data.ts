@@ -5,9 +5,9 @@ export const LESSONS = [
   { id: 'candle', no: 1, title: '봉 하나 읽기', goal: '시가, 고가, 저가, 종가와 꼬리를 읽습니다.', ready: true },
   { id: 'compare', no: 2, title: '봉 여러 개 비교하기', goal: '1분봉과 5분봉, 거래량, 5일 이동평균선을 봅니다.', ready: true },
   { id: 'news', no: 3, title: '뉴스와 주가 연결하기', goal: '계약이 성사됐는데 주가가 떨어진 이유를 찾습니다.', ready: true },
-  { id: 'orders', no: 4, title: '주문 화면 읽기', goal: '호가, 시장가, 지정가, 체결, 수수료를 익힙니다.', ready: false },
-  { id: 'earnings', no: 5, title: '기업 실적 읽기', goal: '매출과 영업이익, 영업이익률을 비교합니다.', ready: false },
-  { id: 'risk', no: 6, title: '내 자산과 위험 읽기', goal: '평가손익과 집중·분산 투자를 계산합니다.', ready: false }
+  { id: 'orders', no: 4, title: '주문 화면 읽기', goal: '호가, 시장가, 지정가, 슬리피지를 익힙니다.', ready: true },
+  { id: 'earnings', no: 5, title: '기업 실적 읽기', goal: '매출과 영업이익, 영업이익률을 비교합니다.', ready: true },
+  { id: 'risk', no: 6, title: '내 자산과 위험 읽기', goal: '평가손익과 업종 쏠림을 계산합니다.', ready: true }
 ];
 
 /* ---------- 수업 1 ---------- */
@@ -82,4 +82,86 @@ export const newsQuestion = {
     { id: 'orders', label: '참가자들이 많이 팔았다', correct: false, feedback: '이 게임의 가격 산식에는 참가자 주문량이 들어가지 않습니다. 변동 근거를 다시 보세요.' }
   ],
   takeaway: '뉴스가 좋은지 나쁜지보다, 시장이 기대한 것과 얼마나 다른지가 가격을 움직입니다.'
+};
+
+/* ---------- 공통: 고르는 문제 ---------- */
+export interface ChoiceQuestion { prompt: string; options: { id: string; label: string; correct: boolean; feedback: string }[]; takeaway: string }
+
+/* ---------- 수업 4 ---------- */
+/* 가상 호가창. 이 예시는 가격 한 칸(호가 단위)을 10원으로 둡니다. */
+export const orderBook = {
+  company: '누바칸 미세전력',
+  asks: [{ price: 10050, qty: 300 }, { price: 10040, qty: 100 }, { price: 10030, qty: 150 }],   // 팔려는 주문(위가 비쌈)
+  bids: [{ price: 10020, qty: 120 }, { price: 10010, qty: 200 }, { price: 10000, qty: 250 }],   // 사려는 주문
+  buyQty: 400
+};
+/** 시장가 매수: 가장 싼 매도 호가부터 차례로 삽니다. */
+export function marketBuy(asks: { price: number; qty: number }[], qty: number) {
+  const fills: { price: number; qty: number }[] = [];
+  let left = qty;
+  for (const a of asks.slice().sort((x, y) => x.price - y.price)) {
+    if (left <= 0) break;
+    const q = Math.min(left, a.qty);
+    fills.push({ price: a.price, qty: q });
+    left -= q;
+  }
+  const filled = qty - left;
+  const total = fills.reduce((x, f) => x + f.price * f.qty, 0);
+  return { fills, filled, total, avg: filled ? total / filled : 0 };
+}
+export const orderQuestion: ChoiceQuestion = {
+  prompt: '시장가로 400주를 사면 평균 몇 원에 사게 될까요?',
+  options: [
+    { id: 'best', label: '10,030원 (가장 싼 매도 호가)', correct: false, feedback: '10,030원에 팔려는 주문은 150주뿐입니다. 나머지는 더 비싼 호가에서 사야 합니다.' },
+    { id: 'avg', label: '10,040원', correct: true, feedback: '맞습니다. 150주는 10,030원, 100주는 10,040원, 150주는 10,050원에 사서 평균 10,040원입니다.' },
+    { id: 'top', label: '10,050원 (가장 비싼 매도 호가)', correct: false, feedback: '전부 10,050원에 사는 것은 아닙니다. 싼 호가부터 차례로 체결됩니다.' },
+    { id: 'bid', label: '10,020원 (가장 비싼 매수 호가)', correct: false, feedback: '매수 호가는 사려는 사람들의 주문입니다. 내가 살 때는 매도 호가와 체결됩니다.' }
+  ],
+  takeaway: '화면에 보이는 가격보다 실제 평균 체결가가 불리해지는 것을 슬리피지라고 합니다. 지정가 주문으로 10,030원을 걸면 슬리피지는 없지만, 150주만 바로 사고 나머지는 기다려야 합니다.'
+};
+
+/* ---------- 수업 5 ---------- */
+export const earningsCase = {
+  companies: [
+    { name: '하일로 냉동창고', revenue: 500, operatingProfit: 25 },   // 단위: 억 원
+    { name: '루펠 배양액', revenue: 200, operatingProfit: 30 }
+  ]
+};
+/** 영업이익률(%) = 영업이익 ÷ 매출 × 100 */
+export const operatingMargin = (c: { revenue: number; operatingProfit: number }) => c.operatingProfit / c.revenue * 100;
+export const earningsQuestion: ChoiceQuestion = {
+  prompt: '1,000원어치를 팔았을 때 이익을 더 많이 남기는 회사는 어디일까요?',
+  options: [
+    { id: 'big', label: '하일로 냉동창고 (매출이 더 큼)', correct: false, feedback: '매출은 2.5배 크지만, 1,000원어치를 팔아 남기는 영업이익은 50원뿐입니다(영업이익률 5%).' },
+    { id: 'margin', label: '루펠 배양액', correct: true, feedback: '맞습니다. 영업이익 30억 ÷ 매출 200억 = 15%. 1,000원어치를 팔면 150원을 남깁니다. 하일로는 5%입니다.' },
+    { id: 'same', label: '둘이 비슷하다', correct: false, feedback: '영업이익 금액은 비슷해 보여도, 매출로 나누면 3배 차이가 납니다.' }
+  ],
+  takeaway: '매출이 크다고 많이 남기는 회사는 아닙니다. 영업이익률(영업이익 ÷ 매출)로 비교하세요. 그리고 주가는 숫자 자체보다 시장 기대와의 차이에 반응합니다.'
+};
+
+/* ---------- 수업 6 ---------- */
+export const riskCase = {
+  cash: 480_000,
+  holdings: [
+    { name: '누바칸 미세전력', sector: '분산 전력', qty: 300, avgCost: 12000, price: 12400 },
+    { name: '라벤토 소형터빈', sector: '분산 전력', qty: 800, avgCost: 7500, price: 7200 },
+    { name: '타르멜 물순환', sector: '물 재이용', qty: 200, avgCost: 10000, price: 10200 }
+  ]
+};
+export function riskSummary(c: typeof riskCase) {
+  const rows = c.holdings.map(h => ({ ...h, value: h.qty * h.price, pnl: h.qty * (h.price - h.avgCost) }));
+  const total = c.cash + rows.reduce((a, r) => a + r.value, 0);
+  const bySector = new Map<string, number>();
+  rows.forEach(r => bySector.set(r.sector, (bySector.get(r.sector) ?? 0) + r.value));
+  return { rows, total, pnl: rows.reduce((a, r) => a + r.pnl, 0), sectors: [...bySector].map(([sector, value]) => ({ sector, value, pct: value / total * 100 })) };
+}
+export const riskQuestion: ChoiceQuestion = {
+  prompt: '종목은 3개입니다. 분산 전력 업종에 들어간 돈은 평가액의 몇 %일까요?',
+  options: [
+    { id: 'third', label: '약 33% (종목 3개 중 1개 업종이니까)', correct: false, feedback: '종목 수로 나누면 안 됩니다. 종목마다 들어간 돈(평가금액)이 다릅니다.' },
+    { id: 'pct', label: '약 79%', correct: true, feedback: '맞습니다. 누바칸 372만 원 + 라벤토 576만 원 = 948만 원, 평가액 1,200만 원의 79%입니다.' },
+    { id: 'half', label: '약 48%', correct: false, feedback: '라벤토 하나만 계산한 값입니다. 누바칸도 같은 업종입니다.' },
+    { id: 'all', label: '100%', correct: false, feedback: '타르멜(물 재이용)과 현금도 있습니다.' }
+  ],
+  takeaway: '같은 업종 종목은 같은 뉴스에 함께 움직입니다(동조화). 종목이 여러 개여도 한 업종에 79%가 몰려 있으면 분산 효과가 작습니다. 평가손익은 아직 팔지 않은 손익이라 팔기 전까지 계속 바뀝니다.'
 };

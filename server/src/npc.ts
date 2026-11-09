@@ -1,6 +1,6 @@
 /* NPC 주문 규칙. 참가자와 같은 공개 정보, 가격, 수수료, 예산 제한만 사용합니다.
    decide()가 돌려준 주문은 사람의 주문과 똑같이 GameRoom.placeOrder 검증을 거칩니다. */
-import { maxBuyQty, type OrderContext } from '../../shared/rules';
+import { maxBuyQty, stockOf, type OrderContext } from '../../shared/rules';
 import type { NpcType, Side, StockCode } from '../../shared/types';
 
 export interface NpcInput {
@@ -32,7 +32,7 @@ export const NPC_RULES: Record<NpcType, { label: string; rule: string; decide: (
     decide: ({ lastChangeBp, prices, ctx }) => {
       const out: NpcOrder[] = [];
       for (const [code, bp] of Object.entries(lastChangeBp) as [StockCode, number][]) {
-        if (bp >= 300) out.push({ code, side: 'buy', qty: Math.floor(ctx.cash * .25 / prices[code]) });
+        if (bp >= 300) out.push({ code, side: 'buy', qty: Math.min(Math.floor(ctx.cash * .25 / prices[code]), maxBuyQty(ctx, code, prices[code])) });
         else if (bp <= -300 && ctx.holdings[code]?.qty) out.push({ code, side: 'sell', qty: Math.ceil(ctx.holdings[code]!.qty / 2) });
       }
       return out;
@@ -40,10 +40,10 @@ export const NPC_RULES: Record<NpcType, { label: string; rule: string; decide: (
   },
   diversifier: {
     label: '분산형',
-    rule: '첫 라운드에 6종목을 15%씩 사고, 이후에는 한 종목이 평가액의 25%를 넘으면 초과분을 팝니다.',
+    rule: '첫 라운드에 업종마다 변동이 가장 작은 종목 하나씩, 6종목을 15%씩 사고, 이후에는 한 종목이 평가액의 25%를 넘으면 초과분을 팝니다.',
     decide: ({ round, prices, ctx }) => {
       const codes = Object.keys(prices) as StockCode[];
-      if (round === 1) return codes.map(code => ({ code, side: 'buy' as const, qty: Math.floor(ctx.cash * .15 / prices[code]) }));
+      if (round === 1) return pickDiversified(codes).map(code => ({ code, side: 'buy' as const, qty: Math.floor(ctx.cash * .15 / prices[code]) }));
       const value = ctx.cash + codes.reduce((a, c) => a + (ctx.holdings[c]?.qty ?? 0) * prices[c], 0);
       const out: NpcOrder[] = [];
       for (const c of codes) {
@@ -54,4 +54,13 @@ export const NPC_RULES: Record<NpcType, { label: string; rule: string; decide: (
     }
   }
 };
+/** 업종마다 변동폭(maxMoveBp)이 가장 작은 종목 하나씩. 같으면 코드가 앞선 종목. */
+export function pickDiversified(codes: StockCode[]): StockCode[] {
+  const best = new Map<string, StockCode>();
+  codes.forEach(c => {
+    const g = stockOf(c).group, cur = best.get(g);
+    if (!cur || stockOf(c).maxMoveBp < stockOf(cur).maxMoveBp) best.set(g, c);
+  });
+  return [...best.values()];
+}
 export const NPC_TYPES: NpcType[] = ['chaser', 'waiter', 'diversifier'];

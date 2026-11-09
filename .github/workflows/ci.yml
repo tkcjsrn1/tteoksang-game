@@ -1,0 +1,57 @@
+# 푸시와 PR마다 타입 검사, 전체 테스트, 빌드, 60명 부하 검증, PostgreSQL 통합 테스트를 돌립니다.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # Windows에서만 깨지는 문제(파일 이름 대소문자 등)를 잡으려고 두 OS에서 돌립니다.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+      - run: npm run load
+      - run: npm run balance
+      # 빌드한 서버를 실제로 켜고, 배포 점검과 같은 스크립트로 화면·API·WebSocket·게임 시작을 확인합니다.
+      - name: smoke
+        if: runner.os == 'Linux'
+        run: |
+          PORT=8787 npm start > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8787/api/health && break; sleep 1; done
+          npm run smoke -- http://localhost:8787 || (cat server.log; exit 1)
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: game
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: game
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U game" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:pg
+        env:
+          TEST_DATABASE_URL: postgres://game:ci@localhost:5432/game
