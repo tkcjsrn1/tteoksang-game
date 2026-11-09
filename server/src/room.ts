@@ -1,7 +1,7 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, MODES, START_CASH, stockOf, STOCKS } from '../../shared/rules';
+import { checkOrder, computeClose, MODES, stagedWicks, START_CASH, stockOf, STOCKS } from '../../shared/rules';
 import type { CardView, Contribution, EventImpact, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, PredictionView, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
@@ -305,7 +305,8 @@ export class GameRoom {
         const out = stageById.get(ps.stageId)!.outcomes.find(o => o.id === ps.outcomeId)!;
         out.impacts.filter(i => i.code === st.code).forEach(i => events.push({ stageId: ps.stageId, label: out.label, bp: i.bp, reason: i.reason }));
       });
-      const b = computeClose(round, bases[st.code], events, plan.marketBp, plan.stockBp[st.code]);
+      const c = computeClose(round, bases[st.code], events, plan.marketBp, plan.stockBp[st.code]);
+      const b = { ...c, ...stagedWicks(st.code, c) };
       this.s.history[st.code].push(b);
       this.s.prices[st.code] = b.closePrice;
     });

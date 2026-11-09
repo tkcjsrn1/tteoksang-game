@@ -39,6 +39,7 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
       <dl className="kv">
         <dt><TermLink id="reference-price">이전가</TermLink></dt><dd className="num">{won(b.basePrice)}</dd>
         <dt><TermLink id="close-price">종료가</TermLink></dt><dd className="num">{won(b.closePrice)}</dd>
+        {b.high !== undefined && b.low !== undefined && <><dt><TermLink id="high-low">고가·저가</TermLink> <small className="hint">연출</small></dt><dd className="num">{won(b.high)} · {won(b.low)}</dd></>}
         <dt>실제 <TermLink id="change-rate">등락률</TermLink></dt><dd className={`num ${dir(b.changeBp)}`}>{arrow(b.changeBp)} {pctBp(b.changeBp)}</dd>
       </dl>
       <h4>변동 근거</h4>
@@ -56,31 +57,48 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
   );
 }
 
-/** 라운드 종료가 선 그래프. 가격은 마감 때만 찍히고, 점을 누르면 이유를 봅니다. */
+/** 라운드 봉 차트. 한 라운드가 봉 하나입니다.
+    몸통(시가 = 직전 종가, 종가 = 이번 종가)은 실제 계산값이고, 꼬리(고가·저가)는 연출입니다(shared/rules.ts stagedWicks).
+    봉을 누르면 그 라운드의 변동 이유를 봅니다. */
 export function PriceChart({ stock, totalRounds, selected, onSelect }: { stock: StockView; totalRounds: number; selected: number | null; onSelect: (round: number) => void }) {
-  const W = 340, H = 170, L = 8, R = 78, T = 14, B = 22;   /* R: 오른쪽 가격 라벨 자리. 좁으면 '시작 12,400'이 잘립니다 */
-  const pts = [{ round: 0, price: stock.startPrice }, ...stock.history.map(h => ({ round: h.round, price: h.closePrice }))];
-  const lo0 = Math.min(...pts.map(p => p.price)), hi0 = Math.max(...pts.map(p => p.price));
-  const pad = Math.max((hi0 - lo0) * .12, stock.startPrice * .02);
+  const W = 340, H = 180, L = 8, R = 78, T = 14, B = 22;   /* R: 오른쪽 가격 라벨 자리. 좁으면 '시작 12,400'이 잘립니다 */
+  const candles = stock.history.map(h => ({ round: h.round, open: h.basePrice, close: h.closePrice, high: h.high ?? Math.max(h.basePrice, h.closePrice), low: h.low ?? Math.min(h.basePrice, h.closePrice) }));
+  const vals = [stock.startPrice, ...candles.flatMap(c => [c.high, c.low])];
+  const lo0 = Math.min(...vals), hi0 = Math.max(...vals);
+  const pad = Math.max((hi0 - lo0) * .1, stock.startPrice * .02);
   const lo = lo0 - pad, hi = hi0 + pad;
-  const x = (r: number) => L + r / totalRounds * (W - L - R), y = (v: number) => T + (hi - v) / (hi - lo) * (H - T - B);
-  const line = pts.map(p => `${x(p.round).toFixed(1)},${y(p.price).toFixed(1)}`).join(' ');
-  const last = pts[pts.length - 1];
-  const color = last.price >= stock.startPrice ? 'var(--up)' : 'var(--down)';
+  const slot = (W - L - R) / (totalRounds + 0.5);
+  const x = (r: number) => L + slot * (r - 0.25);
+  const y = (v: number) => T + (hi - v) / (hi - lo) * (H - T - B);
+  const bw = Math.min(16, slot * 0.55);
+  const last = candles[candles.length - 1];
+  const lastPrice = last ? last.close : stock.startPrice;
+  const lastColor = lastPrice >= stock.startPrice ? 'var(--up)' : 'var(--down)';
+  const colorOf = (c: { open: number; close: number }) => c.close > c.open ? 'var(--up)' : c.close < c.open ? 'var(--down)' : 'var(--faint)';
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${stock.name} 라운드별 종료가`}>
-      <line x1={L} x2={W - R} y1={y(stock.startPrice)} y2={y(stock.startPrice)} stroke="var(--muted)" strokeDasharray="3 3" strokeWidth=".8" />
-      <text x={W - R + 6} y={y(stock.startPrice) + 4} fontSize="11" fill="var(--muted)">시작 {stock.startPrice.toLocaleString('ko-KR')}</text>
-      <polyline fill="none" stroke={color} strokeWidth="2.2" points={line} />
-      {Array.from({ length: totalRounds + 1 }, (_, r) => r).filter(r => r % (totalRounds > 5 ? 2 : 1) === 0).map(r => <text key={r} x={x(r)} y={H - 6} fontSize="11" textAnchor="middle" fill="var(--muted)">{r === 0 ? '시작' : `R${r}`}</text>)}
-      {Math.abs(y(last.price) - y(stock.startPrice)) > 13 && <text x={W - R + 6} y={y(last.price) + 4} fontSize="12" fontWeight="700" fill={color}>{last.price.toLocaleString('ko-KR')}</text>}
-      {pts.slice(1).map(p => (
-        <g key={p.round} onClick={() => onSelect(p.round)} role="button" aria-label={`라운드 ${p.round} 변동 이유 보기`} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onSelect(p.round); }} style={{ cursor: 'pointer' }}>
-          <circle cx={x(p.round)} cy={y(p.price)} r="16" fill="transparent" />
-          <circle cx={x(p.round)} cy={y(p.price)} r={selected === p.round ? 6 : 4} fill={selected === p.round ? 'var(--led)' : color} stroke="var(--panel)" strokeWidth="1.5" />
-        </g>
-      ))}
-    </svg>
+    <figure className="chart-fig">
+      <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${stock.name} 라운드별 봉 차트`}>
+        <line x1={L} x2={W - R} y1={y(stock.startPrice)} y2={y(stock.startPrice)} stroke="var(--chev)" strokeDasharray="3 3" strokeWidth=".8" />
+        <text x={W - R + 6} y={y(stock.startPrice) + 4} fontSize="11" fill="var(--muted)">시작 {stock.startPrice.toLocaleString('ko-KR')}</text>
+        {Array.from({ length: totalRounds }, (_, i) => i + 1).filter(r => totalRounds <= 5 || r % 2 === 1).map(r => <text key={r} x={x(r)} y={H - 6} fontSize="11" textAnchor="middle" fill="var(--muted)">R{r}</text>)}
+        {candles.map(c => {
+          const col = colorOf(c), top = Math.max(c.open, c.close), bottom = Math.min(c.open, c.close);
+          const label = `${c.round}라운드: 시가 ${c.open.toLocaleString('ko-KR')}원, 종가 ${c.close.toLocaleString('ko-KR')}원, 고가 ${c.high.toLocaleString('ko-KR')}원, 저가 ${c.low.toLocaleString('ko-KR')}원. 변동 이유 보기`;
+          return (
+            <g key={c.round} onClick={() => onSelect(c.round)} role="button" aria-label={label} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(c.round); }} style={{ cursor: 'pointer' }}>
+              <rect x={x(c.round) - slot / 2} y={T - 6} width={slot} height={H - T - B + 10} rx="6" fill={selected === c.round ? 'var(--led-soft)' : 'transparent'} />
+              <line x1={x(c.round)} x2={x(c.round)} y1={y(c.high)} y2={y(c.low)} stroke={col} strokeWidth="1.5" />
+              <rect x={x(c.round) - bw / 2} y={y(top)} width={bw} height={Math.max(2, y(bottom) - y(top))} rx="2" fill={col} />
+            </g>
+          );
+        })}
+        {last && Math.abs(y(lastPrice) - y(stock.startPrice)) > 13 && <text x={W - R + 6} y={y(lastPrice) + 4} fontSize="12" fontWeight="700" fill={lastColor}>{lastPrice.toLocaleString('ko-KR')}</text>}
+      </svg>
+      <figcaption className="chart-note">
+        <span className="legend up" aria-hidden="true" /> 오름 <span className="legend down" aria-hidden="true" /> 내림 ·{' '}
+        <TermLink id="candle">봉</TermLink> 몸통(시가→종가)은 실제 계산값, 위아래 꼬리는 라운드 중 움직임을 보여 주는 <b>연출</b>이에요. 봉을 누르면 이유가 나와요.
+      </figcaption>
+    </figure>
   );
 }
 

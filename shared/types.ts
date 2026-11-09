@@ -28,6 +28,9 @@ export interface PriceBreakdown {
   limit: 'upper' | 'lower' | null;
   upperLimit: number;
   lowerLimit: number;
+  /** 봉 차트용 고가·저가. 라운드 안 가격 움직임은 계산하지 않으므로 '연출'입니다(stagedWicks). 예전 저장 데이터에는 없습니다. */
+  high?: number;
+  low?: number;
 }
 
 export interface Order {

@@ -127,6 +127,7 @@ export const TERMS: Term[] = [
     /* '저가 수주'(싸게 따낸 계약)처럼 다른 뜻이 많아 자동 링크하지 않고, 차트 화면에서 직접 연결합니다. */
     short: '그날 가장 높았던 가격과 가장 낮았던 가격',
     body: '종가만 보면 하루 동안 얼마나 출렁였는지 알 수 없습니다. 고가와 저가를 함께 보면 장중 움직임의 폭을 알 수 있습니다.',
+    game: '이 게임은 라운드 안의 가격 움직임을 계산하지 않아서, 봉 차트의 고가·저가는 연출입니다. 가격 제한폭 안에서만 그립니다.',
     match: [], related: ['candle', 'volatility'] },
   { id: 'change-rate', term: '등락률', category: 'price',
     short: '기준 가격보다 몇 % 오르거나 내렸는지',
@@ -376,7 +377,7 @@ export const TERMS: Term[] = [
   { id: 'candle', term: '봉(캔들)', en: 'Candlestick', category: 'chart',
     short: '일정 기간의 시가·고가·저가·종가를 한 막대로 그린 것',
     body: '몸통은 시가와 종가 사이, 위아래 꼬리는 고가와 저가입니다. 하루를 한 봉으로 그리면 일봉, 1분이면 1분봉입니다.',
-    game: '차트 연습실 수업 1~2에서 직접 눌러 볼 수 있습니다.',
+    game: '게임 화면에서는 라운드 하나가 봉 하나입니다. 몸통(시가→종가)은 실제 계산값이고, 꼬리(고가·저가)는 라운드 안 움직임을 보여 주는 연출입니다. 차트 연습실 수업 1~2에서는 체결 기록으로 진짜 봉을 만들어 봅니다.',
     match: ['캔들', '일봉', '분봉'], related: ['bull-bear-candle', 'open-price', 'close-price', 'high-low'] },
   { id: 'bull-bear-candle', term: '양봉·음봉', category: 'chart',
     short: '종가가 시가보다 높으면 양봉(빨강), 낮으면 음봉(파랑)',

@@ -80,3 +80,24 @@ export function maxBuyQty(ctx: OrderContext, code: StockCode, price: number): nu
   while (q > 0 && q * price + feeOf(q * price) > av) q--;
   return q;
 }
+
+/* ---------- 봉 꼬리(연출) ----------
+   이 게임은 라운드 안의 가격 움직임을 계산하지 않습니다. 봉의 몸통(시가=직전 종가, 종가=이번 종가)은 실제 계산값이고,
+   꼬리(고가·저가)는 같은 입력이면 항상 같은 값이 나오는 결정적 연출입니다. 가격 제한폭과 10원 단위를 지키고,
+   상한가로 끝나면 고가 = 종가, 하한가로 끝나면 저가 = 종가입니다. 화면에 '꼬리는 연출'이라고 밝힙니다. */
+function hash01(text: string, salt: number): number {
+  let h = 2166136261 ^ salt;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 10000) / 10000;
+}
+export function stagedWicks(code: StockCode, b: Pick<PriceBreakdown, 'round' | 'basePrice' | 'closePrice' | 'changeBp' | 'limit' | 'upperLimit' | 'lowerLimit' | 'marketBp' | 'stockBp'>): { high: number; low: number } {
+  const key = `${code}:${b.round}:${b.basePrice}:${b.closePrice}:${b.marketBp}:${b.stockBp}`;
+  const span = stockOf(code).maxMoveBp * 2 + Math.abs(b.changeBp) * 0.3;    // 많이 움직인 날일수록 꼬리도 길게
+  const upBp = Math.round(hash01(key, 1) * span), dnBp = Math.round(hash01(key, 2) * span);
+  const top = Math.max(b.basePrice, b.closePrice), bottom = Math.min(b.basePrice, b.closePrice);
+  let high = Math.min(b.upperLimit, Math.ceil(top * (10000 + upBp) / 100000) * 10);
+  let low = Math.max(b.lowerLimit, Math.floor(bottom * (10000 - dnBp) / 100000) * 10);
+  if (b.limit === 'upper') high = b.closePrice;
+  if (b.limit === 'lower') low = b.closePrice;
+  return { high: Math.max(high, top), low: Math.min(low, bottom) };
+}
