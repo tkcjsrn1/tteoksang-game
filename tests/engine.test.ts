@@ -135,6 +135,9 @@ test('종목 풀 24개, 업종 6개 × 4종목, 판마다 10종목', () => {
     const featured = new Set(targets.map(c => stockOf(c).group));
     const withPeer = [...featured].filter(g => codes.some(x => x !== GROUPS[g].leader && stockOf(x).group === g));
     assert.equal(withPeer.length, Math.min(featured.size, STOCKS_PER_GAME - LEADERS.length), `${seed}`);
+    /* 뉴스 카드의 주인공(targets[0]) 업종이 4개 이하이면 모두 동반 종목이 있습니다 */
+    const primary = new Set(ARCS.filter(a => p.arcIds.includes(a.id)).flatMap(a => a.stages.map(st => stockOf(st.targets[0]).group)));
+    if (primary.size <= STOCKS_PER_GAME - LEADERS.length) for (const g of primary) assert.ok(withPeer.includes(g), `${seed} ${g}`);
     /* 이번 판 종목에만 개별 변동을 정합니다 */
     assert.ok(p.rounds.every(r => Object.keys(r.stockBp).every(c => codes.includes(c as `G${number}`))));
   }

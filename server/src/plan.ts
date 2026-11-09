@@ -17,9 +17,12 @@ export const STOCKS_PER_GAME = 10;
     나머지를 무작위로 채웁니다. 업종 동조화를 화면에서 바로 볼 수 있게 하려는 순서입니다. */
 export function pickStocks(arcs: Arc[], rnd: () => number): StockCode[] {
   const peers = STOCKS.filter(s => !LEADERS.includes(s.code));
-  const featured = [...new Set(arcs.flatMap(a => a.stages.flatMap(st => st.targets)).map(c => stockOf(c).group))];
+  /* 뉴스 카드에 크게 나오는 종목(targets[0])의 업종을 먼저, 함께 영향받는 종목의 업종을 다음으로 채웁니다. */
+  const groupsOf = (codes: StockCode[]) => [...new Set(codes.map(c => stockOf(c).group))];
+  const primary = groupsOf(arcs.flatMap(a => a.stages.map(st => st.targets[0])));
+  const secondary = groupsOf(arcs.flatMap(a => a.stages.flatMap(st => st.targets))).filter(g => !primary.includes(g));
   const picked: StockCode[] = [];
-  for (const g of shuffled(featured, rnd)) {
+  for (const g of [...shuffled(primary, rnd), ...shuffled(secondary, rnd)]) {
     const pool = shuffled(peers.filter(p => p.group === g && !picked.includes(p.code)), rnd);
     if (pool[0] && picked.length < STOCKS_PER_GAME - LEADERS.length) picked.push(pool[0].code);
   }

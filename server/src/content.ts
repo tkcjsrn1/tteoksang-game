@@ -299,9 +299,169 @@ export const ARCS: Arc[] = [
         { id: 'fall', weight: 70, beat: true, actual: '원료값 15% 하락', gap: '기대보다 빨리 내림', label: '원료값 하락', impacts: [{ code: 'G04', bp: 450, reason: '원가 부담 완화' }, { code: 'G03', bp: -100, reason: '긴급 수입 운송 감소' }] },
         { id: 'stay', weight: 30, beat: false, actual: '원료값 고공 행진', gap: '기대대로 높음', label: '원료값 고공 행진', impacts: [{ code: 'G04', bp: -400, reason: '원가 부담 지속' }] }
       ] }
-
+  ] },
+  { id: 'fx', title: '환율 급변 사건', stages: [
+    { id: 'fx-1', step: 1, targets: ['G04', 'G03'], signal: { G04: -1 }, clueDir: 1, concept: '환율이 오르면(원화 가치 하락) 원료를 수입하는 회사는 원가가 오르고, 수출하는 회사는 유리해집니다.',
+      headline: '원화 가치 급락, 환율 한 주 새 6% 상승', facts: '아보튠은 배양 원료 대부분을 수입합니다.', expectation: '시장은 아보튠의 원가가 크게 오른다고 봅니다.', remaining: '아보튠이 환율 변동에 대비해 두었는지', clue: '아보튠 사업보고서에 “수입 대금 1년분 환율 고정 계약”이 적혀 있습니다.',
+      outcomes: [
+        { id: 'hedged', weight: 65, beat: true, actual: '1년분 수입 대금을 예전 환율로 고정', gap: '걱정보다 원가 영향이 작음', label: '환율 고정 계약으로 방어', impacts: [{ code: 'G04', bp: 550, reason: '환율이 올라도 올해 원가는 그대로' }, { code: 'G03', bp: -100, reason: '비싸진 수입품 운송 감소 우려' }] },
+        { id: 'exposed', weight: 35, beat: false, actual: '고정 계약 물량이 적어 원가 급등', gap: '걱정이 현실이 됨', label: '환율 상승 직격', impacts: [{ code: 'G04', bp: -800, reason: '수입 원가가 6% 가까이 오름' }, { code: 'G03', bp: -100, reason: '비싸진 수입품 운송 감소 우려' }] }
+      ] },
+    { id: 'fx-2', step: 2, targets: ['G03'], signal: { G03: 1 }, clueDir: -1, concept: '환율은 수입품 가격을 바꿔 운송처럼 연결된 업종에도 영향을 줍니다.',
+      headline: '도르넴, 수입 냉동식품 운송 계약 확대 협상', facts: '수입 냉동식품 운송이 도르넴 매출의 30%입니다.', expectation: '시장은 계약 물량이 20% 늘 것으로 봅니다.', remaining: '수입 업체들의 다음 분기 주문량', clue: '환율이 오르자 수입 업체 두 곳이 다음 분기 주문을 줄이겠다고 밝혔습니다.',
+      outcomes: [
+        { id: 'expand', weight: 30, beat: true, actual: '운송 물량 20% 확대 계약', gap: '기대대로 확대', label: '수입 운송 계약 확대', impacts: [{ code: 'G03', bp: 500, reason: '환율 부담에도 물량을 지킴' }] },
+        { id: 'shrink', weight: 70, beat: false, actual: '운송 물량 10% 축소', gap: '기대한 확대 대신 축소', label: '수입 운송 물량 축소', impacts: [{ code: 'G03', bp: -450, reason: '비싸진 수입품 주문이 줄어듦' }] }
+      ] },
+    { id: 'fx-3', step: 3, targets: ['G04', 'G05'], signal: { G04: 1 }, clueDir: 1, concept: '환율이 제자리로 돌아오면 환율 때문에 내렸던 주가도 되돌아가는 경우가 많습니다.',
+      headline: '외환 당국, 환율 안정 조치 예고', facts: '급격한 환율 변동을 막겠다고 밝혔습니다.', expectation: '시장은 효과가 작을 것으로 봅니다.', remaining: '환율이 실제로 내려갈지', clue: '분기 말을 앞두고 수출 대금을 원화로 바꾸려는 수요가 크게 늘었다는 집계가 나왔습니다.',
+      outcomes: [
+        { id: 'calm', weight: 65, beat: true, actual: '환율 3% 하락', gap: '기대보다 효과가 큼', label: '환율 안정', impacts: [{ code: 'G04', bp: 400, reason: '수입 원가 부담 완화' }, { code: 'G05', bp: 150, reason: '해외 장비 대여료 부담 감소' }] },
+        { id: 'still', weight: 35, beat: false, actual: '환율 높은 수준 유지', gap: '기대대로 효과 미미', label: '환율 고공 지속', impacts: [{ code: 'G04', bp: -350, reason: '원가 부담 계속' }] }
+      ] }
+  ] },
+  { id: 'recall', title: '도르넴 냉장 차량 리콜 사건', stages: [
+    { id: 'rc-1', step: 1, targets: ['G03'], signal: { G03: -1 }, clueDir: 1, concept: '리콜은 범위가 비용을 정합니다. 원인이 좁을수록 걱정이 빨리 걷힙니다.',
+      headline: '도르넴 냉장 차량, 운행 중 냉각 장치 고장 잇따라', facts: '운행 중 짐칸 온도가 올라간 사례가 7건 보고됐습니다.', expectation: '시장은 전 차량 리콜과 큰 비용을 걱정합니다.', remaining: '고장 원인과 리콜 범위', clue: '고장 7건 모두 같은 달에 생산된 냉각 부품을 쓴 차량이었습니다.',
+      outcomes: [
+        { id: 'narrow', weight: 65, beat: true, actual: '특정 달 생산 부품을 쓴 차량 40대만 리콜', gap: '걱정보다 범위가 좁음', label: '리콜 범위 일부로 한정', impacts: [{ code: 'G03', bp: 500, reason: '비용 걱정이 크게 줄어듦' }] },
+        { id: 'wide', weight: 35, beat: false, actual: '전 차량 점검과 리콜', gap: '걱정이 현실이 됨', label: '전 차량 리콜', impacts: [{ code: 'G03', bp: -800, reason: '수리 비용과 운행 중단 손실' }] }
+      ] },
+    { id: 'rc-2', step: 2, targets: ['G03'], signal: { G03: 1 }, clueDir: -1, concept: '“비용은 상대가 낸다”는 발표도 상대가 동의해야 확정됩니다.',
+      headline: '도르넴 “리콜 비용은 부품사가 부담”', facts: '부품 공급 계약에 결함 보상 조항이 있습니다.', expectation: '시장은 비용 전액을 부품사가 낸다고 봅니다.', remaining: '부품사의 실제 지급 여부', clue: '부품사가 “고장 책임은 차량 관리에도 있다”며 이의를 제기했습니다.',
+      outcomes: [
+        { id: 'paid', weight: 30, beat: true, actual: '부품사가 비용 전액 지급 합의', gap: '기대대로', label: '리콜 비용 전액 보상', impacts: [{ code: 'G03', bp: 450, reason: '리콜 비용 부담이 사라짐' }] },
+        { id: 'dispute', weight: 70, beat: false, actual: '비용을 절반씩 나누기로 합의', gap: '기대보다 도르넴 부담이 큼', label: '리콜 비용 절반 부담', impacts: [{ code: 'G03', bp: -400, reason: '예상하지 못한 비용을 떠안음' }] }
+      ] },
+    { id: 'rc-3', step: 3, targets: ['G03'], signal: { G03: -1 }, clueDir: 1, concept: '고객이 떠날지 걱정될 때는 고객에게 다른 선택지가 있는지 보세요.',
+      headline: '대형 유통사, 도르넴과의 운송 계약 재검토', facts: '리콜 기간에 배송 지연이 있었습니다.', expectation: '시장은 대형 유통사가 계약을 끊을 것으로 봅니다.', remaining: '계약 갱신 여부', clue: '업계 자료에 따르면 다른 운송사들은 냉장 차량 여유가 거의 없습니다.',
+      outcomes: [
+        { id: 'renew', weight: 65, beat: true, actual: '계약 2년 갱신', gap: '걱정과 달리 고객 유지', label: '대형 고객 계약 갱신', impacts: [{ code: 'G03', bp: 600, reason: '최대 고객 이탈 걱정 해소' }] },
+        { id: 'lost', weight: 35, beat: false, actual: '계약 물량 절반을 다른 운송사로', gap: '걱정이 일부 현실이 됨', label: '대형 고객 물량 이탈', impacts: [{ code: 'G03', bp: -700, reason: '매출의 큰 부분이 줄어듦' }] }
+      ] }
+  ] },
+  { id: 'overhang', title: '세모륨 물량 부담 사건', stages: [
+    { id: 'oh-1', step: 1, targets: ['G02'], signal: { G02: -1 }, clueDir: 1, concept: '팔 수 있게 된 대량 주식은 실제로 팔리지 않아도 주가를 누릅니다. 이를 오버행(물량 부담)이라고 합니다.',
+      headline: '세모륨 초기 투자자 지분 15%, 다음 주 매도 제한 풀려', facts: '상장 때 일정 기간 팔지 않기로 약속한 지분의 의무보유 기간이 끝납니다.', expectation: '시장은 대량 매도로 주가가 눌릴 것으로 봅니다.', remaining: '초기 투자자가 실제로 팔지', clue: '가장 큰 초기 투자자가 “보유 기간을 스스로 1년 더 늘린다”고 공시했습니다.',
+      outcomes: [
+        { id: 'hold', weight: 65, beat: true, actual: '풀린 물량 대부분이 팔리지 않음', gap: '걱정보다 매도가 적음', label: '물량 부담 해소', impacts: [{ code: 'G02', bp: 500, reason: '걱정한 매도 물량이 나오지 않음' }] },
+        { id: 'dump', weight: 35, beat: false, actual: '풀린 물량의 절반이 시장에 나옴', gap: '걱정이 현실이 됨', label: '초기 투자자 대량 매도', impacts: [{ code: 'G02', bp: -750, reason: '사려는 사람보다 팔려는 물량이 많아짐' }] }
+      ] },
+    { id: 'oh-2', step: 2, targets: ['G02'], signal: { G02: 1 }, clueDir: -1, concept: '블록딜은 보통 현재가보다 싸게 넘기기 때문에, 그 거래 가격이 주가의 새 기준이 되기 쉽습니다.',
+      headline: '세모륨 지분, 대형 연기금에 블록딜 추진', facts: '초기 투자자 지분 일부를 장이 끝난 뒤 한꺼번에 넘기는 거래입니다.', expectation: '시장은 큰손이 들어오니 호재라고 봅니다.', remaining: '거래 가격', clue: '거래를 맡은 증권사가 “현재가보다 8~10% 낮은 가격을 제시했다”고 전해졌습니다.',
+      outcomes: [
+        { id: 'small-disc', weight: 30, beat: true, actual: '현재가보다 2% 낮은 가격에 거래', gap: '기대대로 좋은 조건', label: '낮은 할인율 블록딜', impacts: [{ code: 'G02', bp: 400, reason: '장기 투자자를 큰 할인 없이 맞이함' }] },
+        { id: 'big-disc', weight: 70, beat: false, actual: '현재가보다 9% 낮은 가격에 거래', gap: '기대와 달리 큰 할인', label: '큰 할인 블록딜', impacts: [{ code: 'G02', bp: -350, reason: '할인된 거래 가격 쪽으로 주가가 끌려감' }] }
+      ] },
+    { id: 'oh-3', step: 3, targets: ['G02'], signal: { G02: 1 }, clueDir: 1, concept: '물량 부담이 걷힌 뒤에는 다시 실적이 주가를 정합니다.',
+      headline: '세모륨, 물량 부담 해소 후 첫 분기 실적 발표', facts: '아직 영업손실을 내고 있습니다.', expectation: '시장은 영업손실이 조금 줄어든다고 봅니다.', remaining: '손실이 줄어든 폭', clue: '양산 라인 가동률이 지난 분기보다 20%p 올랐다는 공장 자료가 나왔습니다.',
+      outcomes: [
+        { id: 'better', weight: 65, beat: true, actual: '영업손실 절반으로 축소', gap: '기대보다 크게 개선', label: '적자 폭 크게 축소', impacts: [{ code: 'G02', bp: 450, reason: '흑자 전환 시점이 당겨짐' }] },
+        { id: 'worse', weight: 35, beat: false, actual: '영업손실 오히려 증가', gap: '기대와 반대', label: '적자 폭 확대', impacts: [{ code: 'G02', bp: -700, reason: '양산 비용이 예상보다 큼' }] }
+      ] }
+  ] },
+  { id: 'proxy', title: '피노벡 경영권 분쟁 사건', stages: [
+    { id: 'px-1', step: 1, targets: ['G05'], signal: { G05: 1 }, clueDir: -1, concept: '경영권 분쟁 중에는 양쪽이 지분을 사들일 거라는 기대로 주가가 오르기도 합니다. 그 기대가 꺾이면 빠르게 되돌아갑니다.',
+      headline: '피노벡 2대 주주, 지분 늘리며 경영권 도전 선언', facts: '2대 주주가 지분을 18%까지 늘렸습니다. 최대주주 지분은 22%입니다.', expectation: '시장은 지분 사들이기 경쟁이 붙는다고 봅니다.', remaining: '최대주주가 맞서 지분을 살지', clue: '최대주주가 “추가로 사지 않고 주주총회 표 대결로 가겠다”고 밝혔습니다.',
+      outcomes: [
+        { id: 'race', weight: 30, beat: true, actual: '양쪽 모두 지분 추가 매입', gap: '기대대로 지분 경쟁', label: '지분 매입 경쟁', impacts: [{ code: 'G05', bp: 700, reason: '사려는 쪽이 둘이 되며 수요가 늘어남' }] },
+        { id: 'vote', weight: 70, beat: false, actual: '추가 매입 없이 표 대결 예고', gap: '기대한 지분 경쟁이 없음', label: '지분 경쟁 기대 무산', impacts: [{ code: 'G05', bp: -350, reason: '지분 경쟁 기대로 오른 몫이 빠짐' }] }
+      ] },
+    { id: 'px-2', step: 2, targets: ['G05'], signal: { G05: -1 }, clueDir: 1, concept: '불확실성이 걷히는 것만으로도 주가가 오를 수 있습니다.',
+      headline: '피노벡 주주총회, 이사 선임 표 대결 임박', facts: '2대 주주가 이사 3명을 새로 뽑자는 안건을 냈습니다.', expectation: '시장은 분쟁이 길어져 경영이 흔들릴까 걱정합니다.', remaining: '표 대결 결과와 승복 여부', clue: '주주에게 투표 방향을 조언하는 의결권 자문사 2곳이 모두 같은 쪽 손을 들어 줬습니다.',
+      outcomes: [
+        { id: 'settled', weight: 65, beat: true, actual: '큰 표 차이로 결론, 양측 승복', gap: '걱정보다 빨리 정리', label: '경영권 분쟁 조기 정리', impacts: [{ code: 'G05', bp: 450, reason: '불확실성이 사라짐' }] },
+        { id: 'lawsuit', weight: 35, beat: false, actual: '근소한 차이로 결론, 소송 제기', gap: '걱정대로 분쟁 장기화', label: '분쟁이 소송으로 번짐', impacts: [{ code: 'G05', bp: -600, reason: '경영 공백 우려' }] }
+      ] },
+    { id: 'px-3', step: 3, targets: ['G05'], signal: { G05: 1 }, clueDir: -1, concept: '확장 계획은 좋은 소식이지만, 돈을 주주에게서 마련하면 지분 희석이 따라옵니다.',
+      headline: '피노벡 새 경영진, 공연장 2곳 확장 계획 발표', facts: '분쟁이 끝난 뒤 첫 사업 계획입니다.', expectation: '시장은 확장으로 매출이 크게 는다고 봅니다.', remaining: '확장 자금을 어떻게 마련할지', clue: '새 경영진이 “필요하면 주주들에게 자금을 요청하겠다”고 말했습니다.',
+      outcomes: [
+        { id: 'loan', weight: 30, beat: true, actual: '장기 대출로 자금 마련', gap: '기대대로 지분 희석 없음', label: '대출로 확장 자금 마련', impacts: [{ code: 'G05', bp: 500, reason: '희석 없이 성장 계획 확정' }] },
+        { id: 'rights', weight: 70, beat: false, actual: '유상증자로 자금 마련', gap: '기대와 달리 새 주식 발행', label: '확장 위해 유상증자', impacts: [{ code: 'G05', bp: -500, reason: '주식 수가 늘어 1주의 몫이 줄어듦' }] }
+      ] }
+  ] },
+  { id: 'credit', title: '타르멜 신용등급 사건', stages: [
+    { id: 'cr-1', step: 1, targets: ['G06'], signal: { G06: -1 }, clueDir: 1, concept: '신용등급이 내려가면 회사가 돈을 빌릴 때 이자를 더 내야 합니다.',
+      headline: '신용평가사, 타르멜 신용등급 하향 검토', facts: '해외 설비 투자로 빚이 크게 늘었습니다.', expectation: '시장은 등급 하락과 이자 부담 증가를 예상합니다.', remaining: '등급 결정', clue: '타르멜이 지난달 해외 설비 지분 일부를 팔아 빚의 30%를 갚았다고 공시했습니다.',
+      outcomes: [
+        { id: 'keep', weight: 65, beat: true, actual: '신용등급 유지', gap: '걱정보다 좋은 결과', label: '신용등급 유지', impacts: [{ code: 'G06', bp: 400, reason: '이자 부담 걱정이 사라짐' }] },
+        { id: 'down', weight: 35, beat: false, actual: '신용등급 한 단계 하락', gap: '걱정이 현실이 됨', label: '신용등급 하락', impacts: [{ code: 'G06', bp: -550, reason: '앞으로 빌리는 돈의 이자가 오름' }] }
+      ] },
+    { id: 'cr-2', step: 2, targets: ['G06'], signal: { G06: 1 }, clueDir: -1, concept: '회사채 금리는 회사가 빚을 낼 때 치르는 값입니다. 시장 분위기에 따라 같은 회사도 금리가 달라집니다.',
+      headline: '타르멜, 설비 교체 자금 위해 회사채 발행 추진', facts: '오래된 정수 설비를 교체할 자금입니다.', expectation: '시장은 연 3%대 낮은 금리로 발행된다고 봅니다.', remaining: '실제 발행 금리', clue: '같은 등급 회사들이 이번 달 사려는 사람이 부족해 금리를 올려 발행했습니다.',
+      outcomes: [
+        { id: 'cheap', weight: 30, beat: true, actual: '연 3.2%로 발행', gap: '기대대로 낮은 금리', label: '낮은 금리로 회사채 발행', impacts: [{ code: 'G06', bp: 350, reason: '이자 비용이 적어 배당 여력 유지' }] },
+        { id: 'costly', weight: 70, beat: false, actual: '연 4.6%로 발행', gap: '기대보다 1%p 넘게 높은 금리', label: '높은 금리로 회사채 발행', impacts: [{ code: 'G06', bp: -300, reason: '이자 비용이 늘어 배당 여력 감소' }] }
+      ] },
+    { id: 'cr-3', step: 3, targets: ['G06'], signal: { G06: 1 }, clueDir: 1, concept: '장기 관리 계약은 매출이 오래 이어져 방어주의 힘이 됩니다.',
+      headline: '지자체, 물 재이용 설비 장기 관리 입찰 결과 발표', facts: '3개 지역의 10년 관리 계약입니다.', expectation: '시장은 타르멜이 3곳 중 1곳을 딸 것으로 봅니다.', remaining: '낙찰받은 지역 수', clue: '경쟁사 한 곳이 입찰 서류 미비로 탈락했다는 지자체 공고가 나왔습니다.',
+      outcomes: [
+        { id: 'two', weight: 65, beat: true, actual: '3곳 중 2곳 낙찰', gap: '기대보다 1곳 많음', label: '장기 관리 계약 2곳 수주', impacts: [{ code: 'G06', bp: 500, reason: '10년 매출이 늘어남' }] },
+        { id: 'none', weight: 35, beat: false, actual: '한 곳도 낙찰받지 못함', gap: '기대보다 1곳 적음', label: '장기 관리 입찰 전패', impacts: [{ code: 'G06', bp: -600, reason: '기대한 장기 매출이 사라짐' }] }
+      ] }
+  ] },
+  { id: 'correction', title: '누바칸 정정 공시 사건', stages: [
+    { id: 'co-1', step: 1, targets: ['G01'], signal: { G01: 1 }, clueDir: -1, concept: '공시는 본문뿐 아니라 첨부된 조건까지 읽어야 합니다. 내용이 바뀌면 정정 공시가 나옵니다.',
+      headline: '누바칸, 해외 공급 계약 공시 “계약 금액 500억 원”', facts: '회사 연 매출의 40%에 해당하는 규모입니다.', expectation: '시장은 500억 원이 확정된 금액이라고 봅니다.', remaining: '계약서의 세부 조건', clue: '공시 첨부 서류에 “최종 금액은 시험 납품 뒤 확정”이라는 문구가 있습니다.',
+      outcomes: [
+        { id: 'firm', weight: 30, beat: true, actual: '500억 원 전액 확정 계약', gap: '기대대로', label: '공급 계약 전액 확정', impacts: [{ code: 'G01', bp: 600, reason: '큰 매출이 확정됨' }] },
+        { id: 'revise', weight: 70, beat: false, actual: '정정 공시: 확정 200억 원, 나머지 300억 원은 고객 선택(옵션)', gap: '확정 금액이 기대의 40%', label: '정정 공시로 계약 금액 축소', impacts: [{ code: 'G01', bp: -400, reason: '확정 매출이 생각보다 작음' }] }
+      ] },
+    { id: 'co-2', step: 2, targets: ['G01'], signal: { G01: -1 }, clueDir: 1, concept: '실망 뒤에는 계약이 실제로 이행되는지가 다음 재료가 됩니다.',
+      headline: '누바칸, 해외 시험 납품 일정 공개', facts: '해외 고객사에 첫 물량을 보냅니다.', expectation: '시장은 정정 공시 뒤로 계약 자체를 의심합니다.', remaining: '시험 납품 통과 여부', clue: '고객사 현지 공장이 누바칸 모듈 설치 공사를 이미 시작했습니다.',
+      outcomes: [
+        { id: 'pass', weight: 65, beat: true, actual: '시험 납품 통과', gap: '의심보다 좋은 결과', label: '해외 시험 납품 통과', impacts: [{ code: 'G01', bp: 550, reason: '계약 이행에 대한 의심이 걷힘' }] },
+        { id: 'fail', weight: 35, beat: false, actual: '현지 기준 미달로 재시험', gap: '의심이 커짐', label: '해외 시험 납품 재시험', impacts: [{ code: 'G01', bp: -650, reason: '확정 금액마저 늦어질 우려' }] }
+      ] },
+    { id: 'co-3', step: 3, targets: ['G01'], signal: { G01: 1 }, clueDir: 1, concept: '선택(옵션) 물량은 고객 사정에 달려 있습니다. 고객의 계획을 보면 힌트가 있습니다.',
+      headline: '누바칸 해외 고객사, 옵션 물량 행사 여부 발표 예정', facts: '남은 300억 원어치는 고객사가 선택합니다.', expectation: '시장은 절반인 150억 원만 행사된다고 봅니다.', remaining: '옵션 행사 규모', clue: '고객사가 내년 설치 지역을 두 배로 늘린다고 발표했습니다.',
+      outcomes: [
+        { id: 'full', weight: 65, beat: true, actual: '옵션 300억 원 전부 행사', gap: '기대의 두 배', label: '옵션 물량 전부 행사', impacts: [{ code: 'G01', bp: 600, reason: '처음 공시한 500억 원이 결국 채워짐' }] },
+        { id: 'none', weight: 35, beat: false, actual: '옵션 행사 보류', gap: '기대한 150억 원도 없음', label: '옵션 행사 보류', impacts: [{ code: 'G01', bp: -700, reason: '추가 매출 기대가 사라짐' }] }
+      ] }
+  ] },
+  { id: 'theme', title: '가상 공연 테마주 사건', stages: [
+    { id: 'th-1', step: 1, targets: ['G05'], signal: { G05: 1 }, clueDir: -1, concept: '테마주는 실적보다 이야기로 움직입니다. 회사의 실제 사업과 맞는지 확인해야 합니다.',
+      headline: '“가상 공연이 뜬다” 피노벡, 가상 공연 테마주로 묶여 급등', facts: '사흘 동안 주가가 크게 올랐습니다. 회사는 가상 공연 사업을 발표한 적이 없습니다.', expectation: '시장 일부는 가상 공연 사업 진출 발표를 기대합니다.', remaining: '회사의 공식 입장', clue: '피노벡 사업보고서에 따르면 매출의 95%가 오프라인 공연장 대관과 티켓입니다.',
+      outcomes: [
+        { id: 'noplan', weight: 65, beat: false, actual: '회사 “가상 공연 사업 계획 없음”', gap: '테마 기대에 실체가 없음', label: '테마 기대 공식 부인', impacts: [{ code: 'G05', bp: -700, reason: '이야기로 오른 몫이 빠짐' }] },
+        { id: 'pilot', weight: 35, beat: true, actual: '가상 공연 시범 사업 발표', gap: '기대 일부가 사실로', label: '가상 공연 시범 사업 발표', impacts: [{ code: 'G05', bp: 600, reason: '테마에 실제 사업이 붙음' }] }
+      ] },
+    { id: 'th-2', step: 2, targets: ['G05'], signal: { G05: -1 }, clueDir: 1, concept: '테마가 식은 뒤에는 본업 실적이 주가를 받쳐 주는지가 중요합니다.',
+      headline: '테마 열기 식으며 피노벡 거래량 급감', facts: '거래량이 최고치의 5분의 1로 줄었습니다.', expectation: '시장은 주가가 테마 이전보다 더 내려간다고 봅니다.', remaining: '본업 실적이 받쳐 줄지', clue: '다음 달 공연 예매율이 지난해보다 15% 높습니다.',
+      outcomes: [
+        { id: 'support', weight: 65, beat: true, actual: '공연 예매 호조로 매출 전망 상향', gap: '걱정보다 탄탄한 본업', label: '본업이 주가를 받침', impacts: [{ code: 'G05', bp: 450, reason: '본업 실적으로 관심이 옮겨 감' }] },
+        { id: 'slide', weight: 35, beat: false, actual: '예매 취소가 늘어 매출 전망 유지', gap: '받쳐 줄 재료가 없음', label: '테마 이후 계속 하락', impacts: [{ code: 'G05', bp: -500, reason: '사려는 사람이 사라짐' }] }
+      ] },
+    { id: 'th-3', step: 3, targets: ['G05'], signal: { G05: 1 }, clueDir: -1, concept: '새 테마가 생겨도 회사와 실제로 연결되는지 다시 확인해야 합니다.',
+      headline: '새 테마 “공연 관광” 등장, 피노벡 다시 거론', facts: '외국인 관광객이 늘며 공연 관광 관련주가 주목받습니다.', expectation: '시장은 피노벡이 다시 급등한다고 봅니다.', remaining: '실제 외국인 관객 비중', clue: '피노벡 공연장은 한국어 공연만 하고 외국어 자막 설비가 없습니다.',
+      outcomes: [
+        { id: 'fade', weight: 70, beat: false, actual: '외국인 관객 비중 2%', gap: '테마와 실제가 다름', label: '공연 관광 테마 무관', impacts: [{ code: 'G05', bp: -400, reason: '새 테마 기대가 금방 꺼짐' }] },
+        { id: 'real', weight: 30, beat: true, actual: '외국어 자막 설비 도입 발표', gap: '테마에 맞춘 준비 시작', label: '공연 관광 준비 발표', impacts: [{ code: 'G05', bp: 450, reason: '새 고객층 기대' }] }
+      ] }
+  ] },
+  { id: 'turnaround', title: '도르넴 흑자 전환 사건', stages: [
+    { id: 'ta-1', step: 1, targets: ['G03'], signal: { G03: 1 }, clueDir: 1, concept: '적자를 내던 회사가 이익을 내기 시작하는 것을 흑자 전환이라고 합니다. 기대가 이미 크면 오름 폭은 작습니다.',
+      headline: '도르넴, 3분기 연속 적자 끝내고 흑자 전환 기대', facts: '운임 인상과 적자 노선 정리를 마쳤습니다.', expectation: '시장은 영업이익 20억 원으로 흑자 전환을 기대합니다.', remaining: '실제 영업이익', clue: '경쟁사 2곳의 같은 분기 운임 수입이 15% 늘었습니다.',
+      outcomes: [
+        { id: 'beat', weight: 65, beat: true, actual: '영업이익 30억 원으로 흑자 전환', gap: '기대보다 10억 원 많음', label: '기대 넘는 흑자 전환', impacts: [{ code: 'G03', bp: 450, reason: '흑자 전환 확인. 기대가 이미 반영돼 오름 폭은 제한' }] },
+        { id: 'miss', weight: 35, beat: false, actual: '영업손실 5억 원으로 적자 지속', gap: '기대한 흑자 전환 실패', label: '흑자 전환 실패', impacts: [{ code: 'G03', bp: -800, reason: '흑자 전환 기대가 무너짐' }] }
+      ] },
+    { id: 'ta-2', step: 2, targets: ['G03'], signal: { G03: 1 }, clueDir: -1, concept: '회사가 내놓는 실적 전망(가이던스)이 기대보다 낮으면, 좋은 실적 뒤에도 주가가 내릴 수 있습니다.',
+      headline: '도르넴, 내년 실적 전망 발표 예정', facts: '흑자 전환 뒤 처음 내는 전망입니다.', expectation: '시장은 내년 영업이익이 두 배로 는다고 봅니다.', remaining: '회사가 내놓을 전망치', clue: '도르넴 재무 담당 임원이 “내년은 차량 교체 비용이 크다”고 말했습니다.',
+      outcomes: [
+        { id: 'high', weight: 35, beat: true, actual: '내년 영업이익 두 배 이상 전망', gap: '기대대로', label: '자신감 있는 실적 전망', impacts: [{ code: 'G03', bp: 600, reason: '성장이 이어진다는 확인' }] },
+        { id: 'low', weight: 65, beat: false, actual: '내년 영업이익 20% 증가 전망', gap: '기대한 두 배에 크게 못 미침', label: '보수적인 실적 전망', impacts: [{ code: 'G03', bp: -550, reason: '기대한 성장 속도가 꺾임' }] }
+      ] },
+    { id: 'ta-3', step: 3, targets: ['G03'], signal: { G03: -1 }, clueDir: 1, concept: '같은 비용도 한꺼번에 내는지 나눠 내는지에 따라 이익에 주는 충격이 다릅니다.',
+      headline: '도르넴, 냉장 차량 교체 계획 확정 공시 예정', facts: '낡은 냉장 차량 200대를 바꿔야 합니다.', expectation: '시장은 교체 비용이 내년 이익을 대부분 잡아먹는다고 걱정합니다.', remaining: '교체 방식', clue: '도르넴이 차량을 사지 않고 빌려 쓰는(리스) 계약을 협의 중이라는 보도가 나왔습니다.',
+      outcomes: [
+        { id: 'lease', weight: 65, beat: true, actual: '차량을 빌려 쓰는 리스 계약 체결', gap: '걱정보다 한 번에 드는 비용이 작음', label: '리스로 교체 비용 분산', impacts: [{ code: 'G03', bp: 500, reason: '비용을 여러 해로 나눠 냄' }] },
+        { id: 'buy', weight: 35, beat: false, actual: '차량 200대 일시 구매', gap: '걱정대로 큰 비용', label: '차량 일시 구매', impacts: [{ code: 'G03', bp: -500, reason: '내년 이익이 크게 줄어듦' }] }
+      ] }
   ] }
 ];
+
 
 export const CARDS: ChoiceCard[] = [
   { id: 'leading', title: '단톡방 초대가 왔습니다', body: '“VIP 리딩방, 수익률 300% 보장! 가입비는 오늘까지만 받습니다.”', concept: '유사투자자문 사기', condition: '주문 시간 중 공개', options: [
@@ -321,7 +481,19 @@ export const CARDS: ChoiceCard[] = [
     { key: 'B', label: '살 때의 이유를 다시 본다', feedback: '근거가 바뀌었는지 보면 감정과 판단을 나눌 수 있습니다.' } ] },
   { id: 'allin', title: '확신이 드는 종목이 생겼습니다', body: '“이번엔 진짜다.” 한 종목에 전부 넣고 싶습니다.', concept: '분산 투자', condition: '주문 시간 중 공개', options: [
     { key: 'A', label: '전부 넣고 싶다', feedback: '확신이 맞으면 크게 벌지만, 사건 하나로 계좌가 크게 흔들립니다.' },
-    { key: 'B', label: '나눠서 담겠다', feedback: '서로 다른 사건에 반응하는 종목을 섞으면 위험을 줄일 수 있습니다.' } ] }
+    { key: 'B', label: '나눠서 담겠다', feedback: '서로 다른 사건에 반응하는 종목을 섞으면 위험을 줄일 수 있습니다. 같은 업종끼리는 함께 움직이니 업종도 나눠 보세요.' } ] },
+  { id: 'stoploss', title: '산 종목이 10% 빠졌습니다', body: '산 이유는 그대로인데 가격만 내려갔습니다. 언제 팔지 기준은 정해 두지 않았습니다.', concept: '손절', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '더 떨어지기 전에 판다', feedback: '손실을 끊는 손절은 위험 관리입니다. 다만 기준 없이 가격만 보고 팔면 가장 낮은 곳에서 팔기 쉽습니다. 사기 전에 “어떤 일이 생기면 판다”를 정해 두세요.' },
+    { key: 'B', label: '산 이유가 아직 맞는지 확인한다', feedback: '이유가 깨졌다면 팔고, 그대로라면 들고 가는 것이 판단 기준입니다. 손실 종목을 막연히 오래 들고 가는 처분 효과도 조심하세요.' } ] },
+  { id: 'averaging', title: '평균 단가를 낮추고 싶습니다', body: '손실 중인 종목을 더 사면 평균 단가가 내려갑니다. 남은 현금의 절반을 더 넣을까 고민됩니다.', concept: '물타기', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '더 사서 평균 단가를 낮춘다', feedback: '평균 단가가 낮아져도 이미 난 손실 금액은 그대로이고, 한 종목 비중만 커집니다. 근거 없는 물타기는 손실을 키울 수 있습니다.' },
+    { key: 'B', label: '처음 본다고 생각하고 판단한다', feedback: '“지금 처음 봤다면 이 가격에 살까?”라고 물으면 이미 낸 돈에 끌려가지 않습니다.' } ] },
+  { id: 'divchase', title: '오늘이 배당 마지막 매수일입니다', body: '“오늘 사면 배당 받는다!” 회사는 잘 모르지만 배당만 보고 사려고 합니다.', concept: '배당락', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '배당 받으려고 산다', feedback: '배당받을 권리가 사라지는 배당락일에는 주가가 배당금 정도 내려가는 일이 흔합니다. 수수료까지 내면 오히려 손해일 수 있습니다.' },
+    { key: 'B', label: '회사를 먼저 살펴본다', feedback: '배당은 이익의 일부를 나눠 받는 것입니다. 배당 한 번보다 회사가 꾸준히 벌 수 있는지가 중요합니다.' } ] },
+  { id: 'themesms', title: '“테마주 정보” 문자가 왔습니다', body: '“가상 공연 대장주! 내일 상한가 확실. 지금 매수하세요.” 모르는 번호입니다.', concept: '테마주', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '이름이라도 검색해서 산다', feedback: '이런 문자는 먼저 사 둔 사람이 비싸게 팔 상대를 찾는 수단일 수 있습니다. “확실”이라는 말이 붙으면 더 의심하세요.' },
+    { key: 'B', label: '무시하고 사업 내용을 확인한다', feedback: '테마와 실제 매출이 연결되는지 사업보고서에서 확인하는 습관이 테마주 급락을 피하게 해 줍니다.' } ] }
 ];
 
 export const stageById = new Map(ARCS.flatMap(a => a.stages.map(s => [s.id, s] as const)));
