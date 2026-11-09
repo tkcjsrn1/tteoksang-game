@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DISCLAIMER, formatPct, GROUPS, STOCKS } from '../../shared/rules';
 import type { PriceBreakdown, StockView } from '../../shared/types';
 import { Rich, TermLink } from './glossary/GlossaryContext';
+import { replayAt, replayPath, useReplay } from './fx';
 
 export const won = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 export const signedWon = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n)).toLocaleString('ko-KR')}원`;
@@ -104,6 +105,35 @@ export function PriceChart({ stock, totalRounds, selected, onSelect }: { stock: 
       <figcaption className="chart-note">
         <span className="legend up" aria-hidden="true" /> 오름 <span className="legend down" aria-hidden="true" /> 내림 ·{' '}
         <TermLink id="candle">봉</TermLink> 몸통(시가→종가)은 실제 계산값, 위아래 꼬리는 <b>연출</b>이에요(매수가 몰리면 위, 매도가 몰리면 아래로 길게). 아래 막대는 <TermLink id="volume">거래량</TermLink>. 봉을 누르면 이유가 나와요.
+      </figcaption>
+    </figure>
+  );
+}
+
+/** 결과 화면의 봉 재생. 시가에서 출발해 꼬리를 그리고 종가에 닿습니다(연출, client/src/fx.ts replayAt). */
+export function CandleReplay({ b, name }: { b: PriceBreakdown; name: string }) {
+  const high = b.high ?? Math.max(b.basePrice, b.closePrice), low = b.low ?? Math.min(b.basePrice, b.closePrice);
+  const { t, replay } = useReplay();
+  const now = replayAt(replayPath(b.basePrice, high, low, b.closePrice), t);
+  const W = 300, H = 132, T = 12, Bm = 12, cx = 70, bw = 28;
+  const pad = Math.max((high - low) * .12, b.basePrice * .004);
+  const hi = high + pad, lo = low - pad;
+  const y = (v: number) => T + (hi - v) / (hi - lo) * (H - T - Bm);
+  const col = now.price > b.basePrice ? 'var(--up)' : now.price < b.basePrice ? 'var(--down)' : 'var(--faint)';
+  const chg = Math.round((now.price - b.basePrice) * 10000 / b.basePrice);
+  return (
+    <figure className="replay">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${name} 이번 라운드 봉: 시가 ${b.basePrice.toLocaleString('ko-KR')}원, 고가 ${high.toLocaleString('ko-KR')}원, 저가 ${low.toLocaleString('ko-KR')}원, 종가 ${b.closePrice.toLocaleString('ko-KR')}원`}>
+        <line x1={cx - 40} x2={W - 8} y1={y(b.basePrice)} y2={y(b.basePrice)} stroke="var(--chev)" strokeDasharray="3 3" strokeWidth=".8" />
+        <text x={W - 8} y={y(b.basePrice) - 4} fontSize="11" textAnchor="end" fill="var(--muted)">시가 {b.basePrice.toLocaleString('ko-KR')}</text>
+        <line x1={cx} x2={cx} y1={y(now.high)} y2={y(now.low)} stroke={col} strokeWidth="2" />
+        <rect x={cx - bw / 2} y={y(Math.max(b.basePrice, now.price))} width={bw} height={Math.max(2, Math.abs(y(now.price) - y(b.basePrice)))} rx="3" fill={col} />
+        <line x1={cx + bw / 2 + 4} x2={cx + bw / 2 + 18} y1={y(now.price)} y2={y(now.price)} stroke={col} strokeWidth="1.5" />
+        <text x={cx + bw / 2 + 22} y={y(now.price) + 5} fontSize="15" fontWeight="700" fill={col} className="num">{now.price.toLocaleString('ko-KR')}원 {chg > 0 ? '+' : chg < 0 ? '−' : ''}{(Math.abs(chg) / 100).toFixed(2)}%</text>
+      </svg>
+      <figcaption className="chart-note">
+        <TermLink id="candle">봉</TermLink> 재생 · 시가와 종가는 실제 계산값, 그 사이 움직임과 꼬리는 <b>연출</b>이에요.{' '}
+        {t >= 1 && <button type="button" className="link small" onClick={replay}>다시 보기</button>}
       </figcaption>
     </figure>
   );

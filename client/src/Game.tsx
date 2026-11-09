@@ -11,7 +11,7 @@ import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
 import { defaultOpenGroups, groupStocks } from './sectors';
 import type { StockGroup } from '../../shared/rules';
-import { arrow, BreakdownPanel, bpText, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
+import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
 
 type Tab = 'market' | 'assets' | 'news';
 
@@ -491,6 +491,7 @@ function RecapNews({ card, result, stock }: { card: NewsCard; result: NewsResult
             <span className={dir(p.bp)}>{bpText(p.bp)}</span></div>;
         })}
       </div>}
+      {b && <CandleReplay b={b} name={stock.name} />}
       <p className="lesson-box"><b>배운 점</b> <Rich text={result.concept} /></p>
       <details className="more"><summary>기업별 영향 자세히</summary>
         <ul className="impact">{result.impacts.map((i, k) => <li key={k}><span className={dir(i.bp)}>{i.code} {arrow(i.bp)} {pctBp(i.bp)}</span> <Rich text={i.reason} /></li>)}</ul>

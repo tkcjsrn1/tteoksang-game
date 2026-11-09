@@ -445,7 +445,11 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .book tr.bid td:nth-child(2) { color: var(--up); font-weight: 700; background: var(--up-soft); }
 /* 수업 6: 업종 비중 막대 */
 .sector-bars { display: grid; gap: 8px; }
-.bar-row { display: grid; grid-template-columns: 80px minmax(0, 1fr) 44px; gap: 8px; align-items: center; font-size: 14px; }
-.bar-row i { height: 12px; border-radius: 6px; background: var(--led); display: block; }
-.bar-row b { text-align: right; }
+.sector-bars .bar-row { grid-template-columns: 80px minmax(0, 1fr) 44px; font-size: 14px; }
+.sector-bars .bar-row i { height: 12px; border-radius: 6px; background: var(--led); display: block; }
+.sector-bars .bar-row b { text-align: right; }
 .rank-table td.num { white-space: nowrap; }
+/* 결과 화면 봉 재생 */
+.replay { margin: 4px 0 0; }
+.replay svg { width: 100%; height: auto; display: block; }
+.replay .link.small { font-size: 12px; padding: 0; }

@@ -97,3 +97,46 @@ export function useCountUp(target: number, ms = 800, from = 0): number {
   }, [target, ms]);
   return shown;
 }
+
+/* ---------- 봉 재생(연출) ----------
+   결과가 정해진 뒤 봉이 시가에서 출발해 꼬리를 그리고 종가에 닿는 모습을 보여 줍니다. 실제 라운드 안 가격은 계산하지 않으므로 연출입니다.
+   오른 봉은 시가 → 저가 → 고가 → 종가, 내린 봉은 시가 → 고가 → 저가 → 종가 순서로 움직입니다. */
+export function replayPath(open: number, high: number, low: number, close: number): number[] {
+  return close >= open ? [open, low, high, close] : [open, high, low, close];
+}
+/** 진행률 t(0~1)에서의 현재가와 지금까지 지난 최고·최저가. 구간 길이는 가격 차이에 비례합니다. 가격은 10원 단위로 맞춥니다. */
+export function replayAt(path: number[], t: number): { price: number; high: number; low: number } {
+  const segs = path.slice(1).map((p, i) => Math.abs(p - path[i]));
+  const total = segs.reduce((a, b) => a + b, 0);
+  const tt = Math.min(1, Math.max(0, t));
+  let price = path[path.length - 1];
+  let hi = Math.max(path[0]), lo = Math.min(path[0]);
+  if (total === 0) return { price: path[0], high: path[0], low: path[0] };
+  let left = tt * total;
+  for (let i = 0; i < segs.length; i++) {
+    if (left <= segs[i] || i === segs.length - 1) {
+      const f = segs[i] ? Math.min(1, left / segs[i]) : 1;
+      const raw = path[i] + (path[i + 1] - path[i]) * f;
+      price = tt >= 1 ? path[path.length - 1] : Math.round(raw / 10) * 10;
+      hi = Math.max(hi, price); lo = Math.min(lo, price);
+      break;
+    }
+    hi = Math.max(hi, path[i + 1]); lo = Math.min(lo, path[i + 1]);
+    left -= segs[i];
+  }
+  return { price, high: hi, low: lo };
+}
+/** 마운트되면 ms 동안 0→1로 진행률을 올립니다. 움직임 줄이기 설정이면 바로 1입니다. replay()로 다시 재생합니다. */
+export function useReplay(ms = 2400): { t: number; replay: () => void } {
+  const [t, setT] = useState(reduced() ? 1 : 0);
+  const [run, setRun] = useState(0);
+  useEffect(() => {
+    if (reduced()) { setT(1); return; }
+    const start = performance.now();
+    let raf = 0;
+    const step = (now: number) => { const v = Math.min(1, (now - start) / ms); setT(v); if (v < 1) raf = requestAnimationFrame(step); };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [run, ms]);
+  return { t, replay: () => setRun(r => r + 1) };
+}
