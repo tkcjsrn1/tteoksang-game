@@ -9,6 +9,8 @@ import { play, revealTone, useCountUp, useSoundSetting } from './fx';
 import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
+import { defaultOpenGroups, groupStocks } from './sectors';
+import type { StockGroup } from '../../shared/rules';
 import { arrow, BreakdownPanel, bpText, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
 
 type Tab = 'market' | 'assets' | 'news';
@@ -120,8 +122,9 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send2} />}
           {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send2} />}
           <div className="panel flush">
-            <div className="list-head"><span>종목</span><span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span></div>
-            <div className="board">{view.stocks.map(s => <StockRow key={s.code} s={s} view={view} hint={coach?.no === 2 && coach.target === s.code} onOpen={() => setDetail(s.code)} />)}</div>
+            <div className="list-head"><span><TermLink id="sector">업종</TermLink>별 종목</span><span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span></div>
+            <SectorBoard stocks={view.stocks} defaultOpen={defaultOpenGroups(view)} pinned={coach?.no === 2 && coach.target ? [coach.target] : []}
+              renderRow={s => <StockRow key={s.code} s={s} view={view} hint={coach?.no === 2 && coach.target === s.code} onOpen={() => setDetail(s.code)} />} />
           </div>
         </>}
         {tab === 'assets' && <Assets view={view} cancel={cancelOrder} toast={toast.show} />}
@@ -260,6 +263,38 @@ function Standing({ view }: { view: RoomView }) {
         <div className="stat"><small><TermLink id="cash">주문 가능</TermLink></small><b>{won(view.portfolio?.available ?? 0)}</b></div>
         <div className="stat"><small>{me.rank === 1 ? '2위보다' : '1위와 차이'}</small><b className={dir(gap)}>{signedWon(gap)}</b></div>
       </div>
+    </div>
+  );
+}
+/** 업종별로 묶은 종목 목록. 머리줄을 누르면 접고 펼칩니다. 접힌 업종은 종목 수와 평균 등락만 보여 줍니다.
+    pinned 종목이 있는 업종(따라 하기 안내 대상)은 항상 펼칩니다. 머리줄은 버튼이라 안에 용어 링크를 넣지 않습니다. */
+function SectorBoard({ stocks, defaultOpen, pinned, renderRow, summary }: {
+  stocks: StockView[]; defaultOpen: Set<StockGroup>; pinned: StockCode[];
+  renderRow: (s: StockView) => React.ReactNode; summary?: (b: ReturnType<typeof groupStocks>[number]) => React.ReactNode;
+}) {
+  const [toggled, setToggled] = useState<Partial<Record<StockGroup, boolean>>>({});
+  const blocks = groupStocks(stocks);
+  const isOpen = (g: StockGroup) => pinned.some(c => stockOf(c).group === g) || (toggled[g] ?? defaultOpen.has(g));
+  const allOpen = blocks.every(b => isOpen(b.group));
+  return (
+    <div className="sectors">
+      {blocks.map(b => {
+        const open = isOpen(b.group);
+        const avg = b.avgChangeBp;
+        return (
+          <section key={b.group} className={`sector${open ? ' open' : ''}`}>
+            <button className="sector-head" aria-expanded={open} onClick={() => setToggled(t => ({ ...t, [b.group]: !open }))}>
+              <i className="sector-dot" style={{ background: b.color }} aria-hidden="true" />
+              <b>{b.label}</b>
+              <span className="sector-meta">{b.stocks.length}종목</span>
+              <span className="sector-sum">{summary ? summary(b) : avg === null ? <small className="flat">—</small> : <small className={dir(avg)}>평균 {arrow(avg)} {pctBp(avg)}</small>}</span>
+              <svg className={`chev sector-chev${open ? ' up' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            {open && <div className="board">{b.stocks.map(renderRow)}</div>}
+          </section>
+        );
+      })}
+      <button className="link sector-all" onClick={() => setToggled(Object.fromEntries(blocks.map(b => [b.group, !allOpen])))}>{allOpen ? '모두 접기' : '모두 펼치기'}</button>
     </div>
   );
 }
@@ -506,7 +541,8 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
       <GameTerms view={view} />
       <section className="sec tight">
         <div className="list-head"><span>종목 그래프 다시 보기</span><span>처음 대비</span></div>
-        <div className="board">{view.stocks.map(s => <button key={s.code} className="row" onClick={() => { setOpen(s.code); setPoint(s.history[s.history.length - 1]?.round ?? null); }}><StockAvatar code={s.code} name={s.name} /><span className="row-main"><b>{s.name}</b><small>{s.sector}</small></span><span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.price - s.startPrice)}>{pct((s.price / s.startPrice - 1) * 100)}</small></span></button>)}</div>
+        <SectorBoard stocks={view.stocks} defaultOpen={new Set(view.stocks.map(s => stockOf(s.code).group))} pinned={[]} summary={b => { const r = b.stocks.reduce((a, s) => a + (s.price / s.startPrice - 1) * 100, 0) / b.stocks.length; return <small className={dir(r)}>평균 {pct(r)}</small>; }}
+          renderRow={s => <button key={s.code} className="row" onClick={() => { setOpen(s.code); setPoint(s.history[s.history.length - 1]?.round ?? null); }}><StockAvatar code={s.code} name={s.name} /><span className="row-main"><b>{s.name}</b><small>{s.sector}</small></span><span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.price - s.startPrice)}>{pct((s.price / s.startPrice - 1) * 100)}</small></span></button>} />
       </section>
       {stock && <Sheet title={stock.name} onClose={() => setOpen(null)}><PriceChart stock={stock} totalRounds={view.totalRounds} selected={point} onSelect={setPoint} />{pointData && <BreakdownPanel b={pointData} />}</Sheet>}
       <div className="final-actions">
