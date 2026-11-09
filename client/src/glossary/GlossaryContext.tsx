@@ -2,7 +2,7 @@
    - <TermLink id>: 낱말 하나를 눌러 뜻을 봅니다.
    - <Rich text>: 글 속 용어를 자동으로 찾아 링크합니다(shared/glossary.ts의 linkTerms).
    - 열어 본 용어는 이 기기에만 기록해 사전 화면에서 진행도로 보여 줍니다. */
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { categoryLabel, linkTerms, termById, TERMS } from '../../../shared/glossary';
 import { navigate } from '../App';
 import { store } from '../net';
@@ -28,6 +28,12 @@ export function GlossaryProvider({ children }: { children: ReactNode }) {
       store.set(SEEN_KEY, JSON.stringify([...next]));
       return next;
     });
+  }, []);
+  /* 다른 화면으로 넘어가면(뒤로 가기 포함) 열려 있던 설명 창을 닫습니다. */
+  useEffect(() => {
+    const close = () => setCurrent(null);
+    window.addEventListener('hashchange', close);
+    return () => window.removeEventListener('hashchange', close);
   }, []);
   const value = useMemo(() => ({ open, seen }), [open, seen]);
   return (
