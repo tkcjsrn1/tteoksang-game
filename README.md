@@ -39,7 +39,7 @@ npm start
 | 친구 대전 | 2~8명 + NPC 3명 | 혼자 연습과 같음. 6자리 코드와 초대 링크로 입장 |
 | 학술제 대전 | 최대 60명 + NPC 3명 | 10라운드, 뉴스 15초·주문 55초·결과 20초. 운영자가 QR과 대형 화면을 엽니다 |
 
-첫 화면에서 `주식 용어 사전`(용어 68개, 검색·분류, 퀴즈)과 `차트 연습실`도 열 수 있습니다. 게임 중 밑줄 친 낱말을 누르면 그 자리에서 뜻이 나옵니다.
+첫 화면에서 `주식 용어 사전`(용어 80개, 검색·분류, 퀴즈), `차트 연습실`, `내 기록`도 열 수 있습니다. 게임 중 밑줄 친 낱말을 누르면 그 자리에서 뜻이 나옵니다. 혼자 연습 첫 라운드에는 5단계 따라 하기 안내가 나옵니다.
 
 학술제는 첫 화면의 `학술제 운영자` 버튼으로 시작합니다. 운영자 권한은 방을 만든 기기에만 저장됩니다.
 
@@ -84,11 +84,15 @@ android/   Capacitor Android 프로젝트
 ```bash
 npm test            # 단위, 방 로직, WebSocket 두 기기 대전, 연습실, 용어 사전, 서버 방어
 npm run load        # 60명 동시 주문 부하 검증
-npm run balance     # 뉴스 추종 기대값과 NPC 성적
+npm run balance     # 뉴스 추종 기대값과 NPC 성적 (기준은 tests/balance.test.ts)
 npm run test:pg     # PostgreSQL 통합. TEST_DATABASE_URL이 없으면 임시 DB를 띄웁니다
 ```
 
 Windows 관리자 계정에서는 임시 DB가 뜨지 않으므로 `TEST_DATABASE_URL`을 지정하세요.
+
+## 배포
+
+`Dockerfile`로 서버 이미지를 만들 수 있습니다. HTTPS, PostgreSQL, 학술제 리허설, 스토어 출시 점검표는 [`docs/DEPLOY.md`](docs/DEPLOY.md)에 있습니다. PR마다 GitHub Actions(`.github/workflows/ci.yml`)가 타입 검사·테스트·빌드·부하·PostgreSQL 통합 테스트를 돌립니다.
 
 ## Android 패키징
 

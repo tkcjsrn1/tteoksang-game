@@ -50,8 +50,9 @@ export function Home() {
       {error && <p className="error" role="alert">{error}</p>}
       <TodayTerm />
       <div className="sub-actions two">
-        <button className="ghost" onClick={() => navigate('/glossary')}>주식 용어 사전</button>
+        <button className="ghost" onClick={() => navigate('/glossary')}>용어 사전</button>
         <button className="ghost" onClick={() => navigate('/lessons')}>차트 연습실</button>
+        <button className="ghost" onClick={() => navigate('/records')}>내 기록</button>
       </div>
       <button className="link" disabled={busy} onClick={academic}>학술제 운영자: 대형 화면과 QR 열기</button>
       <Disclaimer />

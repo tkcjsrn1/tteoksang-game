@@ -1,0 +1,45 @@
+# 푸시와 PR마다 타입 검사, 전체 테스트, 빌드, 60명 부하 검증, PostgreSQL 통합 테스트를 돌립니다.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+      - run: npm run load
+      - run: npm run balance
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: game
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: game
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U game" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:pg
+        env:
+          TEST_DATABASE_URL: postgres://game:ci@localhost:5432/game

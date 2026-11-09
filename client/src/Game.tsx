@@ -4,6 +4,8 @@ import { feeOf, maxBuyQty, MODES } from '../../shared/rules';
 import type { NewsCard, NewsResult, Order, RoomView, Side, StockCode, StockView } from '../../shared/types';
 import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
+import { coachStep, type CoachStep } from './coach';
+import { addRecord, parseRecords, RECORDS_KEY } from './records';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { joinUrl, store, useRoom, useSecondsLeft, type OrderOutcome } from './net';
 import { arrow, BreakdownPanel, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, useToast, won } from './ui';
@@ -68,9 +70,10 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
   const send2 = send as unknown as (m: object) => void;
   const isPlayer = view.you.role === 'player';
   const soon = view.phase === 'trade' && left <= 10;
-  const tutorialSeen = store.get('tutorial') === '1';
-  const showTutorial = view.mode === 'solo' && !tutorialSeen;
-  useEffect(() => { if (view.mode === 'solo' && view.round === 2) store.set('tutorial', '1'); }, [view.mode, view.round]);
+  const [tutorialOff, setTutorialOff] = useState(() => store.get('tutorial') === '1');
+  const coach = tutorialOff ? null : coachStep(view, detail);
+  const skipTutorial = () => { store.set('tutorial', '1'); setTutorialOff(true); };
+  useEffect(() => { if (view.mode === 'solo' && view.round >= 2) store.set('tutorial', '1'); }, [view.mode, view.round]);
   useEffect(() => { if (view.phase === 'recap') setDetail(null); }, [view.phase]);
   const stock = detail ? view.stocks.find(s => s.code === detail)! : null;
   const seconds = Math.ceil(left);
@@ -88,7 +91,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
       </header>
       {!online && <p className="offline" role="alert">연결이 끊겼습니다. 다시 연결하는 중이며, 접수된 주문은 마감 때 체결됩니다.</p>}
       {!isPlayer && <p className="offline">관전 중입니다. 시작 후 처음 들어오면 관전자로 입장합니다.</p>}
-      {showTutorial && <Tutorial phase={view.phase} />}
+      {coach && <Coach step={coach} onSkip={skipTutorial} />}
       <main className="game-body">
         {view.phase === 'recap' && <Recap view={view} onOpen={c => { setDetail(c); setTab('market'); }} />}
         {view.phase === 'settling' && <div className="panel"><p className="headline">시장 결과 집계 중</p><p className="hint">체결을 확인하고 있습니다. 잠시만 기다려 주세요.</p></div>}
@@ -98,7 +101,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
           {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send2} />}
           <Standing view={view} />
           <h2 className="h">시장</h2>
-          <div className="board">{view.stocks.map(s => <StockRow key={s.code} s={s} view={view} onOpen={() => setDetail(s.code)} />)}</div>
+          <div className="board">{view.stocks.map(s => <StockRow key={s.code} s={s} view={view} hint={coach?.no === 2 && coach.target === s.code} onOpen={() => setDetail(s.code)} />)}</div>
         </>}
         {tab === 'assets' && <Assets view={view} cancel={cancelOrder} toast={toast.show} />}
         {tab === 'news' && <NewsLog view={view} />}
@@ -107,20 +110,25 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
         {(['market', 'assets', 'news'] as Tab[]).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t === 'market' ? '시장' : t === 'assets' ? '내 자산' : '뉴스'}</button>)}
       </nav>
       <div className="foot"><Disclaimer /></div>
-      {stock && <StockSheet stock={stock} view={view} left={left} onClose={() => setDetail(null)} place={placeOrder} cancel={cancelOrder} toast={toast.show} />}
-      {help && <HelpSheet phase={view.phase} onClose={() => setHelp(false)} />}
+      {stock && <StockSheet stock={stock} view={view} left={left} coach={coach} onClose={() => setDetail(null)} place={placeOrder} cancel={cancelOrder} toast={toast.show} />}
+      {help && <HelpSheet phase={view.phase} onClose={() => setHelp(false)} onReplayTutorial={view.mode === 'solo' ? () => { store.del('tutorial'); setTutorialOff(false); setHelp(false); } : null} />}
       {toast.node}
     </div>
   );
 }
 
-function Tutorial({ phase }: { phase: RoomView['phase'] }) {
-  const text = phase === 'news' ? '1단계: 뉴스의 “시장의 기대치”와 “아직 남은 변수”를 읽어 보세요.'
-    : phase === 'trade' ? '2단계: 종목을 눌러 주문을 예약하세요. 마감 때 직전 종료가로 체결됩니다.'
-    : '3단계: 실제 결과와 기대의 차이가 가격을 움직였습니다. 그래프 점을 눌러 이유를 확인하세요.';
-  return <p className="tutorial">{text}</p>;
+/** 첫 판 따라 하기 안내. 단계 판단은 coach.ts에 있습니다. */
+function Coach({ step, onSkip }: { step: CoachStep; onSkip?: () => void }) {
+  return (
+    <section className="coach" aria-live="polite">
+      <p className="coach-head"><span className="coach-dots" aria-label={`따라 하기 ${step.no}/${step.total}단계`}>{Array.from({ length: step.total }, (_, i) => <i key={i} className={i < step.no ? 'on' : ''} />)}</span>
+        <b>{step.no}. {step.title}</b></p>
+      <p>{step.text}</p>
+      {onSkip && <button className="link" onClick={onSkip}>안내 끄기</button>}
+    </section>
+  );
 }
-function HelpSheet({ phase, onClose }: { phase: RoomView['phase']; onClose: () => void }) {
+function HelpSheet({ phase, onClose, onReplayTutorial }: { phase: RoomView['phase']; onClose: () => void; onReplayTutorial: (() => void) | null }) {
   return (
     <Sheet title="짧은 도움말" onClose={onClose}>
       <p className="hint">타이머는 멈추지 않고 계속 진행됩니다.</p>
@@ -135,6 +143,7 @@ function HelpSheet({ phase, onClose }: { phase: RoomView['phase']; onClose: () =
         <li>밑줄 친 낱말을 누르면 뜻이 나옵니다.</li>
       </ul>
       <button className="ghost" onClick={() => { onClose(); navigate('/glossary'); }}>주식 용어 사전 열기</button>
+      {onReplayTutorial && <button className="link" onClick={onReplayTutorial}>따라 하기 안내 다시 켜기(다음 혼자 연습 첫 라운드부터)</button>}
     </Sheet>
   );
 }
@@ -201,12 +210,12 @@ function Standing({ view }: { view: RoomView }) {
     </div>
   );
 }
-function StockRow({ s, view, onOpen }: { s: StockView; view: RoomView; onOpen: () => void }) {
+function StockRow({ s, view, onOpen, hint = false }: { s: StockView; view: RoomView; onOpen: () => void; hint?: boolean }) {
   const held = view.portfolio?.holdings.find(h => h.code === s.code);
   const ord = view.portfolio?.orders.find(o => o.code === s.code);
   const ch = s.lastChangeBp;
   return (
-    <button className="row" onClick={onOpen}>
+    <button className={`row${hint ? ' hint-pulse' : ''}`} onClick={onOpen}>
       <span className="row-main"><b>{s.name}</b><small>{s.code} · {s.sector}{held ? ` · ${held.qty.toLocaleString('ko-KR')}주 보유` : ''}{ord ? ` · ${ord.side === 'buy' ? '매수' : '매도'} 예약` : ''}</small></span>
       <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}</b>
         <small className={ch === null ? 'flat' : dir(ch)}>{ch === null ? '—' : `${arrow(ch)} ${pctBp(ch)}`}</small></span>
@@ -223,7 +232,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
     </div>
   );
 }
-function StockSheet({ stock, view, left, onClose, place, cancel, toast }: { stock: StockView; view: RoomView; left: number; onClose: () => void; place: PlayProps['placeOrder']; cancel: PlayProps['cancelOrder']; toast: (m: string) => void }) {
+function StockSheet({ stock, view, left, coach, onClose, place, cancel, toast }: { stock: StockView; view: RoomView; left: number; coach: CoachStep | null; onClose: () => void; place: PlayProps['placeOrder']; cancel: PlayProps['cancelOrder']; toast: (m: string) => void }) {
   const [point, setPoint] = useState<number | null>(stock.history.length ? stock.history[stock.history.length - 1].round : null);
   const related = view.news[view.news.length - 1]?.cards.filter(c => c.card.targets.includes(stock.code)) ?? [];
   const held = view.portfolio?.holdings.find(h => h.code === stock.code);
@@ -236,6 +245,7 @@ function StockSheet({ stock, view, left, onClose, place, cancel, toast }: { stoc
       {pointData ? <BreakdownPanel b={pointData} /> : <p className="hint">가격은 라운드 마감 때만 바뀝니다. 첫 결과가 나오면 점을 눌러 이유를 볼 수 있어요.</p>}
       {related.length > 0 && view.phase !== 'recap' && <p className="hint">관련 뉴스: {related.map(r => r.card.headline).join(', ')}</p>}
       {held && <p className="hint">보유 {held.qty.toLocaleString('ko-KR')}주 · <TermLink id="avg-cost">평균</TermLink> {won(held.avgCost)} · <TermLink id="unrealized-pnl">평가손익</TermLink> <span className={dir(held.pnl)}>{signedWon(held.pnl)}</span></p>}
+      {coach && (coach.no === 3 || coach.no === 4) && <Coach step={coach} />}
       {view.you.role === 'player' && <OrderPanel stock={stock} view={view} left={left} place={place} cancel={cancel} toast={toast} onDone={onClose} />}
     </Sheet>
   );
@@ -350,6 +360,14 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
   const send2 = send as unknown as (m: object) => void;
   const stock = open ? view.stocks.find(s => s.code === open)! : null;
   const pointData = stock?.history.find(h => h.round === point);
+  /* 끝난 판을 이 기기의 개인 기록에 한 번만 남깁니다. */
+  useEffect(() => {
+    if (!rep || view.you.role !== 'player') return;
+    const humans = view.leaderboard.filter(l => l.kind === 'human');
+    const rec = { code: view.code, mode: view.mode, at: Date.now(), rank: rep.rank, players: view.leaderboard.length, returnPct: rep.returnPct, fees: rep.fees,
+      bestHuman: !humans.some(h => h.playerId !== view.you.id && h.value > rep.value) };
+    store.set(RECORDS_KEY, JSON.stringify(addRecord(parseRecords(store.get(RECORDS_KEY)), rec)));
+  }, [rep, view.code, view.mode, view.you.id, view.you.role, view.leaderboard]);
   return (
     <main className="final">
       <p className="course">최종 결과 · 방 {view.code}</p>
@@ -373,6 +391,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
         {view.nextRoomCode
           ? <button className="cta" onClick={() => navigate(`/${view.you.role === 'operator' ? 'display' : 'room'}/${view.nextRoomCode}`)}>다음 판 대기실로 가기</button>
           : <button className="cta" onClick={() => send2({ t: 'rematch' })}>같은 멤버로 한 판 더</button>}
+        <button className="ghost" onClick={() => navigate('/records')}>내 기록 보기</button>
         <button className="ghost" onClick={() => navigate('/lessons')}>차트 연습실</button>
         <button className="link" onClick={() => navigate('/')}>처음으로</button>
       </div>

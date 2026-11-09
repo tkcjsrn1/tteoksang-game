@@ -21,8 +21,8 @@ export const ARCS: Arc[] = [
     { id: 'nu-1', step: 1, targets: ['G01'], signal: { G01: 1 }, clueDir: 1, concept: '실증 결과는 납품 기대를 먼저 움직입니다.',
       headline: '누바칸, 소형 발전 모듈 실증 마지막 구간 진입', facts: '시험장 3곳 중 2곳에서 목표 출력을 달성했습니다.', expectation: '시장은 3곳 모두 통과를 기대합니다.', remaining: '혹한 구간인 마지막 시험장의 결과', clue: '마지막 시험장의 예비 측정값이 목표의 96%까지 올라왔습니다.',
       outcomes: [
-        { id: 'pass', weight: 65, beat: true, actual: '3곳 모두 목표 출력 달성', gap: '기대 충족, 납품 일정이 앞당겨질 가능성', label: '실증 전 구간 통과', impacts: [{ code: 'G01', bp: 700, reason: '납품 불확실성이 줄어듦' }] },
-        { id: 'fail', weight: 35, beat: false, actual: '마지막 시험장 출력 미달', gap: '기대한 3곳 통과에 1곳 부족', label: '마지막 시험장 미달', impacts: [{ code: 'G01', bp: -900, reason: '재시험으로 납품이 늦어질 우려' }] }
+        { id: 'pass', weight: 65, beat: true, actual: '3곳 모두 목표 출력 달성', gap: '기대 충족, 납품 일정이 앞당겨질 가능성', label: '실증 전 구간 통과', impacts: [{ code: 'G01', bp: 500, reason: '납품 불확실성이 줄었지만, 통과 기대가 이미 주가에 반영돼 오름 폭은 제한' }] },
+        { id: 'fail', weight: 35, beat: false, actual: '마지막 시험장 출력 미달', gap: '기대한 3곳 통과에 1곳 부족', label: '마지막 시험장 미달', impacts: [{ code: 'G01', bp: -850, reason: '재시험으로 납품이 늦어질 우려' }] }
       ] },
     { id: 'nu-2a', step: 2, requires: ['pass'], targets: ['G01'], signal: { G01: 1 }, clueDir: -1, concept: '조사 일정이 길어지면 좋은 결과도 늦게 반영됩니다.',
       headline: '공공기관, 누바칸 납품 사전 조사 착수', facts: '실증 통과 후 품질 조사에 들어갔습니다.', expectation: '시장은 이번 분기 안에 승인될 것으로 봅니다.', remaining: '조사 기간과 추가 자료 요구 여부', clue: '조사 담당 부서가 “서류 보완 요청이 나갔다”고 확인했습니다.',
@@ -54,10 +54,10 @@ export const ARCS: Arc[] = [
     { id: 'heat-1', step: 1, targets: ['G03', 'G01'], signal: { G03: 1 }, clueDir: 1, concept: '같은 날씨도 업종마다 다르게 작용합니다.',
       headline: '폭염 경보 9일째, 냉장 운송 주문 급증', facts: '도르넴의 이번 주 운송 주문이 12% 늘었습니다.', expectation: '시장은 폭염이 일주일 안에 꺾인다고 봅니다.', remaining: '폭염이 이어지는 기간', clue: '기상청 중기 예보에 고기압이 2주 더 머문다는 전망이 실렸습니다.',
       outcomes: [
-        { id: 'long', weight: 70, beat: true, actual: '폭염 2주 더 지속', gap: '기대보다 1주 이상 길어짐', label: '폭염 장기화', impacts: [{ code: 'G03', bp: 450, reason: '냉장 운송 수요 증가' }, { code: 'G01', bp: 250, reason: '정전 대비 소형 발전 수요 증가' }, { code: 'G05', bp: -200, reason: '야외 대기 행사 관객 감소' }] },
-        { id: 'short', weight: 30, beat: false, actual: '주말에 폭염 해제', gap: '기대보다도 빨리 끝남', label: '폭염 조기 해제', impacts: [{ code: 'G03', bp: -650, reason: '늘려 둔 운송 차량이 놀게 됨' }, { code: 'G01', bp: -150, reason: '비상 전력 수요 감소' }] }
+        { id: 'long', weight: 70, beat: true, actual: '폭염 2주 더 지속', gap: '기대보다 1주 이상 길어짐', label: '폭염 장기화', impacts: [{ code: 'G03', bp: 350, reason: '냉장 운송 수요 증가. 주문 급증 소식에 이미 일부 반영됨' }, { code: 'G01', bp: 250, reason: '정전 대비 소형 발전 수요 증가' }, { code: 'G05', bp: -200, reason: '야외 대기 행사 관객 감소' }] },
+        { id: 'short', weight: 30, beat: false, actual: '주말에 폭염 해제', gap: '기대보다도 빨리 끝남', label: '폭염 조기 해제', impacts: [{ code: 'G03', bp: -750, reason: '늘려 둔 운송 차량이 놀게 됨' }, { code: 'G01', bp: -150, reason: '비상 전력 수요 감소' }] }
       ] },
-    { id: 'heat-2', step: 2, targets: ['G03', 'G01', 'G06'], signal: { G03: 1, G01: 1 }, clueDir: -1, concept: '같은 전기요금 인상이 어떤 기업에는 비용이고 어떤 기업에는 기회입니다.',
+    { id: 'heat-2', step: 2, targets: ['G03', 'G01', 'G06'], signal: { G03: -1, G01: 1 }, clueDir: 1, concept: '같은 전기요금 인상이 어떤 기업에는 비용이고 어떤 기업에는 기회입니다.',
       headline: '정부, 여름철 전기요금 조정안 심의', facts: '전력 수요 최고치를 경신해 요금 조정이 안건에 올랐습니다.', expectation: '시장 기대치는 5% 인상입니다.', remaining: '실제 인상 폭', clue: '담당 장관이 “서민 부담을 가장 먼저 고려한다”고 말했습니다.',
       outcomes: [
         { id: 'hike8', weight: 30, beat: true, actual: '전기요금 8% 인상', gap: '기대보다 3%p 높음', label: '기대보다 큰 전기요금 인상', impacts: [{ code: 'G03', bp: -750, reason: '냉동 창고 전력비로 마진 감소' }, { code: 'G01', bp: 900, reason: '자가 발전 모듈 수요 증가' }, { code: 'G06', bp: -150, reason: '정수 설비 운영비 증가' }] },
@@ -86,8 +86,8 @@ export const ARCS: Arc[] = [
     { id: 'semo-2a', step: 2, requires: ['y78'], targets: ['G02', 'G01'], signal: { G02: 1 }, clueDir: 1, concept: '고객 샘플 평가는 실제 수요를 확인하는 단계입니다.',
       headline: '세모륨, 대형 고객사 샘플 평가 돌입', facts: '좋은 수율 덕분에 샘플을 앞당겨 보냈습니다.', expectation: '시장은 평가 통과를 절반 정도로 봅니다.', remaining: '내열 평가 결과', clue: '고객사가 평가 인력을 늘리고 추가 샘플을 요청했습니다.',
       outcomes: [
-        { id: 'sample-ok', weight: 70, beat: true, actual: '샘플 평가 통과', gap: '기대보다 좋음', label: '고객사 평가 통과', impacts: [{ code: 'G02', bp: 900, reason: '첫 대형 매출 가능성' }, { code: 'G01', bp: -150, reason: '저장 장치 경쟁 부담' }] },
-        { id: 'sample-no', weight: 30, beat: false, actual: '내열 항목 재평가', gap: '기대보다 늦어짐', label: '고객사 재평가', impacts: [{ code: 'G02', bp: -600, reason: '매출 시점이 밀림' }] }
+        { id: 'sample-ok', weight: 70, beat: true, actual: '샘플 평가 통과', gap: '기대보다 좋음', label: '고객사 평가 통과', impacts: [{ code: 'G02', bp: 600, reason: '첫 대형 매출 가능성. 좋은 수율 뒤라 기대가 이미 높았음' }, { code: 'G01', bp: -150, reason: '저장 장치 경쟁 부담' }] },
+        { id: 'sample-no', weight: 30, beat: false, actual: '내열 항목 재평가', gap: '기대보다 늦어짐', label: '고객사 재평가', impacts: [{ code: 'G02', bp: -800, reason: '높아진 기대만큼 실망도 큼' }] }
       ] },
     { id: 'semo-2b', step: 2, requires: ['y58'], targets: ['G02'], signal: { G02: -1 }, clueDir: 1, concept: '문제의 원인이 확인되면 불확실성이 줄어듭니다.',
       headline: '세모륨, 불량 원인 조사 결과 발표', facts: '코팅 공정을 조사했습니다.', expectation: '시장은 설계 결함일까 걱정합니다.', remaining: '불량의 원인', clue: '경쟁사 출신 엔지니어가 “건조 온도 문제로 보인다”고 분석했습니다.',
@@ -118,8 +118,8 @@ export const ARCS: Arc[] = [
     { id: 'avo-3a', step: 3, requires: ['fast'], targets: ['G04'], signal: { G04: 1 }, clueDir: 1, concept: '공장 가동률은 매출로 이어지는 마지막 관문입니다.',
       headline: '아보튠 신공장, 재가동 시험 진행', facts: '규격 대응 설비를 갖췄습니다.', expectation: '시장은 다음 달 가동을 예상합니다.', remaining: '시험 가동 결과', clue: '공장 인근 물류 업체가 이번 달 원료 입고 계약을 맺었습니다.',
       outcomes: [
-        { id: 'run', weight: 70, beat: true, actual: '이번 달 정상 가동', gap: '기대보다 빠름', label: '신공장 조기 가동', impacts: [{ code: 'G04', bp: 800, reason: '신규 물량 조기 납품' }, { code: 'G03', bp: 150, reason: '저온 운송 계약 증가' }] },
-        { id: 'stop', weight: 30, beat: false, actual: '오염 경보로 가동 2주 연기', gap: '기대보다 늦음', label: '신공장 가동 연기', impacts: [{ code: 'G04', bp: -700, reason: '납품 약속에 차질' }] }
+        { id: 'run', weight: 70, beat: true, actual: '이번 달 정상 가동', gap: '기대보다 빠름', label: '신공장 조기 가동', impacts: [{ code: 'G04', bp: 550, reason: '신규 물량 조기 납품. 정상 가동은 시장이 이미 예상한 일' }, { code: 'G03', bp: 150, reason: '저온 운송 계약 증가' }] },
+        { id: 'stop', weight: 30, beat: false, actual: '오염 경보로 가동 2주 연기', gap: '기대보다 늦음', label: '신공장 가동 연기', impacts: [{ code: 'G04', bp: -900, reason: '납품 약속에 차질' }] }
       ] },
     { id: 'avo-3b', step: 3, requires: ['slow'], targets: ['G04'], signal: { G04: -1 }, clueDir: 1, concept: '단기 악재 뒤에도 장기 계약이 주가를 받칠 수 있습니다.',
       headline: '아보튠, 해외 고객 장기 공급 협상', facts: '국내 규격 유예로 해외 시장을 찾고 있습니다.', expectation: '시장은 기대를 낮췄습니다.', remaining: '협상 타결 여부', clue: '해외 고객사 대표단이 공장을 두 번째로 방문했습니다.',
@@ -132,8 +132,8 @@ export const ARCS: Arc[] = [
     { id: 'pino-1', step: 1, targets: ['G05'], signal: { G05: 1 }, clueDir: 1, concept: '선행 지표인 예약률은 실적을 미리 보여 줍니다.',
       headline: '피노벡 소리극장, 대형 음향 페스티벌 예매 시작', facts: '30분 만에 1회차 좌석이 매진됐습니다.', expectation: '시장 기대 전체 예약률은 70%입니다.', remaining: '전체 회차의 예약률', clue: '2회차 이후 대기 인원이 정원의 두 배를 넘었습니다.',
       outcomes: [
-        { id: 'r92', weight: 70, beat: true, actual: '전체 예약률 92%', gap: '기대보다 22%p 높음', label: '기대를 넘은 예약률', impacts: [{ code: 'G05', bp: 800, reason: '티켓 매출 전망 상향' }] },
-        { id: 'r60', weight: 30, beat: false, actual: '전체 예약률 60%', gap: '기대보다 10%p 낮음', label: '기대에 못 미친 예약률', impacts: [{ code: 'G05', bp: -700, reason: '1회차만 인기 있었음' }] }
+        { id: 'r92', weight: 70, beat: true, actual: '전체 예약률 92%', gap: '기대보다 22%p 높음', label: '기대를 넘은 예약률', impacts: [{ code: 'G05', bp: 550, reason: '티켓 매출 전망 상향. 1회차 매진으로 기대가 먼저 올라 있었음' }] },
+        { id: 'r60', weight: 30, beat: false, actual: '전체 예약률 60%', gap: '기대보다 10%p 낮음', label: '기대에 못 미친 예약률', impacts: [{ code: 'G05', bp: -900, reason: '1회차만 인기 있었음' }] }
       ] },
     { id: 'pino-2', step: 2, targets: ['G05'], signal: { G05: -1 }, clueDir: -1, concept: '보험과 환불 규정은 악재의 크기를 결정합니다.',
       headline: '페스티벌 기간 태풍 북상 소식', facts: '주말 공연 일정에 태풍 경로가 겹칩니다.', expectation: '시장은 하루 취소를 예상합니다.', remaining: '실제 취소 일수', clue: '기상청이 태풍 속도가 느려졌다고 예보했고, 지역 축제들도 줄줄이 취소를 검토합니다.',
@@ -144,16 +144,16 @@ export const ARCS: Arc[] = [
     { id: 'pino-3', step: 3, targets: ['G05'], signal: { G05: 1 }, clueDir: 1, concept: '이벤트 매출과 반복 매출은 가치 평가가 다릅니다.',
       headline: '피노벡, 상설 체험관 확대 발표', facts: '전국 5곳에 상설 음향 체험관을 낼 계획입니다.', expectation: '시장은 임차 비용 부담을 걱정합니다.', remaining: '시범 지점의 재방문율', clue: '시범 지점 회원권 재구매 비율이 공개 자료에서 40%를 넘었습니다.',
       outcomes: [
-        { id: 'repeat', weight: 70, beat: true, actual: '재방문율 45%', gap: '기대를 넘는 반복 수요', label: '높은 재방문율', impacts: [{ code: 'G05', bp: 700, reason: '일회성 매출이 반복 매출로 바뀜' }] },
-        { id: 'oneoff', weight: 30, beat: false, actual: '재방문율 15%', gap: '기대에 크게 못 미침', label: '낮은 재방문율', impacts: [{ code: 'G05', bp: -600, reason: '확장 비용을 회수하기 어려움' }] }
+        { id: 'repeat', weight: 70, beat: true, actual: '재방문율 45%', gap: '기대를 넘는 반복 수요', label: '높은 재방문율', impacts: [{ code: 'G05', bp: 500, reason: '일회성 매출이 반복 매출로 바뀜' }] },
+        { id: 'oneoff', weight: 30, beat: false, actual: '재방문율 15%', gap: '기대에 크게 못 미침', label: '낮은 재방문율', impacts: [{ code: 'G05', bp: -850, reason: '확장 비용을 회수하기 어려움' }] }
       ] }
   ] },
   { id: 'tarmel', title: '타르멜 가뭄 사건', stages: [
     { id: 'tar-1', step: 1, targets: ['G06', 'G04'], signal: { G06: 1 }, clueDir: 1, concept: '방어주는 평소 조용하다가 특정 수요에 반응합니다.',
       headline: '남부 지방 가뭄 경보, 물 재이용 설비 문의 증가', facts: '지자체 3곳이 설비 도입을 검토합니다.', expectation: '시장은 올해 발주를 2곳으로 봅니다.', remaining: '실제 발주 규모', clue: '지자체 추가 경정 예산안에 재이용 설비 항목이 신설됐습니다.',
       outcomes: [
-        { id: 'order', weight: 70, beat: true, actual: '5곳 발주 확정', gap: '기대보다 3곳 많음', label: '기대 넘는 가뭄 발주', impacts: [{ code: 'G06', bp: 650, reason: '설비 수주 증가' }, { code: 'G04', bp: -150, reason: '배양 공정 용수비 상승' }] },
-        { id: 'rain', weight: 30, beat: false, actual: '비 소식에 발주 보류', gap: '기대보다 적음', label: '가뭄 해소로 발주 보류', impacts: [{ code: 'G06', bp: -400, reason: '발주 시점이 밀림' }, { code: 'G04', bp: 100, reason: '용수 비용 부담 완화' }] }
+        { id: 'order', weight: 70, beat: true, actual: '5곳 발주 확정', gap: '기대보다 3곳 많음', label: '기대 넘는 가뭄 발주', impacts: [{ code: 'G06', bp: 450, reason: '설비 수주 증가. 문의 급증 소식에 기대가 먼저 반영됨' }, { code: 'G04', bp: -150, reason: '배양 공정 용수비 상승' }] },
+        { id: 'rain', weight: 30, beat: false, actual: '비 소식에 발주 보류', gap: '기대보다 적음', label: '가뭄 해소로 발주 보류', impacts: [{ code: 'G06', bp: -650, reason: '기대했던 발주가 통째로 밀림' }, { code: 'G04', bp: 100, reason: '용수 비용 부담 완화' }] }
       ] },
     { id: 'tar-2', step: 2, targets: ['G06'], signal: { G06: 1 }, clueDir: -1, concept: '입찰 경쟁이 치열하면 매출이 늘어도 이익은 줄 수 있습니다.',
       headline: '타르멜, 대형 공단 물 재이용 입찰 참여', facts: '국내 3개사가 경쟁합니다.', expectation: '시장은 타르멜이 높은 마진으로 수주한다고 봅니다.', remaining: '수주 여부와 낙찰가', clue: '경쟁사가 최근 다른 입찰에서 예정가의 70%를 써냈습니다.',
@@ -187,6 +187,119 @@ export const ARCS: Arc[] = [
         { id: 'large', weight: 30, beat: true, actual: '1조 5천억 원 편성', gap: '기대보다 5천억 원 많음', label: '기대를 넘은 지원 예산', impacts: [{ code: 'G04', bp: 800, reason: '배양 소재 연구비 증가' }, { code: 'G02', bp: 800, reason: '실증 비용 지원' }] },
         { id: 'small', weight: 70, beat: false, actual: '4천억 원 편성', gap: '기대의 40%', label: '기대에 못 미친 지원 예산', impacts: [{ code: 'G04', bp: -400, reason: '수혜 기대 축소' }, { code: 'G02', bp: -400, reason: '실증 자금 계획 차질' }] }
       ] }
+  ] },
+  { id: 'rumor', title: '누바칸 인수설 사건', stages: [
+    { id: 'rumor-1', step: 1, targets: ['G01'], signal: { G01: 1 }, clueDir: -1, concept: '공시로 확인되기 전까지 소문은 소문입니다. 풍문이 돌면 거래소가 조회공시로 회사에 사실 여부를 묻습니다.',
+      headline: '“누바칸, 대기업에 팔린다더라” 커뮤니티 글 확산', facts: '출처 없는 글이 투자 커뮤니티에 퍼졌고, 거래소가 누바칸에 조회공시를 요구했습니다.', expectation: '시장 일부는 인수 프리미엄을 기대합니다.', remaining: '회사의 공식 답변', clue: '누바칸 대표가 지난주 인터뷰에서 “매각보다 독자 성장에 집중한다”고 말했습니다.',
+      outcomes: [
+        { id: 'deny', weight: 65, beat: false, actual: '회사 “사실무근” 답변 공시', gap: '기대한 인수설이 공식 부인됨', label: '인수설 공식 부인', impacts: [{ code: 'G01', bp: -700, reason: '소문으로 기대한 몫이 빠짐' }] },
+        { id: 'review', weight: 35, beat: true, actual: '“매각을 검토 중이나 확정된 바 없다” 답변 공시', gap: '소문 일부가 사실로 확인됨', label: '매각 검토 사실 확인', impacts: [{ code: 'G01', bp: 600, reason: '인수 프리미엄 기대' }] }
+      ] },
+    { id: 'rumor-2a', step: 2, requires: ['deny'], targets: ['G01'], signal: { G01: -1 }, clueDir: 1, concept: '소문으로 출렁인 주가는 결국 실적으로 돌아옵니다.',
+      headline: '누바칸, 허위 글 게시자 금융당국에 신고', facts: '회사가 근거 없는 인수설을 퍼뜨린 계정을 신고했습니다.', expectation: '시장은 실망 매물이 더 나올까 걱정합니다.', remaining: '분기 실적에서 본업이 탄탄한지', clue: '부품 협력사가 이번 분기 누바칸 납품 물량을 20% 늘렸다고 밝혔습니다.',
+      outcomes: [
+        { id: 'solid', weight: 65, beat: true, actual: '분기 매출 15% 증가', gap: '걱정보다 좋은 본업', label: '본업 실적 호조', impacts: [{ code: 'G01', bp: 600, reason: '소문이 걷히고 본업이 주목받음' }] },
+        { id: 'weak', weight: 35, beat: false, actual: '분기 매출 정체', gap: '기댈 재료가 사라짐', label: '본업 실적 정체', impacts: [{ code: 'G01', bp: -450, reason: '소문도 실적도 없는 상황' }] }
+      ] },
+    { id: 'rumor-2b', step: 2, requires: ['review'], targets: ['G01'], signal: { G01: 1 }, clueDir: -1, concept: '인수·합병(M&A) 기대는 가격이 정해지기 전까지 기대일 뿐입니다.',
+      headline: '누바칸 인수 후보로 대형 에너지 기업 거론', facts: '회사가 매각을 검토 중이라고 밝힌 뒤 인수 후보가 거론됩니다.', expectation: '시장은 주당 1만 6천 원 수준의 인수가를 기대합니다.', remaining: '실제 인수 제안 가격', clue: '유력 후보 회사가 “가격이 맞지 않으면 빠지겠다”고 말했습니다.',
+      outcomes: [
+        { id: 'premium', weight: 30, beat: true, actual: '주당 1만 7천 원 인수 제안', gap: '기대보다 1천 원 높은 인수가', label: '기대 넘는 인수 제안', impacts: [{ code: 'G01', bp: 900, reason: '인수 프리미엄 확정에 가까워짐' }] },
+        { id: 'walkaway', weight: 70, beat: false, actual: '인수 후보가 협상 중단', gap: '기대한 인수가가 사라짐', label: '인수 협상 중단', impacts: [{ code: 'G01', bp: -800, reason: '인수 프리미엄 기대가 사라짐' }] }
+      ] },
+    { id: 'rumor-3', step: 3, targets: ['G01'], signal: { G01: 1 }, clueDir: 1, concept: '기대가 낮아진 뒤 나온 새 재료는 작아도 주가를 움직입니다.',
+      headline: '누바칸, 소동 이후 첫 기업설명회(IR) 개최', facts: '경영진이 사업 계획을 직접 설명합니다.', expectation: '시장은 새로운 내용이 없을 것으로 봅니다.', remaining: '새 계약 발표 여부', clue: '설명회 자료 목차에 “해외 공급 계약” 항목이 새로 들어갔습니다.',
+      outcomes: [
+        { id: 'newdeal', weight: 65, beat: true, actual: '해외 공급 계약 첫 공개', gap: '기대가 낮던 상황에서 새 재료', label: 'IR에서 해외 계약 공개', impacts: [{ code: 'G01', bp: 500, reason: '낮아진 기대를 넘는 새 계약' }] },
+        { id: 'nothing', weight: 35, beat: false, actual: '기존 계획만 반복', gap: '기대대로 새 내용 없음', label: 'IR 내용 기대 이하', impacts: [{ code: 'G01', bp: -300, reason: '설명회 기대감만 빠짐' }] }
+      ] }
+  ] },
+  { id: 'dividend', title: '타르멜 배당 사건', stages: [
+    { id: 'div-1', step: 1, targets: ['G06'], signal: { G06: 1 }, clueDir: 1, concept: '배당과 자사주 매입처럼 주주에게 돌려주는 돈이 늘면 방어주가 주목받습니다.',
+      headline: '타르멜 이사회, 배당 안건 논의', facts: '회사 현금이 3년째 쌓이고 있습니다.', expectation: '시장은 주당 배당을 작년과 같은 300원으로 봅니다.', remaining: '실제 배당금과 자사주 매입 여부', clue: '최대주주가 “주주 환원을 늘려 달라”는 서한을 이사회에 보냈습니다.',
+      outcomes: [
+        { id: 'raise', weight: 65, beat: true, actual: '배당 450원과 자사주 매입 발표', gap: '기대보다 큰 주주 환원', label: '배당 확대·자사주 매입', impacts: [{ code: 'G06', bp: 450, reason: '주주 환원이 기대보다 큼' }] },
+        { id: 'same', weight: 35, beat: false, actual: '배당 300원 유지', gap: '기대한 환원 확대가 없음', label: '배당 동결', impacts: [{ code: 'G06', bp: -300, reason: '쌓인 현금을 돌려주지 않음' }] }
+      ] },
+    { id: 'div-2', step: 2, targets: ['G06'], signal: { G06: 1 }, clueDir: -1, concept: '배당을 보고 사는 방어주는 배당 정책이 바뀌면 크게 흔들립니다.',
+      headline: '타르멜, 해외 정수 설비 공장 투자 검토', facts: '해외 공장 건설안이 이사회에 올라왔습니다.', expectation: '시장은 배당을 유지하면서 투자할 수 있다고 봅니다.', remaining: '투자 재원 마련 방법', clue: '회사가 “올해 회사채를 발행할 계획이 없다”고 공시했습니다.',
+      outcomes: [
+        { id: 'cut', weight: 60, beat: false, actual: '배당을 줄여 투자 재원 마련', gap: '기대와 달리 배당 축소', label: '투자 위해 배당 축소', impacts: [{ code: 'G06', bp: -550, reason: '배당을 보고 산 투자자가 실망' }] },
+        { id: 'both', weight: 40, beat: true, actual: '배당 유지, 장기 대출로 투자', gap: '기대대로 성장과 배당을 함께 잡음', label: '배당 유지하며 투자', impacts: [{ code: 'G06', bp: 350, reason: '성장 재료가 더해짐' }] }
+      ] },
+    { id: 'div-3', step: 3, targets: ['G06'], signal: { G06: 1 }, clueDir: -1, concept: '배당받을 권리가 사라지는 날 그만큼 주가가 내려가는데, 이를 배당락이라고 합니다.',
+      headline: '타르멜 배당 받을 수 있는 마지막 매수일 임박', facts: '이번 주 안에 사야 이번 배당을 받을 수 있습니다.', expectation: '시장은 배당을 받으려는 매수가 이어진다고 봅니다.', remaining: '배당받을 권리가 사라진 뒤의 주가', clue: '지난 3년 모두 배당락일에 주가가 배당금 정도 내려갔습니다.',
+      outcomes: [
+        { id: 'exdiv', weight: 75, beat: false, actual: '배당락일에 주가 하락', gap: '배당 기대 매수가 끝나며 하락', label: '배당락으로 하락', impacts: [{ code: 'G06', bp: -350, reason: '배당받을 권리가 사라진 만큼 주가가 내림' }] },
+        { id: 'hold', weight: 25, beat: true, actual: '배당락에도 주가 유지', gap: '기대보다 강함', label: '배당락 이겨 냄', impacts: [{ code: 'G06', bp: 200, reason: '설비 수주 기대가 받쳐 줌' }] }
+      ] }
+  ] },
+  { id: 'earnings', title: '도르넴 실적 시즌 사건', stages: [
+    { id: 'earn-1', step: 1, targets: ['G03'], signal: { G03: 1 }, clueDir: 1, concept: '매출보다 영업이익이, 그리고 시장 기대와의 차이가 주가를 움직입니다.',
+      headline: '도르넴, 분기 실적 발표 하루 앞', facts: '업계 통계로는 냉장 물동량이 전년보다 10% 늘었습니다.', expectation: '시장은 영업이익 120억 원을 기대합니다.', remaining: '실제 영업이익', clue: '경쟁 운송사 2곳이 이번 분기 운임을 올렸다고 발표했습니다.',
+      outcomes: [
+        { id: 'beat', weight: 70, beat: true, actual: '영업이익 140억 원', gap: '기대보다 20억 원 많음', label: '영업이익 기대 상회', impacts: [{ code: 'G03', bp: 450, reason: '어닝 서프라이즈' }] },
+        { id: 'miss', weight: 30, beat: false, actual: '영업이익 95억 원', gap: '매출은 늘었지만 이익은 기대보다 25억 원 적음', label: '영업이익 기대 하회', impacts: [{ code: 'G03', bp: -650, reason: '인건비가 매출보다 더 늘어 이익 감소' }] }
+      ] },
+    { id: 'earn-2', step: 2, targets: ['G03'], signal: { G03: 1 }, clueDir: -1, concept: '주가는 지난 실적보다 회사가 내놓는 앞으로의 전망(가이던스)에 더 민감합니다.',
+      headline: '도르넴, 다음 분기 실적 전망(가이던스) 발표', facts: '회사가 다음 분기 예상 매출을 공개합니다.', expectation: '시장은 이번 분기와 비슷한 수준을 기대합니다.', remaining: '가이던스 숫자', clue: '최대 고객사가 물류센터 2곳을 직접 운영하겠다고 밝혔습니다.',
+      outcomes: [
+        { id: 'up', weight: 30, beat: true, actual: '다음 분기 매출 10% 증가 전망', gap: '기대보다 좋음', label: '가이던스 상향', impacts: [{ code: 'G03', bp: 500, reason: '앞으로의 이익 기대가 커짐' }] },
+        { id: 'down', weight: 70, beat: false, actual: '다음 분기 매출 8% 감소 전망', gap: '기대보다 나쁨', label: '가이던스 하향', impacts: [{ code: 'G03', bp: -600, reason: '지난 실적보다 앞으로의 전망에 더 크게 반응' }] }
+      ] },
+    { id: 'earn-3', step: 3, targets: ['G03'], signal: { G03: -1 }, clueDir: 1, concept: '창고·공장처럼 고정비가 큰 사업은 가동률이 이익을 좌우합니다.',
+      headline: '도르넴 신규 냉동 창고, 가동률 공개 예정', facts: '새 창고가 문을 연 지 석 달 됐습니다.', expectation: '시장은 가동률이 50%에 그칠까 걱정합니다.', remaining: '실제 가동률', clue: '창고 근처 도로에 냉동 화물차 대기 줄이 생겼다는 지역 기사가 나왔습니다.',
+      outcomes: [
+        { id: 'high', weight: 65, beat: true, actual: '가동률 80%', gap: '걱정보다 30%p 높음', label: '신규 창고 가동률 호조', impacts: [{ code: 'G03', bp: 550, reason: '고정비를 빨리 회수' }] },
+        { id: 'low', weight: 35, beat: false, actual: '가동률 45%', gap: '걱정보다도 낮음', label: '신규 창고 가동률 부진', impacts: [{ code: 'G03', bp: -450, reason: '빈 창고의 고정비 부담' }] }
+      ] }
+  ] },
+  { id: 'patent', title: '세모륨 특허 분쟁 사건', stages: [
+    { id: 'pat-1', step: 1, targets: ['G02'], signal: { G02: -1 }, clueDir: 1, concept: '불확실성이 걷히는 것만으로도 주가가 오를 수 있습니다.',
+      headline: '해외 경쟁사, 세모륨에 특허 침해 소송', facts: '열전지 코팅 기술 특허를 침해했다며 판매 금지 가처분도 신청했습니다.', expectation: '시장은 판매 금지까지 갈 수 있다고 걱정합니다.', remaining: '법원의 가처분 판단', clue: '같은 특허가 다른 나라 특허청에서 무효 판정을 받은 적이 있습니다.',
+      outcomes: [
+        { id: 'reject', weight: 70, beat: true, actual: '판매 금지 가처분 기각', gap: '걱정한 최악은 피함', label: '판매 금지 가처분 기각', impacts: [{ code: 'G02', bp: 700, reason: '최악의 시나리오가 사라짐' }] },
+        { id: 'grant', weight: 30, beat: false, actual: '일부 제품 판매 금지', gap: '걱정이 현실화', label: '일부 제품 판매 금지', impacts: [{ code: 'G02', bp: -1000, reason: '매출 일부가 막힘' }] }
+      ] },
+    { id: 'pat-2a', step: 2, requires: ['reject'], targets: ['G02'], signal: { G02: 1 }, clueDir: -1, concept: '한 번 내는 비용과 계속 내는 비용은 주가에 다르게 반영됩니다.',
+      headline: '세모륨, 경쟁사와 특허 합의 협상', facts: '본안 소송을 끝내려는 협상이 시작됐습니다.', expectation: '시장은 적은 합의금으로 끝난다고 봅니다.', remaining: '합의 조건', clue: '경쟁사가 최근 다른 회사에서 매출의 5%를 로열티로 받아 냈습니다.',
+      outcomes: [
+        { id: 'lump', weight: 30, beat: true, actual: '일회성 합의금 30억 원', gap: '기대대로 작게 끝남', label: '일회성 합의로 종결', impacts: [{ code: 'G02', bp: 400, reason: '소송 비용 부담이 사라짐' }] },
+        { id: 'royalty', weight: 70, beat: false, actual: '매출의 4%를 로열티로 계속 지급', gap: '기대와 달리 비용이 계속 나감', label: '매출 4% 로열티 합의', impacts: [{ code: 'G02', bp: -500, reason: '앞으로 이익률이 계속 깎임' }] }
+      ] },
+    { id: 'pat-2b', step: 2, requires: ['grant'], targets: ['G02'], signal: { G02: 1 }, clueDir: -1, concept: '기술로 문제를 풀어도 고객 인증 같은 절차가 매출 시점을 정합니다.',
+      headline: '세모륨, 특허 피한 새 설계 제품 출시 계획', facts: '특허를 피한 새 코팅 방식을 개발했습니다.', expectation: '시장은 석 달 안에 판매가 재개된다고 봅니다.', remaining: '고객사 인증 기간', clue: '업계 자료에 따르면 새 설계 제품의 고객 인증에는 보통 1년이 걸립니다.',
+      outcomes: [
+        { id: 'fast', weight: 40, beat: true, actual: '석 달 만에 인증 통과', gap: '기대대로 빠른 재개', label: '새 설계 빠른 인증', impacts: [{ code: 'G02', bp: 800, reason: '판매 공백이 짧게 끝남' }] },
+        { id: 'slow', weight: 60, beat: false, actual: '인증에 1년 소요', gap: '기대보다 9개월 늦음', label: '새 설계 인증 지연', impacts: [{ code: 'G02', bp: -550, reason: '판매 공백이 길어짐' }] }
+      ] },
+    { id: 'pat-3', step: 3, targets: ['G02'], signal: { G02: -1 }, clueDir: 1, concept: '일회성 비용이 끝나면 다음 해 이익 전망이 좋아질 수 있습니다.',
+      headline: '세모륨, 소송 비용 반영한 연간 실적 전망 발표', facts: '분기마다 소송 비용이 들어갔습니다.', expectation: '시장은 올해 영업적자를 예상합니다.', remaining: '연간 영업이익 전망', clue: '회사가 “소송 관련 비용은 이번 분기로 끝났다”고 설명했습니다.',
+      outcomes: [
+        { id: 'profit', weight: 65, beat: true, actual: '연간 소폭 흑자 전망', gap: '적자 걱정보다 좋음', label: '연간 흑자 전망', impacts: [{ code: 'G02', bp: 600, reason: '적자 걱정이 걷힘' }] },
+        { id: 'loss', weight: 35, beat: false, actual: '연간 적자 전망', gap: '걱정대로', label: '연간 적자 전망', impacts: [{ code: 'G02', bp: -450, reason: '추가 비용 우려' }] }
+      ] }
+  ] },
+  { id: 'rawcost', title: '배양 원료값 급등 사건', stages: [
+    { id: 'raw-1', step: 1, targets: ['G04', 'G03'], signal: { G04: -1 }, clueDir: 1, concept: '원가가 올라도 미리 맺은 고정가 계약이 있으면 충격이 늦게 옵니다. 이런 내용은 사업보고서에서 확인할 수 있습니다.',
+      headline: '배양 원료 국제 가격, 한 달 새 25% 급등', facts: '주요 산지의 작황이 나빠졌습니다.', expectation: '시장은 아보튠의 이익률이 크게 줄 것으로 봅니다.', remaining: '아보튠의 원료 계약 구조', clue: '아보튠 사업보고서에 “주요 원료 6개월분 고정가 계약”이 적혀 있습니다.',
+      outcomes: [
+        { id: 'hedged', weight: 70, beat: true, actual: '6개월분 원료를 예전 가격에 확보', gap: '걱정보다 영향이 작음', label: '고정가 계약으로 원가 방어', impacts: [{ code: 'G04', bp: 500, reason: '원가 상승 영향이 반년 늦게 옴' }, { code: 'G03', bp: 100, reason: '원료 수입 운송 증가' }] },
+        { id: 'exposed', weight: 30, beat: false, actual: '고정가 계약 물량이 적어 원가 급등', gap: '걱정이 현실화', label: '원가 급등 직격', impacts: [{ code: 'G04', bp: -800, reason: '마진이 크게 줄어듦' }] }
+      ] },
+    { id: 'raw-2', step: 2, targets: ['G04'], signal: { G04: 1 }, clueDir: -1, concept: '경쟁자가 가격을 올리지 않으면 혼자 올리기 어렵습니다. 가격 결정력은 경쟁 구도에서 나옵니다.',
+      headline: '아보튠, 제품 가격 인상 발표 예정', facts: '원료값 상승분을 납품가에 반영하려 합니다.', expectation: '시장은 10% 인상이 받아들여진다고 봅니다.', remaining: '고객사의 수용 여부', clue: '경쟁사 2곳이 가격을 동결하겠다고 밝혔습니다.',
+      outcomes: [
+        { id: 'accepted', weight: 30, beat: true, actual: '10% 인상 합의', gap: '기대대로 가격 전가 성공', label: '가격 인상 합의', impacts: [{ code: 'G04', bp: 600, reason: '가격 결정력 확인' }] },
+        { id: 'rejected', weight: 70, beat: false, actual: '인상 철회, 일부 고객 이탈', gap: '기대와 달리 가격도 고객도 잃음', label: '가격 인상 실패', impacts: [{ code: 'G04', bp: -650, reason: '가격을 지킨 경쟁사로 고객이 옮겨 감' }] }
+      ] },
+    { id: 'raw-3', step: 3, targets: ['G04', 'G03'], signal: { G04: 1 }, clueDir: 1, concept: '원가 걱정은 원료값이 내려가기 시작하면 빠르게 되돌아갑니다.',
+      headline: '배양 원료 산지 수확 시작', facts: '주요 산지에서 올해 수확이 시작됐습니다.', expectation: '시장은 원료값이 연말까지 높게 유지된다고 봅니다.', remaining: '다음 달 원료 가격', clue: '산지 수출 물량이 전월보다 40% 늘었다는 통계가 나왔습니다.',
+      outcomes: [
+        { id: 'fall', weight: 70, beat: true, actual: '원료값 15% 하락', gap: '기대보다 빨리 내림', label: '원료값 하락', impacts: [{ code: 'G04', bp: 450, reason: '원가 부담 완화' }, { code: 'G03', bp: -100, reason: '긴급 수입 운송 감소' }] },
+        { id: 'stay', weight: 30, beat: false, actual: '원료값 고공 행진', gap: '기대대로 높음', label: '원료값 고공 행진', impacts: [{ code: 'G04', bp: -400, reason: '원가 부담 지속' }] }
+      ] }
+
   ] }
 ];
 
