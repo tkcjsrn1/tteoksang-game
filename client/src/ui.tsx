@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DISCLAIMER, formatPct } from '../../shared/rules';
+import { DISCLAIMER, formatPct, GROUPS, STOCKS } from '../../shared/rules';
 import type { PriceBreakdown, StockView } from '../../shared/types';
 import { Rich, TermLink } from './glossary/GlossaryContext';
 
@@ -23,10 +23,10 @@ export function Logo() {
 export function Chevron() {
   return <svg className="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>;
 }
-/** 종목 머리글자 동그라미. 종목마다 색을 고정합니다. */
-const AVATAR: Record<string, string> = { G01: '#F5A623', G02: '#7B61FF', G03: '#00A88F', G04: '#2BB673', G05: '#FF6B8A', G06: '#3B8DD9' };
+/** 종목 머리글자 동그라미. 같은 업종은 같은 색입니다. */
+const avatarColor = (code: string) => { const s = STOCKS.find(x => x.code === code); return s ? GROUPS[s.group].color : '#8B95A1'; };
 export function StockAvatar({ code, name }: { code: string; name: string }) {
-  return <span className="avatar" style={{ background: AVATAR[code] ?? '#8B95A1' }} aria-hidden="true">{name[0]}</span>;
+  return <span className="avatar" style={{ background: avatarColor(code) }} aria-hidden="true">{name[0]}</span>;
 }
 
 export const bpText = (bp: number) => `${bp > 0 ? '+' : bp < 0 ? '−' : ''}${Math.abs(bp).toLocaleString('ko-KR')}bp`;
@@ -40,6 +40,7 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
         <dt><TermLink id="reference-price">이전가</TermLink></dt><dd className="num">{won(b.basePrice)}</dd>
         <dt><TermLink id="close-price">종료가</TermLink></dt><dd className="num">{won(b.closePrice)}</dd>
         {b.high !== undefined && b.low !== undefined && <><dt><TermLink id="high-low">고가·저가</TermLink> <small className="hint">연출</small></dt><dd className="num">{won(b.high)} · {won(b.low)}</dd></>}
+        {b.volume !== undefined && <><dt><TermLink id="volume">거래량</TermLink></dt><dd className="num">{b.volume.toLocaleString('ko-KR')}주{b.volume > 0 ? ` (매수 ${(b.buyQty ?? 0).toLocaleString('ko-KR')} · 매도 ${(b.sellQty ?? 0).toLocaleString('ko-KR')})` : ''}</dd></>}
         <dt>실제 <TermLink id="change-rate">등락률</TermLink></dt><dd className={`num ${dir(b.changeBp)}`}>{arrow(b.changeBp)} {pctBp(b.changeBp)}</dd>
       </dl>
       <h4>변동 근거</h4>
@@ -59,17 +60,22 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
 
 /** 라운드 봉 차트. 한 라운드가 봉 하나입니다.
     몸통(시가 = 직전 종가, 종가 = 이번 종가)은 실제 계산값이고, 꼬리(고가·저가)는 연출입니다(shared/rules.ts stagedWicks).
+    아래 막대는 라운드별 체결 수량(거래량)입니다. 매수가 많으면 빨강, 매도가 많으면 파랑.
     봉을 누르면 그 라운드의 변동 이유를 봅니다. */
 export function PriceChart({ stock, totalRounds, selected, onSelect }: { stock: StockView; totalRounds: number; selected: number | null; onSelect: (round: number) => void }) {
-  const W = 340, H = 180, L = 8, R = 78, T = 14, B = 22;   /* R: 오른쪽 가격 라벨 자리. 좁으면 '시작 12,400'이 잘립니다 */
-  const candles = stock.history.map(h => ({ round: h.round, open: h.basePrice, close: h.closePrice, high: h.high ?? Math.max(h.basePrice, h.closePrice), low: h.low ?? Math.min(h.basePrice, h.closePrice) }));
+  const W = 340, H = 214, L = 8, R = 78, T = 14, B = 22;   /* R: 오른쪽 가격 라벨 자리. 좁으면 '시작 12,400'이 잘립니다 */
+  const VOL = 30, GAP = 6;                                    /* 아래 거래량 막대 영역 */
+  const PB = B + VOL + GAP;                                   /* 가격 영역의 아래 여백 */
+  const candles = stock.history.map(h => ({ round: h.round, open: h.basePrice, close: h.closePrice, high: h.high ?? Math.max(h.basePrice, h.closePrice), low: h.low ?? Math.min(h.basePrice, h.closePrice), volume: h.volume ?? 0, buy: h.buyQty ?? 0, sell: h.sellQty ?? 0 }));
   const vals = [stock.startPrice, ...candles.flatMap(c => [c.high, c.low])];
   const lo0 = Math.min(...vals), hi0 = Math.max(...vals);
   const pad = Math.max((hi0 - lo0) * .1, stock.startPrice * .02);
   const lo = lo0 - pad, hi = hi0 + pad;
   const slot = (W - L - R) / (totalRounds + 0.5);
   const x = (r: number) => L + slot * (r - 0.25);
-  const y = (v: number) => T + (hi - v) / (hi - lo) * (H - T - B);
+  const y = (v: number) => T + (hi - v) / (hi - lo) * (H - T - PB);
+  const maxVol = Math.max(0, ...stock.history.map(h => h.volume ?? 0));
+  const volH = (v: number) => maxVol > 0 ? Math.max(v > 0 ? 2 : 0, v / maxVol * VOL) : 0;
   const bw = Math.min(16, slot * 0.55);
   const last = candles[candles.length - 1];
   const lastPrice = last ? last.close : stock.startPrice;
@@ -83,10 +89,11 @@ export function PriceChart({ stock, totalRounds, selected, onSelect }: { stock: 
         {Array.from({ length: totalRounds }, (_, i) => i + 1).filter(r => totalRounds <= 5 || r % 2 === 1).map(r => <text key={r} x={x(r)} y={H - 6} fontSize="11" textAnchor="middle" fill="var(--muted)">R{r}</text>)}
         {candles.map(c => {
           const col = colorOf(c), top = Math.max(c.open, c.close), bottom = Math.min(c.open, c.close);
-          const label = `${c.round}라운드: 시가 ${c.open.toLocaleString('ko-KR')}원, 종가 ${c.close.toLocaleString('ko-KR')}원, 고가 ${c.high.toLocaleString('ko-KR')}원, 저가 ${c.low.toLocaleString('ko-KR')}원. 변동 이유 보기`;
+          const label = `${c.round}라운드: 시가 ${c.open.toLocaleString('ko-KR')}원, 종가 ${c.close.toLocaleString('ko-KR')}원, 고가 ${c.high.toLocaleString('ko-KR')}원, 저가 ${c.low.toLocaleString('ko-KR')}원, 거래량 ${c.volume.toLocaleString('ko-KR')}주. 변동 이유 보기`;
           return (
             <g key={c.round} onClick={() => onSelect(c.round)} role="button" aria-label={label} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(c.round); }} style={{ cursor: 'pointer' }}>
               <rect x={x(c.round) - slot / 2} y={T - 6} width={slot} height={H - T - B + 10} rx="6" fill={selected === c.round ? 'var(--led-soft)' : 'transparent'} />
+              {c.volume > 0 && <rect x={x(c.round) - bw / 2} y={H - B - volH(c.volume)} width={bw} height={volH(c.volume)} rx="1.5" fill={c.buy >= c.sell ? 'var(--up)' : 'var(--down)'} opacity=".35" />}
               <line x1={x(c.round)} x2={x(c.round)} y1={y(c.high)} y2={y(c.low)} stroke={col} strokeWidth="1.5" />
               <rect x={x(c.round) - bw / 2} y={y(top)} width={bw} height={Math.max(2, y(bottom) - y(top))} rx="2" fill={col} />
             </g>
@@ -96,7 +103,7 @@ export function PriceChart({ stock, totalRounds, selected, onSelect }: { stock: 
       </svg>
       <figcaption className="chart-note">
         <span className="legend up" aria-hidden="true" /> 오름 <span className="legend down" aria-hidden="true" /> 내림 ·{' '}
-        <TermLink id="candle">봉</TermLink> 몸통(시가→종가)은 실제 계산값, 위아래 꼬리는 라운드 중 움직임을 보여 주는 <b>연출</b>이에요. 봉을 누르면 이유가 나와요.
+        <TermLink id="candle">봉</TermLink> 몸통(시가→종가)은 실제 계산값, 위아래 꼬리는 <b>연출</b>이에요(매수가 몰리면 위, 매도가 몰리면 아래로 길게). 아래 막대는 <TermLink id="volume">거래량</TermLink>. 봉을 누르면 이유가 나와요.
       </figcaption>
     </figure>
   );

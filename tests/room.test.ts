@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
 import { ARCS } from '../server/src/content';
+import { GROUPS, stockOf, STOCKS } from '../shared/rules';
 import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
@@ -123,6 +124,68 @@ test('1만 대 기대에 6천 대: 하락 근거가 그래프 점에 기록된�
   assert.match(point.summary, /기대에 못 미친 계약 규모/);
   assert.equal(point.rawBp, point.eventBp + point.marketBp + point.stockBp);
 });
+test('같은 업종 종목은 대장주 사건 영향의 linkBeta배만큼 함께 움직인다', () => {
+  const { room, a } = setup({ forcedArcs: ['nuvakan', 'rate'], forced: { 'nu-1': 'pass', 'nu-2a': 'approved', 'nu-3a': 'short' } });
+  toTrade(room);
+  while (room.s.status === 'playing') next(room);
+  const v = room.view(a, 'player', room.s.phaseEndsAt ?? T0);
+  assert.equal(v.stocks.length, 10);
+  const leader = v.stocks.find(s => s.code === GROUPS.power.leader)!;
+  const peers = v.stocks.filter(s => s.code !== leader.code && stockOf(s.code).group === 'power');
+  assert.ok(peers.length >= 1, '뉴스 업종 동반 종목이 판에 있다');
+  for (const peer of peers) leader.history.forEach((lp, i) => {
+    const pp = peer.history[i];
+    for (const e of lp.events) {
+      const link = pp.events.find(x => x.stageId === e.stageId && x.label === `업종 동반 · ${e.label}`);
+      const bp = Math.round(e.bp * stockOf(peer.code).linkBeta);
+      if (bp === 0) { assert.equal(link, undefined); continue; }
+      assert.ok(link, `${peer.code} ${e.label}`);
+      assert.equal(link.bp, bp);
+      assert.match(link.reason, /같은 업종/);
+    }
+    /* 동반 영향도 상하한 계산(rawBp)에 들어갑니다 */
+    assert.equal(pp.rawBp, pp.eventBp + pp.marketBp + pp.stockBp);
+  });
+  /* 다른 업종 종목에는 동반 영향이 없습니다 */
+  v.stocks.filter(s => stockOf(s.code).group !== 'power' && !Object.values(GROUPS).some(g => g.leader === s.code))
+    .forEach(s => s.history.forEach(h => assert.ok(h.events.every(e => !e.label.includes('누바칸')))));
+});
+test('이번 판에 없는 종목은 주문할 수 없다', () => {
+  const { room, a } = setup();
+  const t = toTrade(room);
+  const absent = STOCKS.find(s => !room.s.plan.stockCodes!.includes(s.code))!;
+  const r = room.placeOrder(a, 'x1', absent.code, 'buy', 1, t);
+  assert.equal(r.ok, false);
+  assert.equal(room.placeOrder(a, 'x2', 'G99' as StockCode, 'buy', 1, t).ok, false);
+});
+test('슬리피지는 큰 주문을 낸 사람에게만 적용되고 종료가는 바꾸지 않는다. 체결 수량은 거래량·꼬리에 기록된다', () => {
+  const run = (bigQty: number) => {
+    const { room, a, b } = setup({ seed: 11 });
+    const t = toTrade(room);
+    const ref = room.s.prices.G03;
+    assert.equal(room.placeOrder(a, 'big', 'G03', 'buy', bigQty, t).ok, true);
+    assert.equal(room.placeOrder(b, 'small', 'G03', 'buy', 10, t).ok, true);
+    const pa = room.player(a)!, pb = room.player(b)!;
+    next(room);
+    return { room, pa, pb, ref, h: room.s.history.G03[0] };
+  };
+  const big = run(900), small = run(1);
+  const fa = big.pa.fills[0], fb = big.pb.fills[0];
+  assert.ok(fa.price > big.ref, '큰 주문은 기준가보다 비싸게');
+  assert.equal(fa.refPrice, big.ref);
+  assert.equal(fb.price, big.ref, '작은 주문은 기준가 그대로');
+  const r = big.pa.results[0];
+  assert.equal(r.slippage, (fa.price - big.ref) * 900);
+  assert.equal(r.delta, r.contributions.reduce((x, c) => x + c.won, 0) - r.fees - r.slippage!);
+  /* 종료가는 주문과 무관합니다 */
+  assert.equal(big.h.closePrice, small.h.closePrice);
+  /* 거래량: 참가자 + NPC 체결 수량 */
+  const npcQty = (room: GameRoom) => room.s.players.filter(p => p.kind === 'npc').flatMap(p => p.fills).filter(f => f.code === 'G03').reduce((x, f) => x + f.qty, 0);
+  assert.equal(big.h.volume, 900 + 10 + npcQty(big.room));
+  assert.equal(big.h.buyQty! + big.h.sellQty!, big.h.volume);
+  /* 매수가 몰리면 위 꼬리가 같거나 길어집니다(연출) */
+  assert.ok(big.h.high! >= small.h.high!);
+});
 test('한 판 전체: 평가액 변화 = 종목 기여 합계 − 수수료, 같은 방은 같은 시장, 그래프 값과 현재가 일치', () => {
   const { room, a, b } = setup();
   toTrade(room);
@@ -142,7 +205,7 @@ test('한 판 전체: 평가액 변화 = 종목 기여 합계 − 수수료, 같
     if (room.s.phase === 'recap') {
       for (const tok of [a, b]) {
         const p = room.player(tok)!, r = p.results[p.results.length - 1];
-        assert.equal(r.delta, r.contributions.reduce((x, c) => x + c.won, 0) - r.fees, `라운드 ${r.round}`);
+        assert.equal(r.delta, r.contributions.reduce((x, c) => x + c.won, 0) - r.fees - (r.slippage ?? 0), `라운드 ${r.round}`);
         assert.equal(r.valueAfter, room.value(p));
       }
       const va = room.view(a, 'player', 0), vb = room.view(b, 'player', 0);
@@ -213,6 +276,20 @@ test('상대 주문과 개인 리포트는 비공개다', () => {
   assert.equal(JSON.stringify(vb).includes('"qty":77'), false);
   assert.equal(room.view(null, 'display', end).report, null);
   assert.equal(room.view(null, 'display', end).portfolio, null);
+  /* 거래량·매수·매도 수량은 정산이 끝나 결과가 공개된 뒤에만, 종목별 합계로만 나갑니다 */
+  const close = room.s.phaseEndsAt!;
+  room.tick(close);
+  assert.equal(room.s.phase, 'settling');
+  for (const role of ['player', 'display'] as const) {
+    const v = room.view(role === 'player' ? b : null, role, close);
+    assert.ok(v.stocks.every(s => s.history.length === 0), '정산 중 거래량 비공개');
+    assert.equal(JSON.stringify(v).includes('"volume"'), false);
+  }
+  room.beginRecap(close);
+  const after = room.view(b, 'player', close);
+  assert.ok(after.stocks.find(s => s.code === 'G01')!.history[0].volume! >= 77);
+  /* 개인 체결 내역(fills)은 다른 참가자에게 나가지 않습니다 */
+  assert.equal(after.portfolio!.fillLog.some(f => f.qty === 77), false);
 });
 test('학술제 리포트: 기록이 부족하면 안내 문구, 충분하면 계산', () => {
   const room = GameRoom.create({ code: '654321', mode: 'academic', now: T0, seed: 3 });

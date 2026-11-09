@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { feeOf, maxBuyQty, MODES } from '../../shared/rules';
+import { feeOf, fillPrice, GROUPS, maxBuyQty, MODES, SLIP_FREE_WON, stockOf } from '../../shared/rules';
 import type { NewsCard, NewsResult, Order, RoomView, Side, StockCode, StockView } from '../../shared/types';
 import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
@@ -165,6 +165,8 @@ function HelpSheet({ phase, onClose, onReplayTutorial }: { phase: RoomView['phas
         {phase === 'trade' && <li>종목을 눌러 매수나 매도를 예약하세요. 마감 전까지 바꾸거나 취소할 수 있습니다.</li>}
         {phase === 'recap' && <li>그래프의 점을 누르면 가격이 움직인 이유가 나옵니다.</li>}
         <li><TermLink id="execution">체결</TermLink>가는 지금 화면의 <TermLink id="reference-price">기준가</TermLink>, 즉 직전 라운드 종료가입니다.</li>
+        <li>주문 금액이 200만 원을 넘으면 <TermLink id="slippage">슬리피지</TermLink>가 붙어 내 주문만 조금 불리한 값(최대 0.40%)에 체결됩니다.</li>
+        <li>같은 <TermLink id="sector">업종</TermLink> 종목은 <TermLink id="leader-stock">대장주</TermLink> 뉴스에 함께 움직입니다.</li>
         <li><TermLink id="fee">수수료</TermLink>는 매수와 매도 모두 <TermLink id="turnover">거래대금</TermLink>의 0.20%입니다.</li>
         <li><TermLink id="sell">매도</TermLink> 대금은 다음 라운드부터 쓸 수 있습니다(<TermLink id="settlement">결제일</TermLink>을 단순화).</li>
         <li>1<TermLink id="bp">bp</TermLink>는 0.01%입니다. 100bp가 1%입니다.</li>
@@ -265,8 +267,12 @@ function StockRow({ s, view, onOpen, hint = false }: { s: StockView; view: RoomV
   const held = view.portfolio?.holdings.find(h => h.code === s.code);
   const ord = view.portfolio?.orders.find(o => o.code === s.code);
   const ch = s.lastChangeBp;
-  const inNews = (view.phase === 'news' || view.phase === 'trade') && !!view.news[view.news.length - 1]?.cards.some(c => c.card.targets[0] === s.code);
-  const sub = [s.sector, inNews ? '이번 뉴스' : '', held ? `${held.qty.toLocaleString('ko-KR')}주 보유` : '', ord ? `${ord.side === 'buy' ? '매수' : '매도'} ${ord.qty.toLocaleString('ko-KR')}주 예약` : ''].filter(Boolean).join(' · ');
+  const live = view.phase === 'news' || view.phase === 'trade';
+  const targets = live ? view.news[view.news.length - 1]?.cards.map(c => c.card.targets[0]) ?? [] : [];
+  const inNews = targets.includes(s.code);
+  /* 대장주에 뉴스가 났으면 같은 업종 종목도 함께 움직일 수 있다고 알려 줍니다. */
+  const peerNews = !inNews && targets.includes(GROUPS[stockOf(s.code).group].leader);
+  const sub = [s.sector, inNews ? '이번 뉴스' : '', peerNews ? '같은 업종 뉴스' : '', held ? `${held.qty.toLocaleString('ko-KR')}주 보유` : '', ord ? `${ord.side === 'buy' ? '매수' : '매도'} ${ord.qty.toLocaleString('ko-KR')}주 예약` : ''].filter(Boolean).join(' · ');
   return (
     <button className={`row${inNews ? ' is-news' : ''}${hint ? ' hint-pulse' : ''}`} onClick={onOpen}>
       <StockAvatar code={s.code} name={s.name} />
@@ -293,7 +299,8 @@ function StockSheet({ stock, view, left, coach, onClose, place, cancel, toast }:
   const pointData = stock.history.find(h => h.round === point);
   return (
     <Sheet title={stock.name} onClose={onClose}>
-      <p className="hint">{stock.code} · {stock.sector} · {stock.desc}</p>
+      <p className="hint"><Rich text={`${GROUPS[stockOf(stock.code).group].label} 업종 · ${stock.sector}${stockOf(stock.code).linkBeta === 1 ? ' · 대장주' : ''}`} /></p>
+      <p className="hint">{stock.desc}</p>
       <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 {stock.lastChangeBp !== null && <small className={dir(stock.lastChangeBp)}>{arrow(stock.lastChangeBp)} {pctBp(stock.lastChangeBp)}</small>}</p>
       <PriceChart stock={stock} totalRounds={view.totalRounds} selected={point} onSelect={setPoint} />
       {pointData ? <BreakdownPanel b={pointData} /> : <p className="hint">가격은 라운드 마감 때만 바뀝니다. 첫 결과가 나오면 점을 눌러 이유를 볼 수 있어요.</p>}
@@ -316,7 +323,9 @@ function OrderPanel({ stock, view, left, place, cancel, toast, onDone }: { stock
   const ctx = useMemo(() => ({ cash: pf.cash, holdings: {}, orders: Object.fromEntries(pf.orders.map(o => [o.code, o])) as Partial<Record<StockCode, Order>> }), [pf.cash, pf.orders]);
   const max = side === 'buy' ? maxBuyQty(ctx, stock.code, stock.price) : heldQty;
   const n = Math.floor(Number(qty) || 0);
-  const gross = n * stock.price, fee = feeOf(gross);
+  const fp = fillPrice(stock.price, side, n);
+  const gross = n * fp.price, fee = feeOf(gross);
+  const slipWon = Math.abs(fp.price - stock.price) * n;
   const submit = async () => {
     setBusy(true);
     const res = await place(stock.code, side, n);
@@ -333,7 +342,7 @@ function OrderPanel({ stock, view, left, place, cancel, toast, onDone }: { stock
   if (!open && view.phase !== 'news') return <p className="hint strong">이번 라운드 주문 마감</p>;
   if (existing && !editing) return (
     <div className="booked">
-      <p><b>{existing.side === 'buy' ? '매수' : '매도'} {existing.qty.toLocaleString('ko-KR')}주</b> · 기준가 {won(existing.price)} · 예약 완료, 마감 때 체결</p>
+      <p><b>{existing.side === 'buy' ? '매수' : '매도'} {existing.qty.toLocaleString('ko-KR')}주</b> · 체결 예정가 {won(existing.price)}{existing.slipBp ? ` (슬리피지 ${existing.slipBp}bp)` : ''} · 예약 완료, 마감 때 체결</p>
       <div className="seg"><button disabled={!open || busy} onClick={() => { setEditing(true); setSide(existing.side); }}>주문 변경</button><button disabled={!open || busy} onClick={doCancel}>취소</button></div>
     </div>
   );
@@ -348,12 +357,14 @@ function OrderPanel({ stock, view, left, place, cancel, toast, onDone }: { stock
       </div>
       <div className="pcts">{([[0.1, '10%'], [0.25, '25%'], [0.5, '50%'], [1, '최대']] as const).map(([r, label]) => <button key={label} onClick={() => setQty(String(Math.floor(max * r)))}>{label}</button>)}</div>
       <dl className="kv">
+        <dt>체결 예정가</dt><dd>{won(fp.price)}</dd>
+        <dt><TermLink id="slippage">슬리피지</TermLink>{fp.slipBp ? ` ${fp.slipBp}bp` : ''}</dt><dd>{slipWon ? `${side === 'buy' ? '+' : '−'}${won(slipWon)}` : '없음'}</dd>
         <dt>주문 금액</dt><dd>{won(gross)}</dd>
         <dt><TermLink id="fee">수수료</TermLink> 0.20%</dt><dd>{won(fee)}</dd>
         <dt className="total">{side === 'buy' ? '총 빠져나갈 돈' : '받을 돈(다음 라운드부터)'}</dt><dd className="total">{won(side === 'buy' ? gross + fee : Math.max(0, gross - fee))}</dd>
       </dl>
       {n > max && <p className="error">가능한 수량을 넘었어요</p>}
-      <p className="hint">마감 때 지금 가격(<TermLink id="reference-price">기준가</TermLink>)으로 전부 <TermLink id="execution">체결</TermLink>돼요. 마감 전까지 바꿀 수 있어요.</p>
+      <p className="hint">마감 때 지금 가격(<TermLink id="reference-price">기준가</TermLink>)으로 전부 <TermLink id="execution">체결</TermLink>돼요. 주문 금액이 {won(SLIP_FREE_WON)}을 넘으면 조금 불리한 값에 체결돼요. 마감 전까지 바꿀 수 있어요.</p>
       <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 주문 시작` : busy ? '요청 중' : `${n > 0 ? `${n.toLocaleString('ko-KR')}주 ` : ''}${side === 'buy' ? '매수' : '매도'} 예약${existing ? ' 변경' : ''}`}</button>
     </div>
   );
@@ -401,7 +412,7 @@ function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => voi
     {r && <div className="panel recap-top">
       <p className="wallet-label">내 평가액 변화 {r.rankBefore !== r.rankAfter && <span className={`pill pop ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
       <p className={`delta-big ${dir(r.delta)}`} aria-label={signedWon(r.delta)}>{signedWon(delta)}</p>
-      <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료 −${won(r.fees)}` : ''}</p>
+      <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 −${won(r.slippage)}` : ''}</p>
     </div>}
     {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
     {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}

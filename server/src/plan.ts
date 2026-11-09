@@ -1,5 +1,5 @@
 /* 시드로 게임 전체 시나리오를 미리 확정합니다. 같은 시드와 설정이면 같은 결말과 변동이 나옵니다. */
-import { MARKET_MAX_BP, MODES, STOCKS } from '../../shared/rules';
+import { GROUPS, LEADERS, MARKET_MAX_BP, MODES, stockOf, STOCKS } from '../../shared/rules';
 import type { GameMode, StockCode } from '../../shared/types';
 import { ARCS, CARDS, type Arc, type Outcome, type Stage } from './content';
 
@@ -9,7 +9,24 @@ export function mulberry(seed: number) {
 }
 export interface PlannedStage { stageId: string; outcomeId: string; breaking: boolean }
 export interface RoundPlan { round: number; stages: PlannedStage[]; marketBp: number; stockBp: Record<StockCode, number>; cardId: string | null }
-export interface GamePlan { arcIds: string[]; rounds: RoundPlan[] }
+export interface GamePlan { arcIds: string[]; rounds: RoundPlan[]; /** 이번 판에 나오는 종목. 예전 저장 데이터에는 없습니다 */ stockCodes?: StockCode[] }
+/** 한 판에 나오는 종목 수 */
+export const STOCKS_PER_GAME = 10;
+
+/** 대표 종목 6개는 항상 넣고(뉴스의 주인공), 이번 판 뉴스가 다루는 업종의 같은 업종 종목을 한 개씩 먼저 고른 뒤
+    나머지를 무작위로 채웁니다. 업종 동조화를 화면에서 바로 볼 수 있게 하려는 순서입니다. */
+export function pickStocks(arcs: Arc[], rnd: () => number): StockCode[] {
+  const peers = STOCKS.filter(s => !LEADERS.includes(s.code));
+  const featured = [...new Set(arcs.flatMap(a => a.stages.flatMap(st => st.targets)).map(c => stockOf(c).group))];
+  const picked: StockCode[] = [];
+  for (const g of shuffled(featured, rnd)) {
+    const pool = shuffled(peers.filter(p => p.group === g && !picked.includes(p.code)), rnd);
+    if (pool[0] && picked.length < STOCKS_PER_GAME - LEADERS.length) picked.push(pool[0].code);
+  }
+  for (const p of shuffled(peers, rnd)) if (picked.length < STOCKS_PER_GAME - LEADERS.length && !picked.includes(p.code)) picked.push(p.code);
+  const order = (c: StockCode) => Object.keys(GROUPS).indexOf(stockOf(c).group) * 100 + Number(c.slice(1));
+  return [...LEADERS, ...picked].sort((a, b) => order(a) - order(b));
+}
 /** 테스트에서 특정 결말을 강제할 때 씁니다. { 'nu-3a': 'short' } 처럼 단계별로 지정합니다. */
 export type ForcedOutcomes = Record<string, string>;
 
@@ -46,6 +63,7 @@ export function buildPlan(seed: number, mode: GameMode, excludedArcs: string[] =
   const old = shuffled(ARCS.filter(a => excludedArcs.includes(a.id)), rnd);
   const chosen = forcedArcs ? forcedArcs.map(id => ARCS.find(a => a.id === id)!) : [...fresh, ...old].slice(0, cfg.arcs);
   const resolved = chosen.map(a => resolveArc(a, rnd, forced));
+  const stockCodes = pickStocks(chosen, rnd);
   /* 사건들을 번갈아 배치합니다. 뉴스가 라운드보다 많으면 앞 라운드에 두 건씩 넣습니다. */
   const queue: { stage: Stage; outcome: Outcome }[] = [];
   for (let i = 0; i < 3; i++) resolved.forEach(r => { if (r[i]) queue.push(r[i]); });
@@ -60,9 +78,9 @@ export function buildPlan(seed: number, mode: GameMode, excludedArcs: string[] =
     for (let k = 0; k < take && qi < queue.length; k++, qi++) stages.push({ stageId: queue[qi].stage.id, outcomeId: queue[qi].outcome.id, breaking: k === 1 });
     const marketBp = Math.floor(rnd() * (MARKET_MAX_BP * 2 + 1)) - MARKET_MAX_BP;
     const stockBp = {} as Record<StockCode, number>;
-    STOCKS.forEach(s => { stockBp[s.code] = Math.floor(rnd() * (s.maxMoveBp * 2 + 1)) - s.maxMoveBp; });
+    stockCodes.forEach(c => { const s = stockOf(c); stockBp[c] = Math.floor(rnd() * (s.maxMoveBp * 2 + 1)) - s.maxMoveBp; });
     const ci = cardRounds.indexOf(r);
     rounds.push({ round: r, stages, marketBp, stockBp, cardId: ci >= 0 ? cards[ci % cards.length].id : null });
   }
-  return { arcIds: chosen.map(a => a.id), rounds };
+  return { arcIds: chosen.map(a => a.id), rounds, stockCodes };
 }

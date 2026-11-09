@@ -32,3 +32,20 @@ test('정산된 가격 기록에 고가·저가가 붙고, 정산 전에는 공�
     assert.ok(h.high! >= Math.max(h.basePrice, h.closePrice) && h.low! <= Math.min(h.basePrice, h.closePrice));
   }
 });
+
+test('주문 흐름: 매수가 많으면 위 꼬리, 매도가 많으면 아래 꼬리가 길어지고 제한폭은 그대로 지킨다', () => {
+  for (const s of STOCKS) for (let bp = -1500; bp <= 1500; bp += 500) {
+    const b = computeClose(2, s.start, [{ stageId: 'x', label: 'x', bp, reason: '' }], 0, 0);
+    const none = stagedWicks(s.code, b);
+    assert.deepEqual(stagedWicks(s.code, b, { buyQty: 0, sellQty: 0, turnover: 0 }), none, '흐름 0이면 예전과 같음');
+    const buy = stagedWicks(s.code, b, { buyQty: 1000, sellQty: 0, turnover: 20_000_000 });
+    const sell = stagedWicks(s.code, b, { buyQty: 0, sellQty: 1000, turnover: 20_000_000 });
+    assert.ok(buy.high >= none.high && buy.low === none.low, `${s.code} ${bp} 매수`);
+    assert.ok(sell.low <= none.low && sell.high === none.high, `${s.code} ${bp} 매도`);
+    for (const w of [buy, sell]) {
+      assert.ok(w.high <= b.upperLimit && w.low >= b.lowerLimit);
+      if (b.limit === 'upper') assert.equal(w.high, b.closePrice);
+      if (b.limit === 'lower') assert.equal(w.low, b.closePrice);
+    }
+  }
+});

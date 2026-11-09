@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aggregate, buildCandle, movingAverage } from '../shared/candles';
-import { checkOrder, computeClose, feeOf, lowerLimit, maxBuyQty, MODES, upperLimit } from '../shared/rules';
+import { checkOrder, computeClose, feeOf, fillPrice, GROUPS, LEADERS, lowerLimit, maxBuyQty, MODES, slippageBp, stockOf, STOCKS, upperLimit } from '../shared/rules';
 import { ARCS, CARDS } from '../server/src/content';
-import { buildPlan } from '../server/src/plan';
+import { buildPlan, STOCKS_PER_GAME } from '../server/src/plan';
+import { pickDiversified } from '../server/src/npc';
 
 test('기획서 예시 계산: 12,400원 +780bp는 13,370원, +7.82%', () => {
   const b = computeClose(1, 12400, [{ stageId: 'x', label: 'L', bp: 900, reason: 'r' }], -50, -70);
@@ -40,11 +41,39 @@ test('매수 예약금 합계는 라운드 시작 현금 이내, 변경은 기�
   const o = { code: 'G01' as const, side: 'buy' as const, qty: 500, price: 10000, gross: 5_000_000, fee: 10_000, reserve: 5_010_000, requestId: 'a', placedAt: 0 };
   const ctx = { cash: 10_000_000, holdings: {}, orders: { G01: o } };
   assert.equal(checkOrder(ctx, 'G02', 'buy', 500, 10000).ok, false);
-  assert.equal(checkOrder(ctx, 'G01', 'buy', 998, 10000).ok, true);
-  assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 12400), 804);
+  /* 기존 G01 주문은 돌려받았다고 봅니다. 998주는 슬리피지 40bp(10,040원) 때문에 1,000만 원을 넘습니다 */
+  assert.equal(checkOrder(ctx, 'G01', 'buy', 998, 10000).ok, false);
+  assert.equal(checkOrder(ctx, 'G01', 'buy', 994, 10000).ok, true);
+  assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 12400), 801);
+  assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 10000), 994);
   assert.equal(checkOrder(ctx, 'G03', 'sell', 1, 10000).ok, false);
   assert.equal(checkOrder(ctx, 'G01', 'buy', 0, 10000).ok, false);
   assert.equal(checkOrder(ctx, 'G01', 'buy', 1.5, 10000).ok, false);
+});
+test('슬리피지: 200만 원까지 0, 그 뒤 100만 원마다 5bp, 최대 40bp. 매수는 비싸게, 매도는 싸게', () => {
+  assert.equal(slippageBp(0), 0);
+  assert.equal(slippageBp(2_000_000), 0);
+  assert.equal(slippageBp(2_000_001), 5);
+  assert.equal(slippageBp(3_000_000), 5);
+  assert.equal(slippageBp(3_000_001), 10);
+  assert.equal(slippageBp(9_999_999_999), 40);
+  assert.equal(slippageBp(NaN), 0);
+  assert.deepEqual(fillPrice(10000, 'buy', 100), { price: 10000, slipBp: 0 });
+  assert.deepEqual(fillPrice(10000, 'buy', 990), { price: 10040, slipBp: 40 });
+  assert.deepEqual(fillPrice(10000, 'sell', 990), { price: 9960, slipBp: 40 });
+  assert.deepEqual(fillPrice(4850, 'buy', 500), { price: 4853, slipBp: 5 });    // 올림
+  assert.deepEqual(fillPrice(4850, 'sell', 500), { price: 4847, slipBp: 5 });   // 내림
+  /* 최대 수량은 슬리피지·수수료를 넣어도 현금을 넘지 않고, 한 주 더 사면 넘습니다 */
+  for (const ref of [4300, 7200, 12400, 23400]) {
+    const ctx = { cash: 10_000_000, holdings: {}, orders: {} };
+    const q = maxBuyQty(ctx, 'G01', ref);
+    const ok = checkOrder(ctx, 'G01', 'buy', q, ref), over = checkOrder(ctx, 'G01', 'buy', q + 1, ref);
+    assert.ok(ok.ok && ok.reserve <= 10_000_000, `${ref}`);
+    assert.equal(over.ok, false, `${ref}`);
+  }
+  /* 아주 큰 수량도 곱셈 넘침 없이 거절합니다 */
+  assert.equal(checkOrder({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 'buy', Number.MAX_SAFE_INTEGER, 10000).ok, false);
+  assert.equal(checkOrder({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 'buy', 2 ** 60, 10000).ok, false);
 });
 test('콘텐츠 분량과 범위: 뉴스 20개 이상, 돌발 5개 이상, 근거 필수', () => {
   const stages = ARCS.flatMap(a => a.stages);
@@ -80,8 +109,43 @@ test('모드별 라운드 구성과 변동 범위', () => {
     const p = buildPlan(seed, mode);
     assert.equal(p.rounds.length, MODES[mode].rounds);
     assert.ok(p.rounds.every(r => r.stages.length >= 1 && r.stages.length <= 2), `${mode} ${seed}`);
-    assert.ok(p.rounds.every(r => Math.abs(r.marketBp) <= 50 && Object.values(r.stockBp).every(x => Math.abs(x) <= 150)));
+    assert.ok(p.rounds.every(r => Math.abs(r.marketBp) <= 50 && (Object.entries(r.stockBp) as [`G${number}`, number][]).every(([c, x]) => Math.abs(x) <= stockOf(c).maxMoveBp)));
   }
+});
+test('종목 풀 24개, 업종 6개 × 4종목, 판마다 10종목', () => {
+  assert.equal(STOCKS.length, 24);
+  assert.equal(new Set(STOCKS.map(s => s.code)).size, 24);
+  assert.equal(new Set(STOCKS.map(s => s.name)).size, 24);
+  for (const [g, def] of Object.entries(GROUPS)) {
+    const members = STOCKS.filter(s => s.group === g);
+    assert.equal(members.length, 4, g);
+    assert.equal(stockOf(def.leader).group, g);
+    assert.ok(members.every(s => s.code === def.leader ? s.linkBeta === 1 : s.linkBeta > 0 && s.linkBeta < 1));
+  }
+  for (let seed = 1; seed < 300; seed++) {
+    const p = buildPlan(seed, 'friend');
+    const codes = p.stockCodes!;
+    assert.equal(codes.length, STOCKS_PER_GAME);
+    assert.equal(new Set(codes).size, STOCKS_PER_GAME);
+    /* 뉴스 대상(대장주)은 항상 나옵니다 */
+    assert.ok(LEADERS.every(c => codes.includes(c)), `${seed}`);
+    const targets = ARCS.filter(a => p.arcIds.includes(a.id)).flatMap(a => a.stages.flatMap(st => st.targets));
+    assert.ok(targets.every(c => codes.includes(c)));
+    /* 뉴스가 난 업종부터 동반 종목을 채웁니다(빈자리 4개 한도) */
+    const featured = new Set(targets.map(c => stockOf(c).group));
+    const withPeer = [...featured].filter(g => codes.some(x => x !== GROUPS[g].leader && stockOf(x).group === g));
+    assert.equal(withPeer.length, Math.min(featured.size, STOCKS_PER_GAME - LEADERS.length), `${seed}`);
+    /* 이번 판 종목에만 개별 변동을 정합니다 */
+    assert.ok(p.rounds.every(r => Object.keys(r.stockBp).every(c => codes.includes(c as `G${number}`))));
+  }
+  assert.notDeepEqual(buildPlan(1, 'friend').stockCodes, buildPlan(2, 'friend').stockCodes);
+});
+test('분산형 NPC는 업종마다 변동이 가장 작은 종목을 하나씩 고른다', () => {
+  const codes = buildPlan(7, 'friend').stockCodes!;
+  const picked = pickDiversified(codes);
+  assert.equal(picked.length, 6);
+  assert.equal(new Set(picked.map(c => stockOf(c).group)).size, 6);
+  for (const c of picked) assert.ok(codes.filter(x => stockOf(x).group === stockOf(c).group).every(x => stockOf(x).maxMoveBp >= stockOf(c).maxMoveBp));
 });
 test('재대전은 직전에 하지 않은 사건을 우선 고른다', () => {
   for (let seed = 1; seed < 100; seed++) {
