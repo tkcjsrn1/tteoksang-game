@@ -432,3 +432,20 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .legend.up { background: var(--up); } .legend.down { background: var(--down); }
 .chart g[role=button]:focus { outline: none; }
 .chart g[role=button]:focus-visible > rect:first-child { stroke: var(--led); stroke-width: 1.5; }
+
+/* 수업 4: 가상 호가창 */
+.book { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.book th { font-size: 12px; color: var(--muted); font-weight: 500; padding: 4px 6px; }
+.book td { padding: 6px; text-align: center; position: relative; }
+.book td:first-child, .book td:last-child { width: 36%; }
+.book td i { position: absolute; top: 4px; bottom: 4px; opacity: .14; border-radius: 3px; }
+.book tr.ask td:first-child i { right: 0; background: var(--down); }
+.book tr.bid td:last-child i { left: 0; background: var(--up); }
+.book tr.ask td:nth-child(2) { color: var(--down); font-weight: 700; background: var(--down-soft); }
+.book tr.bid td:nth-child(2) { color: var(--up); font-weight: 700; background: var(--up-soft); }
+/* 수업 6: 업종 비중 막대 */
+.sector-bars { display: grid; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: 80px minmax(0, 1fr) 44px; gap: 8px; align-items: center; font-size: 14px; }
+.bar-row i { height: 12px; border-radius: 6px; background: var(--led); display: block; }
+.bar-row b { text-align: right; }
+.rank-table td.num { white-space: nowrap; }

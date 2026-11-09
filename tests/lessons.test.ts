@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aggregate, buildCandle, movingAverage } from '../shared/candles';
 import { computeClose } from '../shared/rules';
-import { candleExample, candleQuestion, compareQuestion, dailyCloses, fiveMinute, intradayTrades, LESSONS, newsCase, newsQuestion, oneMinute } from '../client/src/lessons/data';
+import { candleExample, candleQuestion, compareQuestion, dailyCloses, earningsCase, earningsQuestion, fiveMinute, intradayTrades, LESSONS, marketBuy, newsCase, newsQuestion, oneMinute, operatingMargin, orderBook, orderQuestion, riskCase, riskQuestion, riskSummary } from '../client/src/lessons/data';
 
 test('수업 1: 예시 체결 기록과 해설의 가격이 일치한다', () => {
   assert.deepEqual(candleExample.trades.map(t => t.price), [10000, 10400, 9800, 10200]);
@@ -49,6 +49,38 @@ test('수업 3: 시나리오 산식으로 계산해도 −4.60%다', () => {
   assert.equal(b.changeBp, -460);
   assert.equal(newsQuestion.options.filter(o => o.correct).length, 1);
 });
-test('수업 구성: 1~3은 공개, 4~6은 준비 중', () => {
-  assert.deepEqual(LESSONS.map(l => l.ready), [true, true, true, false, false, false]);
+test('수업 구성: 1~6 모두 공개', () => {
+  assert.deepEqual(LESSONS.map(l => l.ready), [true, true, true, true, true, true]);
+});
+test('수업 4: 시장가 400주의 평균 체결가가 정답 10,040원이고 해설 숫자와 맞다', () => {
+  const r = marketBuy(orderBook.asks, orderBook.buyQty);
+  assert.equal(r.filled, 400);
+  assert.equal(r.avg, 10040);
+  assert.deepEqual(r.fills.map(f => [f.price, f.qty]), [[10030, 150], [10040, 100], [10050, 150]]);
+  assert.equal(orderQuestion.options.filter(o => o.correct).length, 1);
+  assert.match(orderQuestion.options.find(o => o.correct)!.label, /10,040원/);
+  /* 매도 호가는 모두 매수 호가보다 높습니다 */
+  assert.ok(Math.min(...orderBook.asks.map(a => a.price)) > Math.max(...orderBook.bids.map(b => b.price)));
+  /* 호가 수량보다 많이 사면 남은 수량은 체결되지 않습니다 */
+  assert.equal(marketBuy(orderBook.asks, 10_000).filled, 550);
+});
+test('수업 5: 영업이익률 계산과 정답이 맞다', () => {
+  const [a, b] = earningsCase.companies;
+  assert.equal(operatingMargin(a), 5);
+  assert.equal(operatingMargin(b), 15);
+  assert.equal(earningsQuestion.options.filter(o => o.correct).length, 1);
+  assert.match(earningsQuestion.options.find(o => o.correct)!.label, new RegExp(b.name));
+});
+test('수업 6: 평가액 1,200만 원, 분산 전력 비중 79%, 해설 숫자와 맞다', () => {
+  const r = riskSummary(riskCase);
+  assert.equal(r.total, 12_000_000);
+  assert.equal(r.pnl, 120_000 - 240_000 + 40_000);
+  const power = r.sectors.find(s => s.sector === '분산 전력')!;
+  assert.equal(power.value, 9_480_000);
+  assert.equal(Math.round(power.pct), 79);
+  assert.equal(riskQuestion.options.filter(o => o.correct).length, 1);
+  assert.match(riskQuestion.options.find(o => o.correct)!.label, /79%/);
+  assert.match(riskQuestion.options.find(o => o.correct)!.feedback, /948만 원/);
+  const laven = r.rows.find(x => x.name === '라벤토 소형터빈')!;
+  assert.equal(Math.round(laven.value / r.total * 100), 48);
 });
