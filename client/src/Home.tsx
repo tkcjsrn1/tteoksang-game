@@ -30,7 +30,6 @@ export function Home() {
   const join = () => run(async () => { await roomInfo(code); navigate(`/room/${code}`); });
   return (
     <main className="home">
-      <p className="course">STK-101 · 친구와 듣는 시장 수업</p>
       <h1 className="logo">떡상개론</h1>
       <p className="lede">같은 속보를 보고 각자 판단하세요. 마감 때 결말이 공개되고, 누가 왜 앞질렀는지 바로 나옵니다.</p>
       <div className="home-actions">
