@@ -2,7 +2,7 @@
 # 빌드:  docker build -t tteoksang .
 # 실행:  docker run -p 8787:8787 -e DATABASE_URL=postgres://... tteoksang
 
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 # embedded-postgres(테스트 전용)의 설치 스크립트는 필요 없으므로 건너뜁니다.
@@ -10,7 +10,7 @@ RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build
 
-FROM node:20-slim
+FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production PORT=8787
 COPY package.json package-lock.json ./

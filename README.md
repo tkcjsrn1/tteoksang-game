@@ -10,7 +10,7 @@
 
 ## 실행 방법
 
-Node.js 20 이상이 필요합니다.
+Node.js 22 이상이 필요합니다(테스트 스크립트가 Node 22의 `node --test` 경로 패턴 기능을 씁니다).
 
 ```bash
 npm install

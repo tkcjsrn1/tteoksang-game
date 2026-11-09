@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "친구와 함께하는 가상 주식 멀티플레이 게임",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22" },
   "scripts": {
     "dev": "concurrently -n server,client \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "tsx watch server/src/index.ts",

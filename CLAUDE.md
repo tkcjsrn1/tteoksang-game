@@ -9,7 +9,7 @@
 ## 명령
 
 ```bash
-npm ci               # 설치 (Node 20 이상)
+npm ci               # 설치 (Node 22 이상)
 npx tsc --noEmit     # 타입 검사
 npm test             # 전체 테스트. 커밋 전에 반드시 통과
 npm run build        # 타입 검사 + 클라이언트 빌드(dist/)
