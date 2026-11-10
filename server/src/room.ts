@@ -621,6 +621,8 @@ export class GameRoom {
   view(tokenValue: string | null, role: Role, now: number): RoomView {
     const p = role === 'player' ? this.player(tokenValue) : null, cfg = this.config;
     const inSettling = this.s.phase === 'settling';
+    const live = this.s.live;
+    const breakingAt = this.s.secondRevealed && live?.round === this.s.round ? live.breakAt ?? undefined : undefined;
     const stocks = this.stocksView();
     const priceOf = (c: StockCode) => stocks.find(x => x.code === c)!.price;
     const reserved = p ? Object.values(p.orders).reduce((a, o) => a + (o?.reserve ?? 0), 0) : 0;
@@ -632,12 +634,12 @@ export class GameRoom {
       humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */
       leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
-      stocks, news: this.newsView(), card: this.cardView(p), prediction: this.predictionView(p),
+      stocks, news: this.newsView(), breakingAt, card: this.cardView(p), prediction: this.predictionView(p),
       portfolio: p ? {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),
         orders: Object.values(p.orders) as Order[],
-        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
+        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, tick: f.k, kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
         dividendLog: p.dividends ?? []
       } : null,
       lastResult: p && !inSettling ? p.results[p.results.length - 1] ?? null : null,

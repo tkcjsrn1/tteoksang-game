@@ -23,6 +23,7 @@ const browser = await chromium.launch(process.env.E2E_NO_PROXY ? { args: ['--no-
 const ctx = await browser.newContext({ viewport: { width: W, height: 844 }, deviceScaleFactor: 1 });
 const page = await ctx.newPage();
 let tutorialStock = '';
+let tradedStock = '';
 /* 외부 글꼴(Google Fonts) 로딩 실패는 화면 오류가 아니므로 뺍니다. */
 const ignorable = (t: string) => /fonts\.(googleapis|gstatic)\.com|ERR_NAME_NOT_RESOLVED|net::ERR_/.test(t);
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
@@ -55,6 +56,10 @@ await step('홈과 첫 방문 안내', async () => {
   await page.getByRole('button', { name: '건너뛰기' }).click();
   await page.getByRole('button', { name: '혼자 연습 시작' }).waitFor();
   ok(await page.getByText('투자 조언이 아닙니다').count(), '면책 문구 없음');
+  await page.setViewportSize({ width: 1024, height: 844 });
+  const desktopHome = await page.locator('main.home').boundingBox();
+  ok(desktopHome && desktopHome.width >= 680, 'PC에서 화면 폭이 넓어지지 않음');
+  await page.setViewportSize({ width: W, height: 844 });
   const settings = page.getByRole('dialog', { name: '설정' });
   const music = settings.getByRole('checkbox', { name: '배경음' });
   const effects = settings.getByRole('checkbox', { name: '효과음' });
@@ -97,11 +102,13 @@ await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
   const order = page.getByRole('dialog');
   await order.locator('#order-qty').waitFor();
   tutorialStock = await order.getByRole('heading').first().innerText();
+  await order.getByRole('button', { name: '관심종목', exact: true }).click();
   ok(!(await order.locator('.company').isVisible()), '첫 주문에서 기업 정보가 먼저 열려 있음');
   await page.locator('.list-head .live-dot').waitFor({ state: 'attached' });
   await order.getByRole('button', { name: '이번에는 지켜보기' }).click();
   await order.waitFor({ state: 'detached' });
   await page.getByText('4. 시세를 지켜봐요', { exact: true }).waitFor();
+  await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
   ok(await page.locator('.sector-head').count() >= 1, '업종 머리줄 없음');
   await page.getByRole('button', { name: '모두 펼치기' }).click();
   ok(await page.locator('.sectors button.row').count() === 30, '종목이 30개가 아님');
@@ -114,6 +121,7 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   ok(t0 === 1, '실시간 시세 표시 없음');
   /* 이번 라운드 시세 그래프가 열리는지(종목 창) */
   await firstRow.click();
+  tradedStock = await page.getByRole('dialog').getByRole('heading').first().innerText();
   await page.locator('.live-chart').waitFor({ timeout: 5_000 });
   ok(/시가총액 .*억 원/.test(await page.locator('.company summary').innerText()), '기업 정보 없음');
   const before = await page.locator('.live-chart path').getAttribute('d');
@@ -143,6 +151,13 @@ await step('시장가 매수: 바로 체결', async () => {
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  const chart = page.locator('.live-chart');
+  await chart.locator('.chart-fill').first().waitFor();
+  await chart.locator('.chart-events summary').click();
+  ok(/매수 .*주 · .*원/.test(await chart.locator('.chart-events ul').innerText()), '체결 가격과 수량이 표시되지 않음');
+  await chart.getByRole('button', { name: '10초봉' }).click();
+  ok(await chart.locator('.chart-fill').first().isVisible(), '봉 차트에서 체결 표시가 사라짐');
+  await chart.getByRole('button', { name: '선(1초)' }).click();
 });
 
 await step('손절·익절 걸고 해제', async () => {
@@ -185,8 +200,17 @@ await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   ok(await page.getByText(/1초 시세를 빠르게 다시/).count(), '실제 시세 재생 안내 없음');
   await page.locator('main .board button.row').filter({ hasText: tutorialStock }).first().click();
   const resultStock = page.getByRole('dialog', { name: tutorialStock });
-  await resultStock.locator('.live-chart').waitFor();
+  await resultStock.locator('.live-chart .chart-breaking').waitFor();
   await resultStock.getByRole('button', { name: '닫기' }).click();
+  await page.locator('main .board button.row').filter({ hasText: tradedStock }).first().click();
+  const filledStock = page.getByRole('dialog', { name: tradedStock });
+  const events = filledStock.locator('.chart-events');
+  await events.locator('summary').click();
+  const labels = await events.locator('li').allTextContents();
+  const times = labels.map(label => label.split(' · ', 1)[0]);
+  ok(labels.some(label => label.includes('속보')) && labels.some(label => label.includes('매수')), '속보 또는 매수가 이벤트 목록에 없음');
+  ok(times.every((t, i) => i === 0 || times[i - 1] <= t), '차트 이벤트가 시간순이 아님');
+  await filledStock.getByRole('button', { name: '닫기' }).click();
 });
 
 await step('용어 설명 창 열고 닫기', async () => {
@@ -234,6 +258,7 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await page.goto(base + '/');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.locator('.sectors').waitFor();
+  await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
   const off = page.getByRole('button', { name: '안내 끄기' });
   if (await off.count()) await off.click();
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
