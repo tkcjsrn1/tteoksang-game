@@ -8,8 +8,8 @@ export const needsOnboarding = () => store.get(ONBOARDED_KEY) !== '1';
 
 const SLIDES = [
   { title: '같은 뉴스를 함께 봐요', text: '모두가 같은 가상 뉴스를 받습니다. 핵심은 "시장 기대"와 "단서"예요. 결과가 기대보다 좋을지 나쁠지 판단해 보세요.' },
-  { title: '90초 안에 주문을 예약해요', text: '살 종목과 수량을 고르면 예약됩니다. 마감 때 지금 가격으로 한꺼번에 체결되니, 손이 빠를 필요는 없어요.' },
-  { title: '왜 올랐는지 바로 알려 줘요', text: '결말이 공개되면 주가가 기대와의 차이만큼 움직입니다. 무엇이 얼마나 영향을 줬는지 막대로 보여 줘요.' }
+  { title: '90초 동안 장이 열려요', text: '시세가 1초마다 움직이고 중간에 속보가 뜨기도 해요. 시장가로 바로 사거나, 원하는 가격을 지정가로 걸어 둘 수 있어요.' },
+  { title: '장 마감 때 결과가 공개돼요', text: '뉴스의 실제 결과가 기대보다 좋았는지 나빴는지에 따라 주가가 크게 움직입니다. 무엇이 얼마나 영향을 줬는지 막대로 보여 줘요.' }
 ] as const;
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
@@ -54,7 +54,7 @@ function ArtOrder() {
       <div className="art-seg"><span className="on">매수</span><span>매도</span></div>
       <b className="art-qty">100주</b>
       <div className="art-kv"><span>총 빠져나갈 돈</span><b>871,740원</b></div>
-      <span className="art-btn">100주 매수 예약</span>
+      <span className="art-btn">100주 매수</span>
     </div>
   );
 }

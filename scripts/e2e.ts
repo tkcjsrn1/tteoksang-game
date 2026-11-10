@@ -66,20 +66,48 @@ await step('혼자 연습: 업종별 종목 10개', async () => {
   ok(await page.locator('.sectors button.row').count() === 10, '종목이 10개가 아님');
 });
 
-await step('주문 예약', async () => {
-  await page.locator('.sectors button.row').first().click();
-  await page.locator('#order-qty').waitFor();
+await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
+  await page.locator('.live-dot').waitFor({ timeout: 15_000 });
+  const firstRow = page.locator('.sectors button.row').first();
+  const t0 = await page.locator('.live-dot').count();
+  ok(t0 === 1, '실시간 시세 표시 없음');
+  /* 이번 라운드 시세 그래프가 열리는지(종목 창) */
+  await firstRow.click();
+  await page.locator('.live-chart').waitFor({ timeout: 5_000 });
+  const before = await page.locator('.live-chart path').getAttribute('d');
+  await page.waitForTimeout(2_500);
+  const after = await page.locator('.live-chart path').getAttribute('d');
+  ok(before !== after, '2.5초 동안 시세 그래프가 그대로');
+});
+
+await step('시장가 매수: 바로 체결', async () => {
   const go = page.locator('button.go');
   await page.getByRole('button', { name: '25%' }).click();
-  await go.filter({ hasText: '매수 예약' }).waitFor({ timeout: 15_000 });   // 뉴스 시간이 끝나 주문이 열릴 때까지
   ok(await go.isEnabled(), '주문 버튼이 꺼져 있음');
+  ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
-  await page.getByText(/예약 완료/).first().waitFor({ timeout: 5_000 });
+  await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+});
+
+await step('지정가 매도 예약과 취소', async () => {
+  await page.getByRole('button', { name: '매도', exact: true }).click();
+  await page.getByRole('button', { name: /지정가/ }).click();
+  const limit = page.locator('#order-limit');
+  await limit.waitFor();
+  /* 지금 시세보다 높은 가격에 걸어야 바로 체결되지 않고 예약됩니다 */
+  for (let i = 0; i < 30; i++) await page.getByRole('button', { name: '지정가 10원 올리기' }).click();
+  await page.getByRole('button', { name: '최대' }).click();
+  const go = page.locator('button.go');
+  ok(/매도 예약$/.test((await go.textContent()) ?? ''), '지정가 버튼 문구가 "…매도 예약"이 아님');
+  await go.click();
+  await page.getByText(/지정가 예약 완료/).first().waitFor({ timeout: 5_000 });
+  await page.getByRole('button', { name: '예약 취소' }).click();
+  await page.getByText('예약을 취소했습니다').first().waitFor({ timeout: 5_000 });
   await page.keyboard.press('Escape');
 });
 
 await step('라운드 결과: 등락 막대와 봉 재생', async () => {
-  await page.locator('.replay').first().waitFor({ timeout: 30_000 });
+  await page.locator('.replay').first().waitFor({ timeout: 40_000 });
   const bars = await page.locator('.bar-row .bar i').evaluateAll(els => els.map(e => {
     const r = e.getBoundingClientRect(), pr = e.parentElement!.getBoundingClientRect();
     return { pos: getComputedStyle(e).position, inside: r.left >= pr.left - 1 && r.right <= pr.right + 1, w: r.width };
@@ -87,7 +115,7 @@ await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   ok(bars.length >= 3, '등락 막대가 없음');
   ok(bars.every(b => b.pos === 'absolute' && b.inside), '등락 막대가 칸 밖으로 나가거나 모양이 깨짐');
   ok(await page.locator('.replay svg rect').count() >= 1, '봉 재생 그림 없음');
-  ok(await page.getByText('연출').count(), '연출 표시 없음');
+  ok(await page.getByText(/1초 시세를 빠르게 다시/).count(), '실제 시세 재생 안내 없음');
 });
 
 await step('용어 설명 창 열고 닫기', async () => {

@@ -1,7 +1,8 @@
 /* 서버 연결. 끊기면 자동 재접속하고, 앱이 백그라운드에서 돌아오면 바로 다시 연결합니다.
    이름이나 연락처는 저장하지 않습니다. 재접속 토큰만 이 브라우저나 앱에 남습니다. */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMsg, GameMode, Role, RoomView, ServerMsg, Side, StockCode } from '../../shared/types';
+import type { ClientMsg, FillInfo, GameMode, OrderKind, Role, RoomView, ServerMsg, Side, StockCode } from '../../shared/types';
+import { applyTick } from './live';
 
 /* 앱은 VITE_SERVER_URL로 서버 주소를 받습니다. 웹은 페이지와 같은 서버를 씁니다. */
 const BASE = (import.meta.env.VITE_SERVER_URL as string | undefined)?.replace(/\/$/, '') ?? '';
@@ -53,7 +54,7 @@ export const joinNote = (note: 'ok' | 'lan' | 'none') => note === 'lan'
   ? '휴대폰이 이 PC와 같은 와이파이에 있어야 들어올 수 있어요. 안 열리면 Windows 방화벽에서 Node.js의 "개인 네트워크" 접근을 허용해 주세요.'
   : note === 'none' ? '지금 주소(localhost)로는 다른 기기가 들어올 수 없어요. PC의 와이파이 주소나 배포된 주소로 열어 주세요.' : '';
 
-export interface OrderOutcome { ok: boolean; reason?: string }
+export interface OrderOutcome { ok: boolean; reason?: string; fill?: FillInfo | null }
 export function useRoom(code: string, opts: { display?: boolean; operatorToken?: string | null } = {}) {
   const [view, setView] = useState<RoomView | null>(null);
   const [role, setRole] = useState<Role | null>(null);
@@ -80,7 +81,8 @@ export function useRoom(code: string, opts: { display?: boolean; operatorToken?:
         const m = JSON.parse(e.data) as ServerMsg;
         if (m.t === 'welcome') { if (m.token) store.set(tokenKey, m.token); setRole(m.role); }
         else if (m.t === 'view') { setView(m.view); setOffset(m.view.serverNow - Date.now()); setError(null); }
-        else if (m.t === 'ack') { const p = pending.current.get(m.requestId); if (p) { pending.current.delete(m.requestId); p.resolve({ ok: m.ok, reason: m.reason }); } }
+        else if (m.t === 'ack') { const p = pending.current.get(m.requestId); if (p) { pending.current.delete(m.requestId); p.resolve({ ok: m.ok, reason: m.reason, fill: m.fill }); } }
+        else if (m.t === 'tick') setView(v => applyTick(v, m));
         else if (m.t === 'error') setError(m.reason);
       };
       ws.onclose = () => {
@@ -112,9 +114,9 @@ export function useRoom(code: string, opts: { display?: boolean; operatorToken?:
   const request = useCallback((msg: Extract<ClientMsg, { requestId: string }>) => new Promise<OrderOutcome>(resolve => {
     pending.current.set(msg.requestId, { msg, resolve });
     send(msg);
-    setTimeout(() => { if (pending.current.delete(msg.requestId)) resolve({ ok: false, reason: '서버 응답이 늦습니다. 내 자산에서 예약을 확인해 주세요' }); }, 6000);
+    setTimeout(() => { if (pending.current.delete(msg.requestId)) resolve({ ok: false, reason: '서버 응답이 늦습니다. 내 자산에서 체결 내역을 확인해 주세요' }); }, 6000);
   }), [send]);
-  const placeOrder = useCallback((code: StockCode, side: Side, qty: number) => request({ t: 'order', requestId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, code, side, qty }), [request]);
+  const placeOrder = useCallback((code: StockCode, side: Side, qty: number, kind: OrderKind = 'market', limit?: number) => request({ t: 'order', requestId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, code, side, qty, kind, limit }), [request]);
   const cancelOrder = useCallback((code: StockCode) => request({ t: 'cancel', requestId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, code }), [request]);
   return { view, role, online, error, offset, send, placeOrder, cancelOrder };
 }

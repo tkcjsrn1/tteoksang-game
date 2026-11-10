@@ -1,6 +1,7 @@
 /* 학술제 대형 화면. 최신 뉴스, 종목 등락, 남은 시간, 상위 5명만 보여 줍니다. 개인 주문과 자산은 나오지 않습니다. */
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import { intradayBp } from './live';
 import { joinNote, store, useJoinUrl, useRoom, useSecondsLeft } from './net';
 import { arrow, dir, Disclaimer, pct, pctBp } from './ui';
 
@@ -39,7 +40,7 @@ export function Display({ code }: { code: string }) {
           <h2>{c.card.headline}</h2>
           {c.result ? <><p className="d-actual">{c.result.actual}</p><p>{c.result.gap}</p></> : <><p>{c.card.expectation}</p><p className="hint">남은 변수: {c.card.remaining}</p></>}
         </article>)}</section>
-        <section className="d-stocks">{view.stocks.map(s => <div key={s.code} className="d-stock"><span>{s.name}</span><b className="num">{s.price.toLocaleString('ko-KR')}</b><span className={`num ${s.lastChangeBp === null ? 'flat' : dir(s.lastChangeBp)}`}>{s.lastChangeBp === null ? '—' : `${arrow(s.lastChangeBp)} ${pctBp(s.lastChangeBp)}`}</span></div>)}</section>
+        <section className="d-stocks">{view.stocks.map(s => <div key={s.code} className="d-stock"><span>{s.name}</span><b className="num">{s.price.toLocaleString('ko-KR')}</b>{(() => { const ch = view.phase === 'trade' && s.ticks ? intradayBp(s) : s.lastChangeBp; return <span className={`num ${ch === null ? 'flat' : dir(ch)}`}>{ch === null ? '—' : `${arrow(ch)} ${pctBp(ch)}`}</span>; })()}</div>)}</section>
         <section className="d-rank"><h2>상위 5명</h2><ol>{top.map(l => <li key={l.playerId}><b className="num">{l.rank}</b><span>{l.label}</span><span className={`num ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span></li>)}</ol></section>
       </div>
       {view.status === 'finished' && isOp && <div className="final-actions">{view.nextRoomCode ? <a className="cta" href={`#/display/${view.nextRoomCode}`} onClick={() => store.set(`operator:${view.nextRoomCode}`, view.operatorToken ?? '')}>다음 판 대형 화면 열기</a> : <button className="cta" onClick={() => send({ t: 'rematch' })}>같은 멤버로 한 판 더</button>}</div>}

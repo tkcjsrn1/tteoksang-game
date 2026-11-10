@@ -457,3 +457,15 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .lesson-no { background: var(--led); }
 .lesson-row .row-main b, .lesson-row .row-main small { white-space: normal; overflow: visible; text-overflow: clip; }
 .lesson-row .row-price small { color: var(--led); font-weight: 700; }
+/* 장중 거래 */
+.live-dot { display: inline-flex; align-items: center; gap: 6px; }
+.live-dot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--up); animation: live-blink 1.2s ease-in-out infinite; }
+@keyframes live-blink { 50% { opacity: .25; } }
+.tick-flash { animation: tick-flash .6s ease-out; border-radius: 4px; }
+@keyframes tick-flash { from { background: var(--led-soft); } to { background: transparent; } }
+.seg.kind { margin-top: 2px; }
+.seg.kind button { font-size: 13px; }
+.order .booked { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 12px; background: var(--panel-3); }
+.order .booked p { margin: 0; font-size: 13px; }
+.live-chart { margin-bottom: 6px; }
+@media (prefers-reduced-motion: reduce) { .live-dot::before, .tick-flash { animation: none; } }

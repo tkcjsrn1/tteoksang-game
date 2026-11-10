@@ -140,3 +140,11 @@ export function useReplay(ms = 2400): { t: number; replay: () => void } {
   }, [run, ms]);
   return { t, replay: () => setRun(r => r + 1) };
 }
+
+/** 실제 시세 목록을 진행률 t로 재생합니다. 지나온 최고·최저가도 함께 돌려줍니다. */
+export function replayTicks(ticks: number[], t: number): { price: number; high: number; low: number } {
+  const tt = Math.min(1, Math.max(0, t));
+  const i = Math.min(ticks.length - 1, Math.floor(tt * (ticks.length - 1) + 1e-9));
+  const seen = ticks.slice(0, i + 1);
+  return { price: ticks[i], high: Math.max(...seen), low: Math.min(...seen) };
+}
