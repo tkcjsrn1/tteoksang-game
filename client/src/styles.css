@@ -496,3 +496,7 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .company { border-radius: 12px; background: var(--panel-3); padding: 10px 12px; }
 .company summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .company .kv { margin-top: 8px; }
+.stop-grid { display: grid; gap: 8px; margin-top: 8px; }
+.stop-grid label { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 8px; font-size: 14px; }
+.stop-grid input { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; }
+.stops .btn-row { margin-top: 8px; }

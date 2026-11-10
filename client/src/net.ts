@@ -117,8 +117,9 @@ export function useRoom(code: string, opts: { display?: boolean; operatorToken?:
     setTimeout(() => { if (pending.current.delete(msg.requestId)) resolve({ ok: false, reason: '서버 응답이 늦습니다. 내 자산에서 체결 내역을 확인해 주세요' }); }, 6000);
   }), [send]);
   const placeOrder = useCallback((code: StockCode, side: Side, qty: number, kind: OrderKind = 'market', limit?: number) => request({ t: 'order', requestId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, code, side, qty, kind, limit }), [request]);
+  const setStop = useCallback((code: StockCode, stop: number | null, take: number | null) => request({ t: 'stop', requestId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, code, stop, take }), [request]);
   const cancelOrder = useCallback((code: StockCode) => request({ t: 'cancel', requestId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, code }), [request]);
-  return { view, role, online, error, offset, send, placeOrder, cancelOrder };
+  return { view, role, online, error, offset, send, placeOrder, cancelOrder, setStop };
 }
 export function useSecondsLeft(endsAt: number | null | undefined, offset: number) {
   const [, tick] = useState(0);

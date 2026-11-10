@@ -101,6 +101,17 @@ await step('시장가 매수: 바로 체결', async () => {
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
 });
 
+await step('손절·익절 걸고 해제', async () => {
+  const box = page.locator('details.stops');
+  await box.waitFor({ timeout: 5_000 });
+  if (!(await box.getAttribute('open') !== null)) await box.locator('summary').click();
+  await box.getByRole('button', { name: '평균 −10%' }).click();
+  await box.getByRole('button', { name: '걸기' }).click();
+  await page.getByText('손절·익절을 걸었어요').first().waitFor({ timeout: 5_000 });
+  await box.getByRole('button', { name: '해제' }).click();
+  await page.getByText('손절·익절을 해제했어요').first().waitFor({ timeout: 5_000 });
+});
+
 await step('지정가 매도 예약과 취소', async () => {
   await page.getByRole('button', { name: '매도', exact: true }).click();
   await page.getByRole('button', { name: '지정가 · 예약' }).click();

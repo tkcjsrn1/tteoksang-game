@@ -22,7 +22,7 @@ export function Game({ code }: { code: string }) {
   if (!view) return <main className="center">{error ? <><p className="error">{error}</p><button className="cta" onClick={() => navigate('/')}>처음으로</button></> : <p>방에 들어가는 중입니다</p>}<Disclaimer /></main>;
   if (view.status === 'lobby') return <Lobby view={view} send={r.send} error={error} />;
   if (view.status === 'finished') return <Finished view={view} send={r.send} />;
-  return <Playing view={view} offset={r.offset} online={online} send={r.send} placeOrder={r.placeOrder} cancelOrder={r.cancelOrder} />;
+  return <Playing view={view} offset={r.offset} online={online} send={r.send} placeOrder={r.placeOrder} cancelOrder={r.cancelOrder} setStop={r.setStop} />;
 }
 
 function Lobby({ view, send, error }: { view: RoomView; send: (m: never) => void; error: string | null }) {
@@ -66,8 +66,8 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: never) => void
 const PHASE_LABEL: Record<string, string> = { news: '뉴스 확인', trade: '장중 거래', settling: '결과 집계 중', recap: '라운드 결과' };
 const CLOCK_LABEL: Record<string, string> = { news: '장 시작까지', trade: '장 마감', settling: '', recap: '다음 라운드' };
 
-interface PlayProps { view: RoomView; offset: number; online: boolean; send: (m: never) => void; placeOrder: (c: StockCode, s: Side, q: number, kind?: OrderKind, limit?: number) => Promise<OrderOutcome>; cancelOrder: (c: StockCode) => Promise<OrderOutcome> }
-function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayProps) {
+interface PlayProps { view: RoomView; offset: number; online: boolean; send: (m: never) => void; placeOrder: (c: StockCode, s: Side, q: number, kind?: OrderKind, limit?: number) => Promise<OrderOutcome>; cancelOrder: (c: StockCode) => Promise<OrderOutcome>; setStop: (c: StockCode, stop: number | null, take: number | null) => Promise<OrderOutcome> }
+function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop }: PlayProps) {
   const [tab, setTab] = useState<Tab>('market');
   const [detail, setDetail] = useState<StockCode | null>(null);
   const [help, setHelp] = useState(false);
@@ -93,6 +93,16 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
     if (hit) { const t = setTimeout(() => play('stamp'), 700); return () => clearTimeout(t); }
   }, [revealKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [soundOn, setSoundOn] = useSoundSetting();
+  /* 손절·익절이 발동하면 알려 줍니다 */
+  const triggered = view.portfolio?.fillLog.filter(f => f.trigger) ?? [];
+  const lastTrig = triggered[triggered.length - 1];
+  const trigKey = `${triggered.length}`;
+  useEffect(() => {
+    if (!lastTrig || triggered.length === 0) return;
+    const name = view.stocks.find(s => s.code === lastTrig.code)?.name ?? '';
+    toast.show(`${lastTrig.trigger === 'stop' ? '손절' : '익절'} 자동 매도 · ${name} ${lastTrig.qty.toLocaleString('ko-KR')}주 × ${won(lastTrig.price)}`);
+    play('book');
+  }, [trigKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const stock = detail ? view.stocks.find(s => s.code === detail)! : null;
   return (
     <div className="game">
@@ -136,7 +146,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
         {(['market', 'assets', 'news'] as Tab[]).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{TAB_ICON[t]}{t === 'market' ? '시장' : t === 'assets' ? '내 자산' : '뉴스'}</button>)}
       </nav>
       <div className="foot"><Disclaimer /></div>
-      {stock && <StockSheet stock={stock} view={view} left={left} coach={coach} onClose={() => setDetail(null)} place={placeOrder} cancel={cancelOrder} toast={toast.show} />}
+      {stock && <StockSheet stock={stock} view={view} left={left} coach={coach} onClose={() => setDetail(null)} place={placeOrder} cancel={cancelOrder} setStop={setStop} toast={toast.show} />}
       {help && <HelpSheet phase={view.phase} onClose={() => setHelp(false)} onReplayTutorial={view.mode === 'solo' ? () => { store.del('tutorial'); setTutorialOff(false); setHelp(false); } : null} />}
       {toast.node}
     </div>
@@ -331,7 +341,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
     </div>
   );
 }
-function StockSheet({ stock, view, left, coach, onClose, place, cancel, toast }: { stock: StockView; view: RoomView; left: number; coach: CoachStep | null; onClose: () => void; place: PlayProps['placeOrder']; cancel: PlayProps['cancelOrder']; toast: (m: string) => void }) {
+function StockSheet({ stock, view, left, coach, onClose, place, cancel, setStop, toast }: { stock: StockView; view: RoomView; left: number; coach: CoachStep | null; onClose: () => void; place: PlayProps['placeOrder']; cancel: PlayProps['cancelOrder']; setStop: PlayProps['setStop']; toast: (m: string) => void }) {
   const [point, setPoint] = useState<number | null>(stock.history.length ? stock.history[stock.history.length - 1].round : null);
   const related = view.news[view.news.length - 1]?.cards.filter(c => c.card.targets.includes(stock.code)) ?? [];
   const held = view.portfolio?.holdings.find(h => h.code === stock.code);
@@ -349,6 +359,7 @@ function StockSheet({ stock, view, left, coach, onClose, place, cancel, toast }:
       {pointData ? <BreakdownPanel b={pointData} /> : <p className="hint">주문 시간 동안 시세가 1초마다 움직이고, 장 마감 때 뉴스 결과가 공개되면 크게 움직여요. 첫 결과가 나오면 봉을 눌러 이유를 볼 수 있어요.</p>}
       {related.length > 0 && view.phase !== 'recap' && <p className="hint">관련 뉴스: {related.map(r => r.card.headline).join(', ')}</p>}
       {held && <p className="hint">보유 {held.qty.toLocaleString('ko-KR')}주 · <TermLink id="avg-cost">평균</TermLink> {won(held.avgCost)} · <TermLink id="unrealized-pnl">평가손익</TermLink> <span className={dir(held.pnl)}>{signedWon(held.pnl)}</span></p>}
+      {held && view.you.role === 'player' && view.status === 'playing' && <StopEditor key={`${held.stop}-${held.take}`} held={held} price={stock.price} setStop={setStop} toast={toast} />}
       {coach && (coach.no === 3 || coach.no === 4) && <Coach step={coach} />}
       {view.you.role === 'player' && <OrderPanel stock={stock} view={view} left={left} place={place} cancel={cancel} toast={toast} onDone={onClose} />}
     </Sheet>
@@ -451,6 +462,39 @@ function OrderPanel({ stock, view, left, place, cancel, toast }: { stock: StockV
   );
 }
 /** 호가창: 위(파랑)는 팔려는 주문, 아래(빨강)는 사려는 주문. 가격을 누르면 그 가격으로 지정가를 채웁니다. */
+/** 손절·익절 자동 주문 설정. 가격을 직접 넣거나 평균 단가 대비 ±5%·±10%를 고릅니다. */
+function StopEditor({ held, price, setStop, toast }: { held: NonNullable<RoomView['portfolio']>['holdings'][number]; price: number; setStop: PlayProps['setStop']; toast: (m: string) => void }) {
+  const [stop, setStopText] = useState(held.stop ? String(held.stop) : '');
+  const [take, setTakeText] = useState(held.take ? String(held.take) : '');
+  const [busy, setBusy] = useState(false);
+  const round10 = (v: number) => Math.round(v / 10) * 10;
+  const ns = stop ? Math.floor(Number(stop)) : null, nt = take ? Math.floor(Number(take)) : null;
+  const err = ns !== null && (ns >= price || ns % 10) ? '손절가는 지금 시세보다 낮게, 10원 단위로' : nt !== null && (nt <= price || nt % 10) ? '익절가는 지금 시세보다 높게, 10원 단위로' : '';
+  const save = async (s: number | null, t: number | null) => {
+    setBusy(true);
+    const r = await setStop(held.code, s, t);
+    setBusy(false);
+    toast(r.ok ? (s === null && t === null ? '손절·익절을 해제했어요' : '손절·익절을 걸었어요') : r.reason ?? '설정하지 못했습니다');
+  };
+  const on = held.stop || held.take;
+  return (
+    <details className="company stops" open={!!on}>
+      <summary>손절·익절 자동 주문{on ? ` · ${held.stop ? `손절 ${won(held.stop)}` : ''}${held.stop && held.take ? ' · ' : ''}${held.take ? `익절 ${won(held.take)}` : ''}` : ''}</summary>
+      <p className="hint">시세가 정한 값에 닿으면 가진 수량 전부를 그 순간 <TermLink id="market-order">시장가</TermLink>로 팔아요. 결과 공개로 값이 건너뛰면 정한 값보다 불리하게 팔릴 수 있어요.</p>
+      <div className="stop-grid">
+        <label><span><TermLink id="stop-loss">손절가</TermLink></span><input inputMode="numeric" value={stop} placeholder="없음" onChange={e => setStopText(e.target.value.replace(/\D/g, ''))} /></label>
+        <div className="pcts">{[5, 10].map(pc => <button key={pc} onClick={() => setStopText(String(round10(held.avgCost * (100 - pc) / 100)))}>평균 −{pc}%</button>)}</div>
+        <label><span><TermLink id="take-profit">익절가</TermLink></span><input inputMode="numeric" value={take} placeholder="없음" onChange={e => setTakeText(e.target.value.replace(/\D/g, ''))} /></label>
+        <div className="pcts">{[5, 10].map(pc => <button key={pc} onClick={() => setTakeText(String(round10(held.avgCost * (100 + pc) / 100)))}>평균 +{pc}%</button>)}</div>
+      </div>
+      {err && <p className="error">{err}</p>}
+      <div className="btn-row">
+        <button className="ghost" disabled={busy || !!err || (ns === null && nt === null)} onClick={() => save(ns, nt)}>걸기</button>
+        {on && <button className="ghost" disabled={busy} onClick={() => { setStopText(''); setTakeText(''); save(null, null); }}>해제</button>}
+      </div>
+    </details>
+  );
+}
 function OrderBook({ book, price, open, onPick }: { book: QuoteBook; price: number; open: number; onPick: (p: number) => void }) {
   const asks = book.asks.slice(0, BOOK_SHOW).reverse(), bids = book.bids.slice(0, BOOK_SHOW);
   const maxQ = Math.max(1, ...asks.map(a => a.qty), ...bids.map(b => b.qty));

@@ -2,14 +2,14 @@
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
 import { checkOrder, computeClose, feeOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
-import type { CardView, Contribution, EventImpact, FillInfo, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PredictionView, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
+import type { CardView, Contribution, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PredictionView, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
 import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
 import { buildReport } from './report';
 
 /** refPrice: 체결 순간의 장중 시세. kind: 시장가(바로 체결)·지정가(예약). k: 주문 시간 시작부터 지난 초 */
-export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; refPrice?: number; fee: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string; kind?: OrderKind; k?: number }
+export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; refPrice?: number; fee: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string; kind?: OrderKind; k?: number; trigger?: 'stop' | 'take' }
 /** 이번 라운드 장중 시세. paths[code][k]가 k초의 가격입니다. done이면 종료가가 정해진 뒤입니다. */
 export interface LiveState { round: number; startedAt: number; steps: number; k: number; breakAt: number | null; paths: Record<StockCode, number[]>; done: boolean }
 export interface Observation {
@@ -25,6 +25,8 @@ export interface Player {
   fills: Fill[]; fees: number; valueHist: number[]; rankHist: number[]; results: RoundResult[];
   cards: Record<number, 'A' | 'B'>; predictions: Record<number, { stageId: string; choice: 'A' | 'B'; confidence: number; correct: boolean | null }>;
   observations: Observation[];
+  /** 손절·익절 자동 주문. 예전 저장 데이터에는 없습니다 */
+  stops?: Partial<Record<StockCode, StopOrder>>;
 }
 export interface RoomState {
   code: string; mode: GameMode; seed: number; status: RoomStatus; hostId: string | null; operatorToken: string | null;
@@ -161,6 +163,7 @@ export class GameRoom {
         s.live.k++;
         out = out === 'none' ? 'tick' : out;
         this.matchLimits(now);
+        this.checkStops(now);
         /* 장중 속보: 주문 시간 중간에 두 번째 뉴스가 뜨고, 같은 순간 시세가 헤드라인 방향으로 튑니다. */
         if (s.live.breakAt !== null && s.live.k >= s.live.breakAt && !s.secondRevealed) {
           s.secondRevealed = true;
@@ -173,6 +176,7 @@ export class GameRoom {
     if (s.phase === 'news') {
       this.setPhase('trade', this.config.trade, now);
       this.startTrade(now);
+      this.checkStops(now);   // 밤사이(결과 공개로) 이미 손절가·익절가를 넘었으면 장 시작하자마자 팝니다
       this.runNpcs(now);
       return 'changed';
     }
@@ -303,7 +307,7 @@ export class GameRoom {
     return { ok: true, fill: this.executeFill(p, code, side, qty, chk.price, ref, requestId, 'market', now) };
   }
   /** 체결: 현금·보유 수량을 바로 바꾸고 체결 기록을 남깁니다. */
-  private executeFill(p: Player, code: StockCode, side: Side, qty: number, price: number, ref: number, requestId: string, kind: OrderKind, now: number): FillInfo {
+  private executeFill(p: Player, code: StockCode, side: Side, qty: number, price: number, ref: number, requestId: string, kind: OrderKind, now: number, trigger?: 'stop' | 'take'): FillInfo {
     const gross = price * qty, fee = feeOf(gross);
     let realized: Fill['realized'] = null;
     if (side === 'buy') {
@@ -316,13 +320,54 @@ export class GameRoom {
       realized = price > h.avgCost ? 'gain' : 'loss';
       p.cash += gross - fee;
       h.qty -= qty;
-      if (h.qty === 0) delete p.holdings[code];
+      if (h.qty === 0) { delete p.holdings[code]; if (p.stops) delete p.stops[code]; }
     }
     p.fees += fee;
-    p.fills.push({ round: this.s.round, code, side, qty, price, refPrice: ref, fee, gross, realized, requestId, kind, k: this.s.live?.k ?? 0 });
+    p.fills.push({ round: this.s.round, code, side, qty, price, refPrice: ref, fee, gross, realized, requestId, kind, k: this.s.live?.k ?? 0, ...(trigger ? { trigger } : {}) });
     this.touched.add(p.id);
     this.touch(now);
-    return { code, side, qty, price, fee, kind };
+    return { code, side, qty, price, fee, kind, ...(trigger ? { trigger } : {}) };
+  }
+  /** 손절·익절 설정. stop은 지금 시세보다 낮게, take는 높게, 10원 단위. 둘 다 null이면 지웁니다. 장중이 아니어도 설정할 수 있습니다. */
+  setStop(tokenValue: string, requestId: string, code: StockCode, stop: number | null, take: number | null, now: number): OrderResult {
+    const p = this.player(tokenValue);
+    if (!p) return { ok: false, reason: '참가자만 설정할 수 있습니다' };
+    const seen = p.requests[requestId];
+    if (seen) return { ok: seen.ok, reason: seen.reason, duplicate: true };
+    if (this.tooManyRequests(p)) return { ok: false, reason: '이번 라운드 요청이 너무 많습니다' };
+    let res: OrderResult = { ok: true };
+    const price = this.markPrice(code);
+    const valid = (v: number | null) => v === null || (Number.isSafeInteger(v) && v > 0 && v % 10 === 0);
+    if (this.s.status !== 'playing') res = { ok: false, reason: '게임 중에만 설정할 수 있습니다' };
+    else if (!stockOf(code) || !gameCodes(this.s.plan).includes(code)) res = { ok: false, reason: '없는 종목입니다' };
+    else if (!(p.holdings[code]?.qty)) res = { ok: false, reason: '가진 종목에만 걸 수 있습니다' };
+    else if (!valid(stop) || !valid(take)) res = { ok: false, reason: '가격은 10원 단위로 입력해 주세요' };
+    else if (stop !== null && stop >= price) res = { ok: false, reason: '손절가는 지금 시세보다 낮아야 합니다' };
+    else if (take !== null && take <= price) res = { ok: false, reason: '익절가는 지금 시세보다 높아야 합니다' };
+    else {
+      p.stops ??= {};
+      if (stop === null && take === null) delete p.stops[code];
+      else p.stops[code] = { stop, take, setAt: now };
+      this.touch(now);
+    }
+    p.requests[requestId] = { ok: res.ok, reason: res.reason, round: this.s.round };
+    return res;
+  }
+  /** 손절가·익절가에 닿은 종목은 가진 수량(매도 예약에 묶인 수량 제외) 전부를 그 순간 호가창으로 시장가 매도합니다. */
+  private checkStops(now: number) {
+    if (this.s.phase !== 'trade') return;
+    for (const p of this.s.players) for (const [code, st] of Object.entries(p.stops ?? {}) as [StockCode, StopOrder][]) {
+      const price = this.markPrice(code);
+      const trigger = st.stop !== null && price <= st.stop ? 'stop' : st.take !== null && price >= st.take ? 'take' : null;
+      if (!trigger) continue;
+      delete p.stops![code];
+      const locked = p.orders[code]?.side === 'sell' ? p.orders[code]!.qty : 0;
+      const qty = (p.holdings[code]?.qty ?? 0) - locked;
+      if (qty < 1) continue;
+      const fill = marketFill(this.book(code), 'sell', qty);
+      if (!fill) continue;   // 하한가라 사려는 주문이 없으면 팔지 못합니다(실제 시장과 같음)
+      this.executeFill(p, code, 'sell', qty, fill.price, price, `${trigger}-${this.s.round}-${this.s.live?.k ?? 0}`, 'market', now, trigger);
+    }
   }
   /** 걸어 둔 지정가 주문 중 시세가 닿은 것을 지정가에 체결합니다. */
   private matchLimits(now: number) {
@@ -551,9 +596,9 @@ export class GameRoom {
       stocks, news: this.newsView(), card: this.cardView(p), prediction: this.predictionView(p),
       portfolio: p ? {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
-        holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost) }; }),
+        holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),
         orders: Object.values(p.orders) as Order[],
-        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee }))
+        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, ...(f.trigger ? { trigger: f.trigger } : {}) }))
       } : null,
       lastResult: p && !inSettling ? p.results[p.results.length - 1] ?? null : null,
       report: p && this.s.status === 'finished' ? buildReport(this, p) : null,

@@ -49,7 +49,9 @@ export interface Order {
   gross: number; fee: number; reserve: number; requestId: string; placedAt: number;
 }
 /** 체결 한 건 */
-export interface FillInfo { code: StockCode; side: Side; qty: number; price: number; fee: number; kind: OrderKind }
+export interface FillInfo { code: StockCode; side: Side; qty: number; price: number; fee: number; kind: OrderKind; trigger?: 'stop' | 'take' }
+/** 손절·익절 자동 주문. 시세가 stop 이하로 내려가거나 take 이상으로 오르면 가진 수량 전부를 시장가로 팝니다. */
+export interface StopOrder { stop: number | null; take: number | null; setAt: number }
 export interface Holding { qty: number; avgCost: number; sinceRound: number }
 
 export interface NewsCard {
@@ -106,9 +108,9 @@ export interface FinalReport {
 }
 export interface Portfolio {
   cash: number; reserved: number; available: number; value: number; returnPct: number; fees: number;
-  holdings: { code: StockCode; name: string; qty: number; avgCost: number; price: number; pnl: number }[];
+  holdings: { code: StockCode; name: string; qty: number; avgCost: number; price: number; pnl: number; stop?: number | null; take?: number | null }[];
   orders: Order[];
-  fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number }[];
+  fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; trigger?: 'stop' | 'take' }[];
 }
 export interface RoomView {
   code: string; mode: GameMode; status: RoomStatus; phase: Phase | null;
@@ -133,6 +135,7 @@ export type ClientMsg =
   | { t: 'start' }
   | { t: 'order'; requestId: string; code: StockCode; side: Side; qty: number; kind?: OrderKind; limit?: number }
   | { t: 'cancel'; requestId: string; code: StockCode }
+  | { t: 'stop'; requestId: string; code: StockCode; stop: number | null; take: number | null }
   | { t: 'card'; choice: 'A' | 'B' }
   | { t: 'predict'; choice: 'A' | 'B'; confidence: number }
   | { t: 'rematch' }

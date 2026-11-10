@@ -225,6 +225,12 @@ export class Hub {
         if (res.ok && !res.duplicate) { this.dirty.add(room.s.code); this.sendView(c, now); }
         return;
       }
+      case 'stop': {
+        const res = room.setStop(c.token ?? '', String(m.requestId), m.code as StockCode, m.stop === null ? null : Number(m.stop), m.take === null ? null : Number(m.take), now);
+        this.send(c, { t: 'ack', requestId: m.requestId, ok: res.ok, reason: res.reason });
+        if (res.ok && !res.duplicate) { this.dirty.add(room.s.code); this.sendView(c, now); }
+        return;
+      }
       case 'card': if (room.answerCard(c.token ?? '', m.choice, now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
       case 'predict': if (room.predict(c.token ?? '', m.choice, Number(m.confidence), now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
       case 'rematch': {
