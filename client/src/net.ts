@@ -21,7 +21,7 @@ export const store = {
 export async function createRoom(mode: GameMode, settings?: RoomSettings) {
   const r = await fetch(`${BASE}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode, settings }) });
   if (!r.ok) throw new Error('방을 만들지 못했습니다');
-  return r.json() as Promise<{ code: string; operatorToken: string | null }>;
+  return r.json() as Promise<{ code: string }>;
 }
 export async function roomInfo(code: string) {
   const r = await fetch(`${BASE}/api/rooms/${code}`);
@@ -55,7 +55,7 @@ export const joinNote = (note: 'ok' | 'lan' | 'none') => note === 'lan'
   : note === 'none' ? '지금 주소(localhost)로는 다른 기기가 들어올 수 없어요. PC의 와이파이 주소나 배포된 주소로 열어 주세요.' : '';
 
 export interface OrderOutcome { ok: boolean; reason?: string; fill?: FillInfo | null }
-export function useRoom(code: string, opts: { display?: boolean; operatorToken?: string | null } = {}) {
+export function useRoom(code: string) {
   const [view, setView] = useState<RoomView | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [online, setOnline] = useState(false);
@@ -73,7 +73,7 @@ export function useRoom(code: string, opts: { display?: boolean; operatorToken?:
       wsRef.current = ws;
       ws.onopen = () => {
         retry = 0; setOnline(true);
-        ws.send(JSON.stringify({ t: 'hello', code, token: opts.display || opts.operatorToken ? null : store.get(tokenKey), display: opts.display, operatorToken: opts.operatorToken } satisfies ClientMsg));
+        ws.send(JSON.stringify({ t: 'hello', code, token: store.get(tokenKey) } satisfies ClientMsg));
         /* 응답을 못 받은 주문은 같은 요청 ID로 다시 보냅니다. 서버가 중복을 걸러 줍니다. */
         pending.current.forEach(p => ws.send(JSON.stringify(p.msg)));
       };
@@ -108,7 +108,7 @@ export function useRoom(code: string, opts: { display?: boolean; operatorToken?:
       window.removeEventListener('online', wake);
       wsRef.current?.close();
     };
-  }, [code, opts.display, opts.operatorToken]);
+  }, [code]);
 
   const send = useCallback((m: ClientMsg) => { if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(m)); }, []);
   const request = useCallback((msg: Extract<ClientMsg, { requestId: string }>) => new Promise<OrderOutcome>(resolve => {

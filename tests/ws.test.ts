@@ -46,7 +46,7 @@ async function until(f: () => boolean, ms = 5000) {
 }
 async function create(body: object) {
   const r = await fetch(`http://localhost:${port}/api/rooms`, { method: 'POST', body: JSON.stringify(body) });
-  return r.json() as Promise<{ code: string; operatorToken: string | null }>;
+  return r.json() as Promise<{ code: string }>;
 }
 /** 현재 단계가 끝날 때까지 시계를 넘기고 다음 단계가 보일 때까지 기다립니다. */
 async function advance(room: GameRoom, watchers: Client[]) {
@@ -260,29 +260,14 @@ test('재접속, 중복 요청, 관전, 방장 이탈', async () => {
   [a3, spec].forEach(c => c.close());
 });
 
-test('혼자 연습은 즉시 시작하고 학술제는 운영자만 시작한다', async () => {
+test('혼자 연습은 즉시 시작하고, 없어진 모드로는 방이 친구 대전으로 만들어진다', async () => {
   const solo = await create({ mode: 'solo' });
   const s = await (await new Client().connect()).hello(solo.code);
   await until(() => s.view!.status === 'playing');
   assert.equal(s.view!.leaderboard.length, 4);
   s.close();
-  const ac = await create({ mode: 'academic' });
-  assert.ok(ac.operatorToken);
-  const p = await (await new Client().connect()).hello(ac.code);
-  p.send({ t: 'start' });
-  await new Promise(r => setTimeout(r, 30));
-  assert.equal(hub.rooms.get(ac.code)!.s.status, 'lobby');
-  const screen = await new Client().connect();
-  screen.send({ t: 'hello', code: ac.code, display: true });
-  await until(() => screen.view?.you.role === 'display');
-  assert.equal(screen.view!.portfolio, null);
-  const op = await new Client().connect();
-  op.send({ t: 'hello', code: ac.code, operatorToken: ac.operatorToken });
-  await until(() => op.view?.you.role === 'operator');
-  op.send({ t: 'start' });
-  await until(() => p.view!.status === 'playing' && screen.view!.status === 'playing');
-  assert.equal(p.view!.totalRounds, 10);
-  [p, screen, op].forEach(c => c.close());
+  const old = await create({ mode: 'academic' });
+  assert.equal(hub.rooms.get(old.code)!.s.mode, 'friend');
 });
 test('없는 방과 정적 경로 방어', async () => {
   const c = await new Client().connect();

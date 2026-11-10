@@ -8,16 +8,30 @@ export const MARKET_MAX_BP = 50;
 export const STOCK_MAX_BP = 150;
 export const FEE_BP = 20;
 
-/* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 기본 라운드를 2분 넘게 둡니다(2026-11 결정). */
-export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; predictions: boolean; report: boolean; label: string }> = {
-  friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 2, predictions: false, report: false, label: '친구 대전' },
-  solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 2, predictions: false, report: false, label: '혼자 연습' },
-  academic: { rounds: 10, news: 20, trade: 90, recap: 25, maxPlayers: 60, minToStart: 1, arcs: 4, cards: 5, predictions: true,  report: true,  label: '학술제 대전' }
+/* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 한 라운드를 2분 넘게 둡니다(2026-11 결정). */
+export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; label: string }> = {
+  friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 2, label: '친구 대전' },
+  solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 2, label: '혼자 연습' }
 };
 
+/* 방을 만들 때 고를 수 있는 값. 고르지 않으면 MODES와 STOCKS_PER_GAME 기본값을 씁니다. */
 export const ROOM_OPTIONS: Record<keyof RoomSettings, readonly number[]> = {
-  stocks: [10, 20, 30], rounds: [3, 5, 10], trade: [45, 60, 90]
+  stocks: [10, 20, 30], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120]
 };
+/** 한 판에 나오는 종목 수 기본값 */
+export const STOCKS_PER_GAME = 10;
+/** 기기에 저장해 둔 설정 문자열을 읽습니다. 깨졌거나 고를 수 없는 값은 버립니다. */
+export function cleanSettings(saved: string | null | undefined): RoomSettings {
+  let raw: unknown = null;
+  try { raw = JSON.parse(saved ?? '{}'); } catch { return {}; }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: RoomSettings = {};
+  for (const [key, choices] of Object.entries(ROOM_OPTIONS)) {
+    const v = (raw as Record<string, unknown>)[key];
+    if (typeof v === 'number' && choices.includes(v)) out[key as keyof RoomSettings] = v;
+  }
+  return out;
+}
 
 /* 종목 30개 = 업종 6개 × 5종목. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
    같은 업종 종목은 대표 종목 뉴스에 linkBeta 비율만큼 함께 움직입니다(업종 동조화).

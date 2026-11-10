@@ -327,31 +327,6 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .compare-box .glow { box-shadow: inset 0 0 0 2px var(--led); }
 .left { text-align: left !important; }
 
-/* 대형 화면 */
-.display { max-width: 1400px; font-size: 20px; padding: 24px; gap: 16px; }
-.lobby-screen { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; min-height: 80vh; }
-.lobby-screen > .disclaimer { grid-column: 1 / -1; }
-.d-code { font-size: clamp(56px, 11vw, 120px); font-weight: 800; color: var(--fg); letter-spacing: .08em; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.d-count { font-size: 24px; margin-block: 8px 16px; }
-.d-qr { width: min(38vw, 420px); background: #fff; border-radius: 16px; padding: 10px; }
-.d-top { display: flex; gap: 24px; align-items: baseline; font-size: 26px; flex-wrap: wrap; }
-.d-top b { font-weight: 800; }
-.d-timer { font-size: 56px; margin-left: auto; line-height: 1; color: var(--led); }
-.d-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
-.d-news { grid-column: 1 / -1; background: var(--panel); border-radius: 16px; padding: 22px; display: grid; gap: 12px; }
-.d-news h2 { font-size: 30px; font-weight: 800; line-height: 1.3; }
-.d-actual { color: var(--led-2); font-size: 26px; font-weight: 700; }
-.d-stocks { display: grid; gap: 1px; background: var(--line); border-radius: 16px; overflow: hidden; }
-.d-stock { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(110px, auto); gap: 14px; background: var(--panel); padding: 12px 18px; align-items: center; text-align: right; }
-.d-stock > span:first-child { text-align: left; font-weight: 700; }
-.d-stock b { font-weight: 800; font-size: 26px; }
-.d-rank { background: var(--panel); border-radius: 16px; padding: 18px; }
-.d-rank h2 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
-.d-rank li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; padding-block: 8px; border-bottom: 1px solid var(--line); }
-@media (max-width: 720px) {
-  .d-grid, .lobby-screen { grid-template-columns: minmax(0, 1fr); }
-  .d-qr { width: min(80vw, 320px); justify-self: center; }
-}
 @media (prefers-reduced-motion: reduce) { .timer i { transition: none; } }
 
 /* 용어 사전 */
@@ -394,7 +369,7 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .sheet .coach { margin: 0; border-radius: 12px; padding: 12px 14px; }
 .coach-head { display: flex; align-items: center; gap: 8px; color: var(--led-2); }
 .coach-dots { display: inline-flex; gap: 3px; }
-.coach-dots i { width: 7px; height: 7px; border-radius: 50%; background: #C5DCFB; }
+.coach-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--led-soft); }
 .coach-dots i.on { background: var(--led); }
 .coach .link { justify-self: start; padding: 2px 0; font-size: 13px; }
 .row.hint-pulse { box-shadow: inset 3px 0 0 var(--led); animation: pulse 1.2s ease-in-out infinite; }
@@ -514,7 +489,7 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .qbook tr.ask .lvl b { color: var(--down); }
 .qbook tr.bid .lvl b { color: var(--up); }
 .qbook .lvl small { font-size: 11px; color: var(--muted); }
-.qbook tr.now td:nth-child(2) { outline: 2px solid var(--ink-2, #191F28); outline-offset: -2px; }
+.qbook tr.now td:nth-child(2) { outline: 2px solid var(--fg); outline-offset: -2px; }
 /* 떡상 지수 · 기업 정보 */
 .panel.index-strip { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
 .index-strip > div { display: grid; gap: 2px; min-width: 0; }
@@ -548,3 +523,33 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .journal-after { margin: 4px 0 0; font-size: 14px; }
 .journal-memo { margin-top: 4px; padding: 4px 0; text-align: left; font-size: 13px; overflow-wrap: anywhere; }
 .journal-note { width: 100%; box-sizing: border-box; margin-top: 6px; font: inherit; font-size: 14px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-3); color: inherit; resize: vertical; }
+
+/* 테마 전환 버튼 */
+.logo-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.theme-btn { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--panel-2); color: var(--fg-3); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+
+/* 기업 로고 */
+.avatar svg { display: block; }
+/* 설정(도움말 안) */
+.settings { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: var(--panel-3); }
+.settings input[role=switch] { width: 44px; height: 26px; appearance: none; -webkit-appearance: none; border-radius: 13px; background: var(--chev); position: relative; flex: none; cursor: pointer; transition: background .15s; }
+.settings input[role=switch]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.settings input[role=switch]:checked { background: var(--led); }
+.settings input[role=switch]:checked::after { transform: translateX(18px); }
+/* 순위 변화: 직전 순위 자리에서 지금 자리로 미끄러집니다 */
+.rank-moves { display: grid; margin-top: 6px; }
+.rank-moves li { display: grid; grid-template-columns: 18px minmax(0, 1fr) 34px auto; gap: 10px; align-items: center; height: 38px; padding-inline: 8px; border-radius: 8px; animation: rank-slide .7s cubic-bezier(.2, .9, .3, 1) .35s both; }
+.rank-moves li.me { background: var(--selected); }
+.rank-moves .r { font-weight: 800; color: var(--faint); }
+.rank-moves b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-moves .mv { font-size: 12px; font-weight: 700; text-align: right; }
+.rank-moves .ret { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+@keyframes rank-slide { from { transform: translateY(var(--from, 0)); } to { transform: none; } }
+/* 폭죽 */
+.confetti { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+.confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; opacity: 0; animation: confetti-fall 2s cubic-bezier(.3, .6, .6, 1) both; }
+@keyframes confetti-fall { 0% { transform: translateY(0) rotate(0); opacity: 1; } 85% { opacity: 1; } 100% { transform: translateY(105vh) rotate(calc(var(--rot, 180deg) + 540deg)); opacity: 0; } }
+/* 장중 그래프 십자선 */
+.probe { margin: 0; font-size: 13px; min-height: 20px; }
+.probe-area { touch-action: pan-y; cursor: crosshair; }
+@media (prefers-reduced-motion: reduce) { .confetti { display: none; } .rank-moves li { animation: none; } }

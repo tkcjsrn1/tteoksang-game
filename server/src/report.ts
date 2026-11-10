@@ -13,7 +13,6 @@ export function buildMetrics(p: Player): Metric[] {
   const rg = obs.reduce((a, o) => a + o.realizedGain, 0), rl = obs.reduce((a, o) => a + o.realizedLoss, 0);
   const pg = obs.reduce((a, o) => a + o.paperGain, 0), pl = obs.reduce((a, o) => a + o.paperLoss, 0);
   const buys = obs.flatMap(o => o.buys);
-  const preds = Object.values(p.predictions).filter(x => x.correct !== null);
   const out: Metric[] = [];
 
   const disp = { key: 'disposition', title: '처분 효과', formula: 'PGR − PLR. PGR = 실현이익 / (실현이익 + 평가이익), PLR = 실현손실 / (실현손실 + 평가손실)', minObservations: '이익 기회 2건 이상, 손실 기회 2건 이상' };
@@ -39,12 +38,6 @@ export function buildMetrics(p: Player): Metric[] {
     out.push({ ...over, available: true, value: `헤드라인 추종 ${pct(r)} · 적중 ${followed.length ? pct(hit) : '—'}`, text: r > .5 ? `이번 판에서는 매수 금액의 절반 이상을 좋아 보이는 헤드라인에 넣었어요. 그중 기대를 넘은 결과는 ${followed.length ? pct(hit) : '없음'}이었어요.` : '이번 판에서는 헤드라인과 다른 근거로 산 금액이 더 많았어요.' });
   } else out.push(missing(over));
 
-  const conf = { key: 'overconfidence', title: '과신', formula: '결과 공개 전 평균 확신도 − 실제 정답률', minObservations: '예측 5건 이상' };
-  if (preds.length >= 5) {
-    const c = preds.reduce((a, x) => a + x.confidence, 0) / preds.length / 100;
-    const h = preds.filter(x => x.correct).length / preds.length;
-    out.push({ ...conf, available: true, value: `확신도 ${pct(c)} · 정답률 ${pct(h)}`, text: c - h > .1 ? '이번 판에서는 실제 정답률보다 더 자신 있게 예측했어요.' : c - h < -.1 ? '이번 판에서는 실제 정답률보다 조심스럽게 예측했어요.' : '이번 판에서는 확신도와 정답률이 비슷했어요.' });
-  } else out.push(missing(conf));
   return out;
 }
 
@@ -55,5 +48,5 @@ export function buildReport(room: GameRoom, p: Player): FinalReport {
     const c = cardById.get(room.s.plan.rounds[Number(r) - 1].cardId!)!;
     return { title: c.title, choice: c.options.find(o => o.key === choice)!.label, concept: c.concept };
   });
-  return { rank: room.rankOf(p), value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees, majorTrades, metrics: room.config.report ? buildMetrics(p) : null, judgments };
+  return { rank: room.rankOf(p), value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees, majorTrades, metrics: buildMetrics(p), judgments };
 }

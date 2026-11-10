@@ -334,7 +334,7 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
   const secretTexts = ARCS.flatMap(x => x.stages.flatMap(s => s.outcomes.map(o => o.actual)));
   room.start(T0);
   const check = (label: string, allowed: Set<string>) => {
-    for (const [tok, role] of [[a, 'player'], [null, 'display'], ['x', 'spectator']] as const) {
+    for (const [tok, role] of [[a, 'player'], [null, 'spectator'], ['x', 'spectator']] as const) {
       const js = JSON.stringify(room.view(tok, role, T0));
       assert.equal(js.includes('seed'), false, label);
       assert.equal(js.includes('outcomeId'), false, label);
@@ -368,13 +368,13 @@ test('상대 주문과 개인 리포트는 비공개다', () => {
   assert.equal(ownFill?.price, room.player(a)!.fills.find(f => f.qty === 77)?.price);
   const vb = room.view(b, 'player', end);
   assert.equal(JSON.stringify(vb).includes('"qty":77'), false);
-  assert.equal(room.view(null, 'display', end).report, null);
-  assert.equal(room.view(null, 'display', end).portfolio, null);
+  assert.equal(room.view(null, 'spectator', end).report, null);
+  assert.equal(room.view(null, 'spectator', end).portfolio, null);
   /* 거래량·매수·매도 수량은 정산이 끝나 결과가 공개된 뒤에만, 종목별 합계로만 나갑니다 */
   const close = room.s.phaseEndsAt!;
   room.tick(close);
   assert.equal(room.s.phase, 'settling');
-  for (const role of ['player', 'display'] as const) {
+  for (const role of ['player', 'spectator'] as const) {
     const v = room.view(role === 'player' ? b : null, role, close);
     assert.ok(v.stocks.every(s => s.history.length === 0), '정산 중 거래량 비공개');
     assert.equal(JSON.stringify(v).includes('"volume"'), false);
@@ -385,30 +385,31 @@ test('상대 주문과 개인 리포트는 비공개다', () => {
   /* 개인 체결 내역(fills)은 다른 참가자에게 나가지 않습니다 */
   assert.equal(after.portfolio!.fillLog.some(f => f.qty === 77), false);
 });
-test('학술제 리포트: 기록이 부족하면 안내 문구, 충분하면 계산', () => {
-  const room = GameRoom.create({ code: '654321', mode: 'academic', now: T0, seed: 3 });
+test('행동 리포트: 기록이 부족하면 안내 문구, 충분하면 계산', () => {
+  const room = GameRoom.create({ code: '654321', mode: 'friend', now: T0, seed: 3 });
   const a = room.join(null, T0).token, idle = room.join(null, T0).token;
-  assert.equal(room.canStart(a), false);
-  assert.equal(room.canStart(null, room.s.operatorToken), true);
+  assert.equal(room.canStart(idle), false, '방장만 시작');
+  assert.equal(room.canStart(a), true);
   room.start(T0);
   const codes: StockCode[] = ['G01', 'G02', 'G03'];
   let i = 0;
   while (room.s.status === 'playing') {
     if (room.s.phase === 'trade') {
       const t = room.s.phaseEndsAt! - 1;
-      assert.equal(room.predict(a, 'A', 70, t), true);
       room.placeOrder(a, `b${i}`, codes[i % 3], 'buy', 20, t);
+      room.placeOrder(a, `c${i}`, codes[(i + 2) % 3], 'buy', 10, t);
       const held = room.player(a)!.holdings[codes[(i + 1) % 3]];
       if (held) room.placeOrder(a, `s${i}`, codes[(i + 1) % 3], 'sell', held.qty, t);
       i++;
     }
     next(room);
   }
-  assert.equal(room.s.settled.length, 10);
-  const full = room.view(a, 'player', 0).report!.metrics!;
-  assert.equal(full.find(m => m.key === 'overconfidence')!.available, true);
+  assert.equal(room.s.settled.length, 5);
+  const full = room.view(a, 'player', 0).report!.metrics;
+  assert.deepEqual(full.map(m => m.key), ['disposition', 'herding', 'overreaction']);
   assert.equal(full.find(m => m.key === 'herding')!.available, true);
-  const none = room.view(idle, 'player', 0).report!.metrics!;
+  assert.equal(full.find(m => m.key === 'overreaction')!.available, true);
+  const none = room.view(idle, 'player', 0).report!.metrics;
   assert.ok(none.every(m => m.value === '이번 게임에서는 판단할 기록이 부족했어요'));
   assert.ok(full.every(m => m.formula && m.minObservations));
 });

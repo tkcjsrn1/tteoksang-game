@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { DISCLAIMER, formatPct, GROUPS, STOCKS } from '../../shared/rules';
 import type { PriceBreakdown, Side, StockView } from '../../shared/types';
 import { Rich, TermLink } from './glossary/GlossaryContext';
 import { replayAt, replayPath, replayTicks, useReplay } from './fx';
-import { bucketCandles, movingAverage } from './live';
+import { bucketCandles, movingAverage, probeIndex } from './live';
+import { logoVariant } from './sectors';
+import { useTheme } from './theme';
 
 export const won = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 export const signedWon = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n)).toLocaleString('ko-KR')}원`;
@@ -27,13 +29,63 @@ export function Logo() {
     </span>떡상개론</p>
   );
 }
+/** 밝은·어두운 화면 전환 버튼 */
+export function ThemeToggle() {
+  const [theme, setTheme] = useTheme();
+  const dark = theme === 'dark';
+  return (
+    <button className="theme-btn" aria-label={dark ? '밝은 화면으로 바꾸기' : '어두운 화면으로 바꾸기'} aria-pressed={dark} onClick={() => setTheme(dark ? 'light' : 'dark')}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {dark ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></> : <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />}
+      </svg>
+    </button>
+  );
+}
 export function Chevron() {
   return <svg className="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>;
 }
 /** 종목 머리글자 동그라미. 같은 업종은 같은 색입니다. */
 const avatarColor = (code: string) => { const s = STOCKS.find(x => x.code === code); return s ? GROUPS[s.group].color : '#8B95A1'; };
+/* 가상 기업 로고: 업종마다 기본 그림(번개·불꽃·눈꽃·잎·음표·물방울)이 있고, 같은 업종 안에서는 테두리 모양으로 구분합니다. */
+const GLYPH: Record<string, string> = {
+  power: 'M13 3L5 13h5l-1 8 8-11h-5z',
+  storage: 'M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z',
+  cold: 'M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5',
+  bio: 'M5 19C5 10 10 5 19 5c0 9-5 14-14 14zM5 19l8-8',
+  stage: 'M9 18V6l10-2v12M9 18a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM19 16a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z',
+  water: 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z'
+};
 export function StockAvatar({ code, name }: { code: string; name: string }) {
-  return <span className="avatar" style={{ background: avatarColor(code) }} aria-hidden="true">{name[0]}</span>;
+  const s = STOCKS.find(x => x.code === code);
+  if (!s) return <span className="avatar" style={{ background: avatarColor(code) }} aria-hidden="true">{name[0]}</span>;
+  const v = logoVariant(code), stroke = s.group === 'cold' || s.group === 'bio' || s.group === 'stage';
+  return (
+    <span className={`avatar logo-${v}`} style={{ background: avatarColor(code) }} aria-hidden="true">
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        {v === 1 && <circle cx="18" cy="18" r="14.5" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="1.5" />}
+        {v === 2 && <rect x="5" y="5" width="26" height="26" rx="7" fill="#fff" fillOpacity=".2" />}
+        {v === 3 && <path d="M4 26h28" stroke="#fff" strokeOpacity=".7" strokeWidth="2" strokeLinecap="round" />}
+        {v === 4 && <path d="M18 3.5 31 11v14L18 32.5 5 25V11z" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="1.5" strokeLinejoin="round" />}
+        <g transform={v === 3 ? 'translate(7.5 5) scale(.88)' : 'translate(6 6)'}>
+          <path d={GLYPH[s.group]} fill={stroke ? 'none' : '#fff'} stroke="#fff" strokeWidth={stroke ? 2 : 0.6} strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+      </svg>
+    </span>
+  );
+}
+
+/** 폭죽: 색종이 조각이 위에서 떨어집니다. 움직임 줄이기 설정이면 그리지 않습니다(CSS). */
+const CONFETTI_COLORS = ['var(--up)', 'var(--gold)', 'var(--led)', 'var(--good)', 'var(--down)'];
+export function Confetti({ count = 36 }: { count?: number }) {
+  return (
+    <div className="confetti" aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => {
+        /* 조각마다 자리·늦음·기울기를 번호로 정해 매번 같은 모양이 나오게 합니다 */
+        const left = (i * 37) % 100, delay = (i * 53) % 600, dur = 1600 + (i * 71) % 900, rot = (i * 47) % 360;
+        return <i key={i} style={{ left: `${left}%`, background: CONFETTI_COLORS[i % CONFETTI_COLORS.length], animationDelay: `${delay}ms`, animationDuration: `${dur}ms`, '--rot': `${rot}deg` } as CSSProperties} />;
+      })}
+    </div>
+  );
 }
 
 export const bpText = (bp: number) => `${bp > 0 ? '+' : bp < 0 ? '−' : ''}${Math.abs(bp).toLocaleString('ko-KR')}bp`;
@@ -198,13 +250,26 @@ export function LiveChart({ stock, steps, closing, breaking, fills }: {
   const maPts = ma.map((v, k) => [k, v] as [number, number | null]).filter((p): p is [number, number] => p[1] !== null);
   const candles = mode === 'candle' ? bucketCandles(ticks, CANDLE_SECONDS) : [];
   const cw = Math.max(2, (x(CANDLE_SECONDS) - x(0)) * 0.6);
+  /* 십자선: 그래프를 누르거나 끌면 그 시각의 가격을 보여 줍니다 */
+  const [probe, setProbe] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const onProbe = (e: PointerEvent<SVGSVGElement>) => {
+    const box = svgRef.current?.getBoundingClientRect();
+    if (!box || box.width === 0) return;
+    setProbe(probeIndex((e.clientX - box.left) / box.width * W, L, x(1) - x(0), ticks.length));
+  };
+  const pk = probe !== null ? Math.min(probe, ticks.length - 1) : null;
   return (
     <figure className="chart-fig live-chart">
       <div className="seg mini" role="group" aria-label="장중 그래프 모양">
         <button aria-pressed={mode === 'line'} onClick={() => pick('line')}>선(1초)</button>
         <button aria-pressed={mode === 'candle'} onClick={() => pick('candle')}>10초봉</button>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${stock.name} 이번 라운드 시세: 시가 ${ticks[0].toLocaleString('ko-KR')}원, 지금 ${last.toLocaleString('ko-KR')}원${end !== null ? `, 결과 공개 뒤 ${end.toLocaleString('ko-KR')}원` : ''}`}>
+      <p className="probe num" aria-live="off">{pk !== null
+        ? <>{pk}초 · <b>{ticks[pk].toLocaleString('ko-KR')}원</b> <span className={ticks[pk] > ticks[0] ? 'up' : ticks[pk] < ticks[0] ? 'down' : 'flat'}>{formatPct(Math.round((ticks[pk] - ticks[0]) * 10000 / ticks[0]), 2)}</span></>
+        : <span className="hint">그래프를 누르거나 끌면 그 시각의 가격이 나와요</span>}</p>
+      <svg ref={svgRef} className="probe-area" onPointerDown={onProbe} onPointerMove={e => { if (e.buttons || e.pointerType === 'touch') onProbe(e); }} onPointerLeave={() => setProbe(null)} onPointerUp={e => { if (e.pointerType !== 'mouse') setTimeout(() => setProbe(null), 1500); }}
+        viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${stock.name} 이번 라운드 시세: 시가 ${ticks[0].toLocaleString('ko-KR')}원, 지금 ${last.toLocaleString('ko-KR')}원${end !== null ? `, 결과 공개 뒤 ${end.toLocaleString('ko-KR')}원` : ''}`}>
         <line x1={L} x2={W - R} y1={y(ticks[0])} y2={y(ticks[0])} stroke="var(--chev)" strokeDasharray="3 3" strokeWidth=".8" />
         <text x={W - R + 6} y={y(ticks[0]) + 4} fontSize="11" fill="var(--muted)">시가 {ticks[0].toLocaleString('ko-KR')}</text>
         {mode === 'line' && <path d={path(ticks.map((v, k) => [k, v]))} fill="none" stroke={col} strokeWidth="1.8" strokeLinejoin="round" />}
@@ -234,6 +299,11 @@ export function LiveChart({ stock, steps, closing, breaking, fills }: {
           <text x={W - R + 6} y={y(end) + 4} fontSize="12" fontWeight="700" fill={end >= last ? 'var(--up)' : 'var(--down)'}>{end.toLocaleString('ko-KR')}</text>
         </>}
         {end === null && Math.abs(y(last) - y(ticks[0])) > 13 && <text x={W - R + 6} y={y(last) + 4} fontSize="12" fontWeight="700" fill={col}>{last.toLocaleString('ko-KR')}</text>}
+        {pk !== null && <g pointerEvents="none">
+          <line x1={x(pk)} x2={x(pk)} y1={T - 4} y2={H - B} stroke="var(--fg-3)" strokeWidth=".8" strokeDasharray="2 2" />
+          <line x1={L} x2={W - R} y1={y(ticks[pk])} y2={y(ticks[pk])} stroke="var(--fg-3)" strokeWidth=".8" strokeDasharray="2 2" />
+          <circle cx={x(pk)} cy={y(ticks[pk])} r="3.5" fill="var(--panel)" stroke="var(--fg)" strokeWidth="1.5" />
+        </g>}
         <text x={L} y={H - 4} fontSize="10" fill="var(--muted)">장 시작</text>
         <text x={x(n)} y={H - 4} fontSize="10" textAnchor="end" fill="var(--muted)">장 마감</text>
       </svg>

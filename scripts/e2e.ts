@@ -83,6 +83,8 @@ await step('홈과 첫 방문 안내', async () => {
 });
 
 await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
+  await page.getByText(/^게임 설정 ·/).click();
+  await page.getByLabel('종목 수').selectOption('30');
   await page.getByLabel('라운드 수').selectOption('3');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.getByLabel('1라운드, 전체 3라운드').waitFor();
@@ -128,6 +130,9 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.waitForTimeout(2_500);
   const after = await page.locator('.live-chart path').getAttribute('d');
   ok(before !== after, '2.5초 동안 시세 그래프가 그대로');
+  /* 그래프를 누르면 그 시각의 가격(십자선)이 나옵니다 */
+  await page.locator('.live-chart svg.probe-area').click({ position: { x: 20, y: 60 } });
+  ok(/\d초 · [\d,]+원/.test(await page.locator('.live-chart .probe').innerText()), '십자선 가격 표시 없음');
   /* 10초봉으로 바꾸면 봉(rect)이 그려지고, 다시 선으로 돌립니다 */
   await page.locator('.live-chart').getByRole('button', { name: '10초봉' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.live-chart svg rect').length >= 1, null, { timeout: 12_000 });
@@ -197,6 +202,8 @@ await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   ok(bars.length >= 3, '등락 막대가 없음');
   ok(bars.every(b => b.pos === 'absolute' && b.inside), '등락 막대가 칸 밖으로 나가거나 모양이 깨짐');
   ok(await page.locator('.replay svg rect').count() >= 1, '봉 재생 그림 없음');
+  ok(await page.locator('.rank-moves li').count() === 4, '순위 변화 4줄이 아님');
+  ok(await page.locator('.sectors .avatar svg, .board .avatar svg').count() >= 1, '기업 로고 없음');
   ok(await page.getByText(/1초 시세를 빠르게 다시/).count(), '실제 시세 재생 안내 없음');
   await page.locator('main .board button.row').filter({ hasText: tutorialStock }).first().click();
   const resultStock = page.getByRole('dialog', { name: tutorialStock });
