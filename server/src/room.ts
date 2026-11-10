@@ -1,7 +1,7 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, dividendRound, exDividendPrice, feeOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import { checkOrder, computeClose, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
@@ -9,7 +9,7 @@ import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan'
 import { buildReport } from './report';
 
 /** refPrice: 체결 순간의 장중 시세. kind: 시장가(바로 체결)·지정가(예약). k: 주문 시간 시작부터 지난 초 */
-export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; refPrice?: number; fee: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string; kind?: OrderKind; k?: number; trigger?: 'stop' | 'take' }
+export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; refPrice?: number; /** 수수료 + 거래세 */ fee: number; /** 그중 거래세(매도만) */ tax?: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string; kind?: OrderKind; k?: number; trigger?: 'stop' | 'take' }
 /** 이번 라운드 장중 시세. paths[code][k]가 k초의 가격입니다. done이면 종료가가 정해진 뒤입니다. */
 export interface LiveState { round: number; startedAt: number; steps: number; k: number; breakAt: number | null; paths: Record<StockCode, number[]>; done: boolean }
 export interface Observation {
@@ -337,7 +337,7 @@ export class GameRoom {
   }
   /** 체결: 현금·보유 수량을 바로 바꾸고 체결 기록을 남깁니다. */
   private executeFill(p: Player, code: StockCode, side: Side, qty: number, price: number, ref: number, requestId: string, kind: OrderKind, now: number, trigger?: 'stop' | 'take'): FillInfo {
-    const gross = price * qty, fee = feeOf(gross);
+    const gross = price * qty, fee = chargeOf(side, gross), tax = side === 'sell' ? taxOf(gross) : 0;
     let realized: Fill['realized'] = null;
     if (side === 'buy') {
       p.cash -= gross + fee;
@@ -352,10 +352,10 @@ export class GameRoom {
       if (h.qty === 0) { delete p.holdings[code]; if (p.stops) delete p.stops[code]; }
     }
     p.fees += fee;
-    p.fills.push({ round: this.s.round, code, side, qty, price, refPrice: ref, fee, gross, realized, requestId, kind, k: this.s.live?.k ?? 0, ...(trigger ? { trigger } : {}) });
+    p.fills.push({ round: this.s.round, code, side, qty, price, refPrice: ref, fee, ...(tax ? { tax } : {}), gross, realized, requestId, kind, k: this.s.live?.k ?? 0, ...(trigger ? { trigger } : {}) });
     this.touched.add(p.id);
     this.touch(now);
-    return { code, side, qty, price, fee, kind, ...(trigger ? { trigger } : {}) };
+    return { code, side, qty, price, fee, ...(tax ? { tax } : {}), kind, ...(trigger ? { trigger } : {}) };
   }
   /** 손절·익절 설정. stop은 지금 시세보다 낮게, take는 높게, 10원 단위. 둘 다 null이면 지웁니다. 장중이 아니어도 설정할 수 있습니다. */
   setStop(tokenValue: string, requestId: string, code: StockCode, stop: number | null, take: number | null, now: number): OrderResult {
@@ -618,7 +618,7 @@ export class GameRoom {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),
         orders: Object.values(p.orders) as Order[],
-        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, tick: f.k, kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
+        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, ...(f.tax ? { tax: f.tax } : {}), tick: f.k, kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
         dividendLog: p.dividends ?? []
       } : null,
       lastResult: p && !inSettling ? p.results[p.results.length - 1] ?? null : null,
