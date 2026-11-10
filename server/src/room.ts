@@ -2,7 +2,7 @@
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
 import { checkOrder, computeClose, dividendRound, exDividendPrice, feeOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
-import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
+import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
 import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
@@ -37,6 +37,7 @@ export interface RoomState {
   players: Player[]; spectators: string[];
   prices: Record<StockCode, number>; history: Record<StockCode, PriceBreakdown[]>;
   settled: number[]; nextRoomCode: string | null;
+  settings?: RoomSettings;
   /** 배당락을 적용한 라운드(중복 방지). 예전 저장 데이터에는 없습니다 */
   exDividendRound?: number | null;
   /** 장중 시세. 예전 저장 데이터에는 없습니다 */
@@ -63,23 +64,23 @@ export class GameRoom {
   touched = new Set<string>();
   constructor(state: RoomState) { this.s = state; }
 
-  static create(opts: { code: string; mode: GameMode; now: number; seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[] }): GameRoom {
+  static create(opts: { code: string; mode: GameMode; now: number; seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; settings?: RoomSettings }): GameRoom {
     const seed = opts.seed ?? randomInt(2 ** 31);
     const excluded = opts.excludedArcs ?? [];
-    const plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs);
+    const plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, opts.settings);
     const npcs = NPC_TYPES.map(t => newPlayer('npc', `NPC ${NPC_RULES[t].label}`, opts.now, t, npcId(t)));
     return new GameRoom({
       code: opts.code, mode: opts.mode, seed, status: 'lobby', hostId: null,
       createdAt: opts.now, updatedAt: opts.now, plan, excludedArcs: excluded, round: 0, phase: null, phaseEndsAt: null, phaseSeconds: 0, newsStartedAt: 0, secondRevealed: false,
       players: npcs, spectators: [], prices: initialPrices(gameCodes(plan)), history: Object.fromEntries(gameCodes(plan).map(c => [c, []])) as unknown as Record<StockCode, PriceBreakdown[]>,
-      settled: [], nextRoomCode: null, live: null
+      settled: [], nextRoomCode: null, live: null, settings: opts.settings
     });
   }
 
   /** 이번 판 종목 정의(업종 순서). */
   get stocks(): StockDef[] { return gameCodes(this.s.plan).map(stockOf); }
   get humans() { return this.s.players.filter(p => p.kind === 'human'); }
-  get config() { return MODES[this.s.mode]; }
+  get config() { return { ...MODES[this.s.mode], ...this.s.settings }; }
   player(tokenValue: string | null | undefined) { return tokenValue ? this.s.players.find(p => p.token === tokenValue) ?? null : null; }
 
   /** 재접속 토큰이 맞으면 복구, 시작 전이면 참가, 시작 후 처음 온 사람은 관전자입니다. */
@@ -539,10 +540,18 @@ export class GameRoom {
   }
 
   leaderboard(): LeaderRow[] {
-    return this.s.players.map(p => ({
-      playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected,
-      value: this.value(p), returnPct: (this.value(p) / START_CASH - 1) * 100, rank: this.rankOf(p), prevRank: p.rankHist[p.rankHist.length - 2] ?? this.rankOf(p)
-    })).sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
+    const sorted = this.s.players.map(p => ({ p, value: this.value(p) }))
+      .sort((a, b) => b.value - a.value || a.p.label.localeCompare(b.p.label));
+    let rank = 0;
+    return sorted.map(({ p, value }, i) => {
+      if (i === 0 || value !== sorted[i - 1].value) rank = i + 1;
+      return {
+        playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null,
+        npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected,
+        value, returnPct: (value / START_CASH - 1) * 100, rank,
+        prevRank: p.rankHist[p.rankHist.length - 2] ?? rank
+      };
+    });
   }
 
   private newsView(): RoundNews[] {
@@ -591,23 +600,25 @@ export class GameRoom {
   view(tokenValue: string | null, role: Role, now: number): RoomView {
     const p = role === 'player' ? this.player(tokenValue) : null, cfg = this.config;
     const inSettling = this.s.phase === 'settling';
+    const live = this.s.live;
+    const breakingAt = this.s.secondRevealed && live?.round === this.s.round ? live.breakAt ?? undefined : undefined;
     const stocks = this.stocksView();
     const priceOf = (c: StockCode) => stocks.find(x => x.code === c)!.price;
     const reserved = p ? Object.values(p.orders).reduce((a, o) => a + (o?.reserve ?? 0), 0) : 0;
     const value = p ? p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * priceOf(st.code), 0) : 0;
     return {
       code: this.s.code, mode: this.s.mode, status: this.s.status, phase: this.s.phase, round: this.s.round, totalRounds: cfg.rounds,
-      phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now,
+      phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade,
       you: { id: p?.id ?? null, label: p?.label ?? null, role, isHost: !!p && p.id === this.s.hostId },
       humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */
       leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
-      stocks, news: this.newsView(), card: this.cardView(p),
+      stocks, news: this.newsView(), breakingAt, card: this.cardView(p),
       portfolio: p ? {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),
         orders: Object.values(p.orders) as Order[],
-        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
+        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, tick: f.k, kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
         dividendLog: p.dividends ?? []
       } : null,
       lastResult: p && !inSettling ? p.results[p.results.length - 1] ?? null : null,

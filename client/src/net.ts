@@ -1,7 +1,7 @@
 /* 서버 연결. 끊기면 자동 재접속하고, 앱이 백그라운드에서 돌아오면 바로 다시 연결합니다.
    이름이나 연락처는 저장하지 않습니다. 재접속 토큰만 이 브라우저나 앱에 남습니다. */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMsg, FillInfo, GameMode, OrderKind, Role, RoomView, ServerMsg, Side, StockCode } from '../../shared/types';
+import type { ClientMsg, FillInfo, GameMode, OrderKind, Role, RoomSettings, RoomView, ServerMsg, Side, StockCode } from '../../shared/types';
 import { applyTick } from './live';
 
 /* 앱은 VITE_SERVER_URL로 서버 주소를 받습니다. 웹은 페이지와 같은 서버를 씁니다. */
@@ -18,8 +18,8 @@ export const store = {
   set(name: string, v: string) { try { localStorage.setItem(key(name), v); } catch { /* 저장 불가 환경에서는 재접속 복구만 빠집니다 */ } },
   del(name: string) { try { localStorage.removeItem(key(name)); } catch { /* 무시 */ } }
 };
-export async function createRoom(mode: GameMode) {
-  const r = await fetch(`${BASE}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode }) });
+export async function createRoom(mode: GameMode, settings?: RoomSettings) {
+  const r = await fetch(`${BASE}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode, settings }) });
   if (!r.ok) throw new Error('방을 만들지 못했습니다');
   return r.json() as Promise<{ code: string }>;
 }

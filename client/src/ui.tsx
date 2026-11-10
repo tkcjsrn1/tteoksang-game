@@ -1,6 +1,6 @@
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { DISCLAIMER, formatPct, GROUPS, STOCKS } from '../../shared/rules';
-import type { PriceBreakdown, StockView } from '../../shared/types';
+import type { PriceBreakdown, Side, StockView } from '../../shared/types';
 import { Rich, TermLink } from './glossary/GlossaryContext';
 import { replayAt, replayPath, replayTicks, useReplay } from './fx';
 import { bucketCandles, movingAverage, probeIndex } from './live';
@@ -11,6 +11,11 @@ export const won = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 export const signedWon = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n)).toLocaleString('ko-KR')}원`;
 export const pctBp = (bp: number) => formatPct(bp, 2);
 export const pct = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toFixed(2)}%`;
+export function formatCountdown(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 export const dir = (x: number) => (x > 0 ? 'up' : x < 0 ? 'down' : 'flat');
 export const arrow = (x: number) => (x > 0 ? '▲' : x < 0 ? '▼' : '·');
 
@@ -60,6 +65,7 @@ export function StockAvatar({ code, name }: { code: string; name: string }) {
         {v === 1 && <circle cx="18" cy="18" r="14.5" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="1.5" />}
         {v === 2 && <rect x="5" y="5" width="26" height="26" rx="7" fill="#fff" fillOpacity=".2" />}
         {v === 3 && <path d="M4 26h28" stroke="#fff" strokeOpacity=".7" strokeWidth="2" strokeLinecap="round" />}
+        {v === 4 && <path d="M18 3.5 31 11v14L18 32.5 5 25V11z" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="1.5" strokeLinejoin="round" />}
         <g transform={v === 3 ? 'translate(7.5 5) scale(.88)' : 'translate(6 6)'}>
           <path d={GLYPH[s.group]} fill={stroke ? 'none' : '#fff'} stroke="#fff" strokeWidth={stroke ? 2 : 0.6} strokeLinecap="round" strokeLinejoin="round" />
         </g>
@@ -212,14 +218,26 @@ export function CandleReplay({ b, name, ticks }: { b: PriceBreakdown; name: stri
 /** 이번 라운드 장중 시세 그래프. 선(1초)과 10초봉을 고를 수 있고, 20초 이동평균선을 함께 그립니다.
     결과 시간에는 마지막에 결과 공개로 움직인 몫을 점선으로 이어 줍니다. */
 const MA_SECONDS = 20, CANDLE_SECONDS = 10;
-export function LiveChart({ stock, steps, closing }: { stock: StockView; steps: number; closing: PriceBreakdown | null }) {
+export function LiveChart({ stock, steps, closing, breaking, fills }: {
+  stock: StockView; steps: number; closing: PriceBreakdown | null;
+  breaking: { tick: number; headline: string } | null;
+  fills: { tick: number; side: Side; qty: number; price: number }[];
+}) {
   const [mode, setMode] = useState<'line' | 'candle'>(() => { try { return (localStorage.getItem('tteoksang:livemode') as 'line' | 'candle') ?? 'line'; } catch { return 'line'; } });
   const pick = (m: 'line' | 'candle') => { setMode(m); try { localStorage.setItem('tteoksang:livemode', m); } catch { /* 저장 못 해도 됨 */ } };
   const ticks = stock.ticks ?? [];
+  const shownBreaking = breaking && breaking.tick < ticks.length ? breaking : null;
+  const shownFills = fills.filter(f => f.tick < ticks.length).map(f => ({
+    ...f, label: `${f.side === 'buy' ? '매수' : '매도'} ${f.qty.toLocaleString('ko-KR')}주 · ${won(f.price)}`
+  }));
+  const events = [
+    ...shownFills,
+    ...(shownBreaking ? [{ tick: shownBreaking.tick, label: `속보 ${shownBreaking.headline}` }] : [])
+  ].sort((a, b) => a.tick - b.tick);
   const W = 340, H = 130, L = 8, R = 70, T = 12, B = 18;
   const n = Math.max(steps, ticks.length - 1, 1);
   const end = closing && closing.basePrice === ticks[0] ? closing.closePrice : null;
-  const vals = [...ticks, ...(end !== null ? [end] : [])];
+  const vals = [...ticks, ...shownFills.map(f => f.price), ...(end !== null ? [end] : [])];
   const lo0 = Math.min(...vals), hi0 = Math.max(...vals);
   const pad = Math.max((hi0 - lo0) * .12, ticks[0] * .003);
   const lo = lo0 - pad, hi = hi0 + pad;
@@ -262,6 +280,19 @@ export function LiveChart({ stock, steps, closing }: { stock: StockView; steps: 
         })}
         {maPts.length > 1 && <path d={path(maPts)} fill="none" stroke="var(--gold)" strokeWidth="1.4" opacity=".9" />}
         {mode === 'line' && <circle cx={x(ticks.length - 1)} cy={y(last)} r="3" fill={col} />}
+        {shownBreaking && <g className="chart-breaking">
+          <title>{shownBreaking.headline}</title>
+          <line x1={x(shownBreaking.tick)} x2={x(shownBreaking.tick)} y1={T} y2={H - B} stroke="var(--gold)" strokeWidth="1.5" strokeDasharray="3 3" />
+          <circle cx={x(shownBreaking.tick)} cy={T} r="3" fill="var(--gold)" />
+        </g>}
+        {shownFills.map((f, i) => {
+          const px = x(f.tick), py = y(f.price), buy = f.side === 'buy', sign = buy ? -1 : 1;
+          return <g className="chart-fill" key={i}>
+            <title>{f.label}</title>
+            <polygon points={`${px},${py + sign * 5} ${px - 4},${py - sign * 3} ${px + 4},${py - sign * 3}`}
+              fill={buy ? 'var(--up)' : 'var(--down)'} stroke="var(--panel)" strokeWidth="1" />
+          </g>;
+        })}
         {end !== null && <>
           <line x1={x(ticks.length - 1)} x2={x(n + 4)} y1={y(last)} y2={y(end)} stroke={end >= last ? 'var(--up)' : 'var(--down)'} strokeWidth="1.8" strokeDasharray="4 3" />
           <circle cx={x(n + 4)} cy={y(end)} r="3.5" fill={end >= last ? 'var(--up)' : 'var(--down)'} />
@@ -276,7 +307,13 @@ export function LiveChart({ stock, steps, closing }: { stock: StockView; steps: 
         <text x={L} y={H - 4} fontSize="10" fill="var(--muted)">장 시작</text>
         <text x={x(n)} y={H - 4} fontSize="10" textAnchor="end" fill="var(--muted)">장 마감</text>
       </svg>
-      <figcaption className="chart-note">이번 라운드 시세 · <span className="legend ma" aria-hidden="true" /> {MA_SECONDS}초 <TermLink id="moving-average">이동평균선</TermLink>{end !== null ? ' · 점선은 장 마감 뒤 뉴스 결과 공개로 움직인 몫' : ''}</figcaption>
+      <figcaption className="chart-note">이번 라운드 시세 · <span className="legend ma" aria-hidden="true" /> {MA_SECONDS}초 <TermLink id="moving-average">이동평균선</TermLink>{end !== null ? ' · 장 마감 오른쪽 점선은 결과 공개 뒤 움직인 몫' : ''}
+        {shownBreaking && ' · 금색 세로선은 속보'}{shownFills.length > 0 && ' · ▲ 내 매수, ▼ 내 매도'}
+        {events.length > 0 && <details className="chart-events">
+          <summary>속보와 내 체결 {events.length}건</summary>
+          <ul>{events.map(({ tick, label }, i) => <li key={i}>{formatCountdown(tick)} · {label}</li>)}</ul>
+        </details>}
+      </figcaption>
     </figure>
   );
 }
