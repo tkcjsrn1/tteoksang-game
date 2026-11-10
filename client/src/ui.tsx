@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { DISCLAIMER, formatFlow, formatPct, GROUPS, INVESTOR_LABEL, INVESTORS, STOCKS } from '../../shared/rules';
+import { DISCLAIMER, formatPct, GROUPS, STOCKS } from '../../shared/rules';
 import type { PriceBreakdown, Side, StockView } from '../../shared/types';
 import { Rich, TermLink } from './glossary/GlossaryContext';
 import { replayAt, replayPath, replayTicks, useReplay } from './fx';
@@ -106,10 +106,6 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
         {b.preClose !== undefined && <><dt>장 마감 직전 시세</dt><dd className="num">{won(b.preClose)}</dd>
           <dt>결과 공개로 움직인 몫</dt><dd className={`num ${dir(b.closePrice - b.preClose)}`}>{signedWon(b.closePrice - b.preClose)} ({pctBp(Math.round((b.closePrice - b.preClose) * 10000 / b.preClose))})</dd></>}
         {b.volume !== undefined && <><dt><TermLink id="volume">거래량</TermLink></dt><dd className="num">{b.volume.toLocaleString('ko-KR')}주{b.volume > 0 ? ` (매수 ${(b.buyQty ?? 0).toLocaleString('ko-KR')} · 매도 ${(b.sellQty ?? 0).toLocaleString('ko-KR')})` : ''}</dd></>}
-        {b.flows && <><dt className="flows-dt"><TermLink id="net-flow">투자자별 순매수</TermLink></dt><dd className="flows">{INVESTORS.map(k => {
-          const v = b.flows![k];
-          return <span key={k} className={dir(v)}>{INVESTOR_LABEL[k]} {formatFlow(v)}</span>;
-        })}</dd></>}
         <dt>실제 <TermLink id="change-rate">등락률</TermLink></dt><dd className={`num ${dir(b.changeBp)}`}>{arrow(b.changeBp)} {pctBp(b.changeBp)}</dd>
       </dl>
       <h4>변동 근거</h4>

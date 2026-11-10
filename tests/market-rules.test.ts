@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
-import { INVESTORS, sumFlows, VI_BP, VI_SECONDS, viDirection } from '../shared/rules';
+import { VI_BP, VI_SECONDS, viDirection } from '../shared/rules';
 import { stageById } from '../server/src/content';
 import type { StockCode } from '../shared/types';
 
@@ -74,41 +74,6 @@ test('VI는 한 라운드에 종목마다 한 번만 걸린다', () => {
   assert.equal(room.haltLeft('G01'), 0);
   forceVi(room, 'G01', 2 + VI_SECONDS + 2, -1);
   assert.deepEqual(room.s.live!.halts!.G01, first, '두 번째는 걸리지 않음');
-});
-
-test('투자자별 순매수: 체결에서 바로 뽑고, 셋을 더하면 0', () => {
-  const f = sumFlows([
-    { investor: 'retail', side: 'buy', gross: 1_000_000 },
-    { investor: 'retail', side: 'sell', gross: 400_000 },
-    { investor: 'institution', side: 'buy', gross: 250_000 }
-  ]);
-  assert.equal(f.retail, 600_000, '사람 참가자가 산 금액 − 판 금액');
-  assert.equal(f.institution, 250_000, 'NPC');
-  assert.equal(f.foreign, -850_000, '호가창이 그만큼 받아 줌');
-  assert.equal(f.foreign + f.institution + f.retail, 0);
-  assert.deepEqual(sumFlows([]), { foreign: 0, institution: 0, retail: 0 }, '거래가 없으면 모두 0');
-});
-
-test('투자자별 순매수는 내가 실제로 산 금액과 일치한다', () => {
-  const { room, a, t } = trading(5);
-  const buy = room.placeOrder(a, 'f1', 'G01', 'buy', 40, t);
-  assert.equal(buy.ok, true);
-  const myWon = buy.fill!.price * buy.fill!.qty;
-  /* 정산 전에는 내려보내지 않습니다 */
-  assert.ok(room.view(a, 'player', t).stocks.every(s => (s.history[s.history.length - 1]?.flows) === undefined));
-  const end = room.s.phaseEndsAt!;
-  room.tick(end); room.beginRecap(end);
-  const stocks = room.view(a, 'player', end).stocks;
-  const g01 = stocks.find(s => s.code === 'G01')!.history.at(-1)!.flows!;
-  assert.equal(g01.retail, myWon, '내가 산 금액이 개인 순매수에 그대로 잡힘');
-  for (const s of stocks) {
-    const f = s.history.at(-1)!.flows!;
-    assert.equal(f.foreign + f.institution + f.retail, 0, s.code);
-    assert.ok(INVESTORS.every(k => Number.isSafeInteger(f[k])));
-  }
-  /* 아무도 거래하지 않은 종목은 모두 0 */
-  const quiet = stocks.find(s => (s.history.at(-1)!.volume ?? 0) === 0);
-  if (quiet) assert.deepEqual(quiet.history.at(-1)!.flows, { foreign: 0, institution: 0, retail: 0 });
 });
 
 test('발표 일정: 다음 라운드 종목만 알려 주고 헤드라인·결과는 담지 않는다', () => {

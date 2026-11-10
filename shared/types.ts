@@ -12,8 +12,6 @@ export type NpcType = 'chaser' | 'waiter' | 'diversifier';
 export interface EventImpact { stageId: string; label: string; bp: number; reason: string }
 
 /** 그래프 점 하나를 눌렀을 때 보여 주는 가격 변동 근거 */
-/** 그 라운드 투자자별 순매수(원). 셋을 더하면 0입니다. 정산 뒤에만 들어옵니다 */
-export interface NetFlows { foreign: number; institution: number; retail: number }
 export interface PriceBreakdown {
   round: number;
   basePrice: number;
@@ -41,8 +39,6 @@ export interface PriceBreakdown {
   preClose?: number;
   /** 이번 라운드에 체결된 수량(참가자 + NPC). 예전 저장 데이터에는 없습니다. */
   volume?: number;
-  /** 투자자별 순매수(원). 정산 뒤에만 */
-  flows?: NetFlows;
   buyQty?: number;
   sellQty?: number;
 }

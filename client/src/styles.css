@@ -493,13 +493,6 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .qbook .lvl small { font-size: 11px; color: var(--muted); }
 .qbook tr.now td:nth-child(2) { outline: 2px solid var(--fg); outline-offset: -2px; }
 /* 떡상 지수 · 기업 정보 */
-.panel.index-strip { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
-.index-strip > div { display: grid; gap: 2px; min-width: 0; }
-.index-strip svg { flex-shrink: 0; }
-.index-strip p { margin: 0; }
-.index-strip .idx { display: flex; align-items: baseline; gap: 8px; }
-.index-strip .idx b { font-size: 20px; }
-.index-strip .idx small { font-size: 13px; font-weight: 600; }
 .company { border-radius: 12px; background: var(--panel-3); padding: 10px 12px; }
 .company summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .company .kv { margin-top: 8px; }
@@ -559,10 +552,6 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .vi-note { background: var(--up-soft); }
 .vi-note .list b { color: var(--up); }
 .schedule .list small { color: var(--muted); }
-/* 투자자별 순매수: 줄을 통째로 써서 왼쪽 라벨이 눌리지 않게 합니다 */
-.kv dt.flows-dt { grid-column: 1 / -1; margin-top: 2px; }
-.kv dd.flows { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 14px; justify-content: space-between; text-align: left; }
-.flows span { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* 내 보유 종목(시장 화면 맨 위) */
 .mine .list-head { font-weight: 600; }
 .mine .row { background: var(--selected); }
@@ -572,14 +561,15 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .name-row { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
 .name-row input { width: 130px; padding: 6px 8px; font-size: 15px; text-align: right; }
 .ghost.small { min-height: 34px; padding: 4px 10px; font-size: 13px; }
-/* 장중 속보 팝업 */
-.breaking-wrap { position: fixed; inset: 0; z-index: 35; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 16px; animation: fade-in .18s ease-out; }
-.breaking { width: min(var(--app-width), 100%); max-height: 86vh; overflow-y: auto; background: var(--panel); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 10px; border-top: 5px solid var(--up); animation: breaking-in .26s cubic-bezier(.2, .9, .3, 1); }
-.breaking .headline { font-size: 19px; }
+/* 장중 속보: 화면 위에서 내려오는 알림. 아래쪽 주문 화면은 그대로 쓸 수 있게 클릭을 가로채지 않습니다. */
+.breaking-wrap { position: fixed; top: 0; left: 0; right: 0; z-index: 35; display: flex; justify-content: center; padding: 8px 12px 0; pointer-events: none; }
+.breaking { pointer-events: auto; width: min(var(--app-width), 100%); max-height: 70vh; overflow-y: auto; background: var(--panel); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; border: 2px solid var(--up); box-shadow: 0 10px 28px rgba(0, 0, 0, .28); animation: breaking-in .3s cubic-bezier(.2, .9, .3, 1); }
+.breaking .headline { font-size: 18px; }
+.breaking .facts { padding-top: 8px; }
+.breaking .ghost { align-self: flex-end; min-height: 36px; padding: 4px 14px; font-size: 13px; }
 .breaking-stocks b { font-size: 16px; font-variant-numeric: tabular-nums; }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes breaking-in { from { transform: scale(.94) translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .breaking-wrap, .breaking { animation: none; } }
+@keyframes breaking-in { from { transform: translateY(-16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .breaking { animation: none; } }
 
 /* 글자 크게(설정). 본문 기준 크기만 올리면 em으로 쓴 곳이 함께 커집니다 */
 :root[data-text="large"] { --text: 18px; }
