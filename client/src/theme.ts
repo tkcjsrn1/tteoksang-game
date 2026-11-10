@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 
 export type Theme = 'light' | 'dark';
-const KEY = 'tteoksang:theme';
+const KEY = 'tteoksang:theme';   /* 예전 판에서 쓰던 'theme' 키도 읽어 줍니다 */
 const listeners = new Set<(t: Theme) => void>();
 
 export function parseTheme(saved: string | null, systemDark: boolean): Theme {
@@ -10,7 +10,7 @@ export function parseTheme(saved: string | null, systemDark: boolean): Theme {
 }
 function read(): Theme {
   let saved: string | null = null;
-  try { saved = localStorage.getItem(KEY); } catch { /* 저장소를 못 쓰면 기기 설정을 따릅니다 */ }
+  try { saved = localStorage.getItem(KEY) ?? localStorage.getItem('theme'); } catch { /* 저장소를 못 쓰면 기기 설정을 따릅니다 */ }
   const systemDark = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
   return parseTheme(saved, systemDark);
 }

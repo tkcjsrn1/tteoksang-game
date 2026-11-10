@@ -22,6 +22,8 @@ const base = `http://localhost:${port}`;
 const browser = await chromium.launch(process.env.E2E_NO_PROXY ? { args: ['--no-proxy-server'] } : {});
 const ctx = await browser.newContext({ viewport: { width: W, height: 844 }, deviceScaleFactor: 1 });
 const page = await ctx.newPage();
+let tutorialStock = '';
+let tradedStock = '';
 /* 외부 글꼴(Google Fonts) 로딩 실패는 화면 오류가 아니므로 뺍니다. */
 const ignorable = (t: string) => /fonts\.(googleapis|gstatic)\.com|ERR_NAME_NOT_RESOLVED|net::ERR_/.test(t);
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
@@ -54,51 +56,74 @@ await step('홈과 첫 방문 안내', async () => {
   await page.getByRole('button', { name: '건너뛰기' }).click();
   await page.getByRole('button', { name: '혼자 연습 시작' }).waitFor();
   ok(await page.getByText('투자 조언이 아닙니다').count(), '면책 문구 없음');
-});
-
-await step('어두운 화면 전환: 바탕색이 바뀌고 새로 열어도 유지', async () => {
-  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const light = await bg();
-  await page.getByRole('button', { name: '어두운 화면으로 바꾸기' }).click();
-  ok(await page.evaluate(() => document.documentElement.dataset.theme) === 'dark', 'data-theme이 dark가 아님');
-  ok(await bg() !== light, '바탕색이 그대로');
+  await page.setViewportSize({ width: 1024, height: 844 });
+  const desktopHome = await page.locator('main.home').boundingBox();
+  ok(desktopHome && desktopHome.width >= 680, 'PC에서 화면 폭이 넓어지지 않음');
+  await page.setViewportSize({ width: W, height: 844 });
+  const settings = page.getByRole('dialog', { name: '설정' });
+  const music = settings.getByRole('checkbox', { name: '배경음' });
+  const effects = settings.getByRole('checkbox', { name: '효과음' });
+  const theme = settings.getByRole('checkbox', { name: '다크 모드' });
+  const volume = settings.getByRole('slider', { name: '전체 음량' });
+  await page.getByRole('button', { name: '설정' }).click();
+  await music.check();
+  await effects.uncheck();
+  await volume.fill('35');
+  await theme.check();
   await page.reload();
-  await page.getByRole('button', { name: '밝은 화면으로 바꾸기' }).waitFor();
-  ok(await bg() !== light, '새로 열면 밝은 화면으로 돌아감');
-  await page.getByRole('button', { name: '밝은 화면으로 바꾸기' }).click();
-  ok(await bg() === light, '밝은 화면으로 돌아오지 않음');
+  await page.getByRole('button', { name: '설정' }).click();
+  ok(await theme.isChecked(), '다크 모드가 유지되지 않음');
+  ok(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme === 'dark'), '다크 모드 색상 미적용');
+  ok(await music.isChecked() && !(await effects.isChecked()) && await volume.inputValue() === '35', '음량·오디오 설정이 유지되지 않음');
+  await music.uncheck();
+  await effects.check();
+  await volume.fill('100');
+  await theme.uncheck();
+  await settings.getByRole('button', { name: '닫기' }).click();
 });
 
-await step('혼자 연습: 업종별 종목 10개', async () => {
+await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
+  await page.getByText(/^게임 설정 ·/).click();
+  await page.getByLabel('종목 수').selectOption('30');
+  await page.getByLabel('라운드 수').selectOption('3');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
+  await page.getByLabel('1라운드, 전체 3라운드').waitFor();
   await page.locator('.sectors').waitFor();
-  const off = page.getByRole('button', { name: '안내 끄기' });
-  if (await off.count()) await off.click();
-  ok(await page.locator('.sector-head').count() >= 1, '업종 머리줄 없음');
+  await page.getByRole('button', { name: '설정' }).click();
+  const settings = page.getByRole('dialog', { name: '설정' });
+  await settings.waitFor();
+  await page.keyboard.press('Escape');
+  await settings.waitFor({ state: 'hidden' });
   ok(/1,000\.00/.test(await page.locator('.index-strip').innerText()), '떡상 지수가 1,000.00으로 시작하지 않음');
+  const news = page.locator('main .news').first();
+  const newsBox = await news.boundingBox();
+  const balanceBox = await page.locator('main .wallet-label').first().boundingBox();
+  ok(newsBox && balanceBox && newsBox.y < balanceBox.y, '첫 라운드에서 내 평가액이 뉴스보다 앞에 있음');
+  const related = page.getByRole('button', { name: /종목 보기/ });
+  await related.click();
+  const order = page.getByRole('dialog');
+  await order.locator('#order-qty').waitFor();
+  tutorialStock = await order.getByRole('heading').first().innerText();
+  await order.getByRole('button', { name: '관심종목', exact: true }).click();
+  ok(!(await order.locator('.company').isVisible()), '첫 주문에서 기업 정보가 먼저 열려 있음');
+  await page.locator('.list-head .live-dot').waitFor({ state: 'attached' });
+  await order.getByRole('button', { name: '이번에는 지켜보기' }).click();
+  await order.waitFor({ state: 'detached' });
+  await page.getByText('4. 시세를 지켜봐요', { exact: true }).waitFor();
+  await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
+  ok(await page.locator('.sector-head').count() >= 1, '업종 머리줄 없음');
   await page.getByRole('button', { name: '모두 펼치기' }).click();
-  ok(await page.locator('.sectors button.row').count() === 10, '종목이 10개가 아님');
-});
-
-await step('설정: 배경음·효과음 스위치', async () => {
-  await page.getByRole('button', { name: '도움말' }).click();
-  const music = page.getByRole('switch', { name: /장중 배경음/ });
-  await music.waitFor();
-  const was = await music.isChecked();
-  await music.click();
-  ok(await music.isChecked() !== was, '배경음 스위치가 바뀌지 않음');
-  await music.click();
-  ok(await page.getByRole('switch', { name: /효과음/ }).count() === 1, '효과음 스위치 없음');
-  await page.locator('.sheet').getByRole('button', { name: '닫기' }).click();
+  ok(await page.locator('.sectors button.row').count() === 30, '종목이 30개가 아님');
 });
 
 await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
-  const firstRow = page.locator('.sectors button.row').first();
+  const firstRow = page.locator('.sectors button.row').filter({ hasNotText: tutorialStock || /$^/ }).first();
   const t0 = await page.locator('.list-head .live-dot').count();
   ok(t0 === 1, '실시간 시세 표시 없음');
   /* 이번 라운드 시세 그래프가 열리는지(종목 창) */
   await firstRow.click();
+  tradedStock = await page.getByRole('dialog').getByRole('heading').first().innerText();
   await page.locator('.live-chart').waitFor({ timeout: 5_000 });
   ok(/시가총액 .*억 원/.test(await page.locator('.company summary').innerText()), '기업 정보 없음');
   const before = await page.locator('.live-chart path').getAttribute('d');
@@ -126,11 +151,18 @@ await step('호가창: 매도 5단계·매수 5단계, 가격을 누르면 지�
 
 await step('시장가 매수: 바로 체결', async () => {
   const go = page.locator('button.go');
-  await page.getByRole('button', { name: '25%' }).click();
+  await page.getByRole('button', { name: '25%', exact: true }).click();
   ok(await go.isEnabled(), '주문 버튼이 꺼져 있음');
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  const chart = page.locator('.live-chart');
+  await chart.locator('.chart-fill').first().waitFor();
+  await chart.locator('.chart-events summary').click();
+  ok(/매수 .*주 · .*원/.test(await chart.locator('.chart-events ul').innerText()), '체결 가격과 수량이 표시되지 않음');
+  await chart.getByRole('button', { name: '10초봉' }).click();
+  ok(await chart.locator('.chart-fill').first().isVisible(), '봉 차트에서 체결 표시가 사라짐');
+  await chart.getByRole('button', { name: '선(1초)' }).click();
 });
 
 await step('손절·익절 걸고 해제', async () => {
@@ -151,7 +183,7 @@ await step('지정가 매도 예약과 취소', async () => {
   await limit.waitFor();
   /* 지금 시세보다 높은 가격에 걸어야 바로 체결되지 않고 예약됩니다 */
   for (let i = 0; i < 30; i++) await page.getByRole('button', { name: '지정가 10원 올리기' }).click();
-  await page.getByRole('button', { name: '최대' }).click();
+  await page.getByRole('button', { name: '최대', exact: true }).click();
   const go = page.locator('button.go');
   ok(/매도 예약$/.test((await go.textContent()) ?? ''), '지정가 버튼 문구가 "…매도 예약"이 아님');
   await go.click();
@@ -173,6 +205,19 @@ await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   ok(await page.locator('.rank-moves li').count() === 4, '순위 변화 4줄이 아님');
   ok(await page.locator('.sectors .avatar svg, .board .avatar svg').count() >= 1, '기업 로고 없음');
   ok(await page.getByText(/1초 시세를 빠르게 다시/).count(), '실제 시세 재생 안내 없음');
+  await page.locator('main .board button.row').filter({ hasText: tutorialStock }).first().click();
+  const resultStock = page.getByRole('dialog', { name: tutorialStock });
+  await resultStock.locator('.live-chart .chart-breaking').waitFor();
+  await resultStock.getByRole('button', { name: '닫기' }).click();
+  await page.locator('main .board button.row').filter({ hasText: tradedStock }).first().click();
+  const filledStock = page.getByRole('dialog', { name: tradedStock });
+  const events = filledStock.locator('.chart-events');
+  await events.locator('summary').click();
+  const labels = await events.locator('li').allTextContents();
+  const times = labels.map(label => label.split(' · ', 1)[0]);
+  ok(labels.some(label => label.includes('속보')) && labels.some(label => label.includes('매수')), '속보 또는 매수가 이벤트 목록에 없음');
+  ok(times.every((t, i) => i === 0 || times[i - 1] <= t), '차트 이벤트가 시간순이 아님');
+  await filledStock.getByRole('button', { name: '닫기' }).click();
 });
 
 await step('용어 설명 창 열고 닫기', async () => {
@@ -220,13 +265,14 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await page.goto(base + '/');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.locator('.sectors').waitFor();
+  await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
   const off = page.getByRole('button', { name: '안내 끄기' });
   if (await off.count()) await off.click();
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
   await page.getByRole('button', { name: '모두 펼치기' }).click().catch(() => {});
   await page.locator('.sectors button.row').first().click();
   await page.getByRole('button', { name: '시장가 · 바로 체결' }).click().catch(() => {});
-  await page.getByRole('button', { name: '25%' }).click();
+  await page.getByRole('button', { name: '25%', exact: true }).click();
   await page.locator('button.go').click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
   await page.keyboard.press('Escape');

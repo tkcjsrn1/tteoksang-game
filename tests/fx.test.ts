@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BUZZ, countValue, fillTone, musicBpm, musicStep, MUSIC_STEPS, revealTone } from '../client/src/fx';
 import { probeIndex } from '../client/src/live';
-import { logoVariant } from '../client/src/sectors';
+import { logoVariant, LOGO_VARIANTS } from '../client/src/sectors';
 import { STOCKS } from '../shared/rules';
 
 test('카운트업: 시작과 끝은 정확하고, 중간은 단조롭게 다가간다', () => {
@@ -46,7 +46,11 @@ test('십자선: 그래프 가로 위치를 몇 초째인지로 바꾸고 양 �
   assert.equal(probeIndex(9999, 8, 3, 91), 90);
   assert.equal(probeIndex(100, 8, 3, 1), 0);
 });
-test('기업 로고: 같은 업종 네 기업은 테두리 모양이 모두 다르다', () => {
+test('기업 로고: 같은 업종 기업끼리 테두리 모양이 모두 다르다', () => {
   const groups = new Set(STOCKS.map(s => s.group));
-  for (const g of groups) assert.deepEqual(STOCKS.filter(s => s.group === g).map(s => logoVariant(s.code)), [0, 1, 2, 3]);
+  for (const g of groups) {
+    const members = STOCKS.filter(s => s.group === g);
+    assert.deepEqual(members.map(s => logoVariant(s.code)), members.map((_, i) => i), g);
+    assert.ok(members.length <= LOGO_VARIANTS, `${g}: 로고 모양(${LOGO_VARIANTS}가지)보다 기업이 많음`);
+  }
 });

@@ -42,6 +42,8 @@ export function defaultOpenGroups(view: RoomView): Set<StockGroup> {
   return new Set([...codes].filter(c => stockOf(c)).map(c => stockOf(c).group));
 }
 
+/** 로고 테두리 모양 가짓수. 한 업종의 기업 수가 이보다 많아지면 모양이 겹칩니다(tests/fx.test.ts가 막습니다). */
+export const LOGO_VARIANTS = 5;
 /** 업종 안에서 몇 번째 기업인지(0~3). 로고 테두리 모양을 고릅니다 */
 export function logoVariant(code: string): number {
   const s = STOCKS.find(x => x.code === code);

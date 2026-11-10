@@ -5,8 +5,8 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
-import { MODES } from '../../shared/rules';
-import type { ClientMsg, GameMode, Role, ServerMsg, StockCode } from '../../shared/types';
+import { MODES, ROOM_OPTIONS } from '../../shared/rules';
+import type { ClientMsg, GameMode, Role, RoomSettings, ServerMsg, StockCode } from '../../shared/types';
 import type { ForcedOutcomes } from './plan';
 import { GameRoom } from './room';
 import { MemoryStore, type Store } from './store';
@@ -32,6 +32,7 @@ export class Hub {
   private timer: NodeJS.Timeout | null = null;
   private busy = new Set<string>();
   private dirty = new Set<string>();
+  private saving = new Map<string, Promise<void>>();
   private lastFlush = 0;
   private readonly startedAt = Date.now();
   private errors = 0;
@@ -60,6 +61,7 @@ export class Hub {
     const closed = new Promise(r => this.server.close(r));
     this.server.closeAllConnections();   // 열려 있는 HTTP keep-alive 연결 때문에 종료가 멈추지 않게
     await closed;
+    await Promise.all(this.saving.values());
     await this.flush();
     await this.store.close();
   }
@@ -82,7 +84,7 @@ export class Hub {
   newCode() {
     for (;;) { const c = String(randomInt(100000, 1000000)); if (!this.rooms.has(c)) return c; }
   }
-  createRoom(mode: GameMode, opts: { seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[] } = {}) {
+  createRoom(mode: GameMode, opts: { seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; settings?: RoomSettings } = {}) {
     const room = GameRoom.create({ code: this.newCode(), mode, now: this.now(), ...opts });
     this.rooms.set(room.s.code, room);
     this.dirty.add(room.s.code);
@@ -94,6 +96,8 @@ export class Hub {
     const now = this.now();
     for (const room of this.rooms.values()) {
       if (this.busy.has(room.s.code)) continue;
+      // 재시작 때 불러온 정산 중인 방은 계산을 되풀이하지 않고 저장부터 이어갑니다.
+      if (room.s.phase === 'settling') { void this.afterSettle(room); continue; }
       /* 한 방의 오류가 타이머 전체(=모든 방)를 멈추지 않게 방마다 따로 잡습니다. 같은 방 오류는 1분에 한 번만 기록합니다. */
       let r: ReturnType<GameRoom['tick']>;
       try { r = room.tick(now); }
@@ -111,20 +115,27 @@ export class Hub {
     const code = room.s.code;
     this.busy.add(code);
     this.broadcast(room);
+    // 느린 이전 스냅샷이 정산 결과를 덮어쓰지 않도록 먼저 끝냅니다.
+    await this.saving.get(code);
     for (let attempt = 0; ; attempt++) {
       try { await this.store.saveSettlement(code, room.s.round, room.s); break; }
       catch (e) { console.error('정산 저장 실패, 다시 시도합니다', e); await new Promise(r => setTimeout(r, Math.min(5000, 300 * 2 ** attempt))); }
     }
     room.beginRecap(this.now());
+    this.dirty.add(code);
     this.busy.delete(code);
     this.broadcast(room);
   }
   private async flush() {
-    const codes = [...this.dirty]; this.dirty.clear();
-    for (const c of codes) {
-      const room = this.rooms.get(c);
+    for (const code of [...this.dirty]) {
+      if (this.busy.has(code) || this.saving.has(code) || !this.dirty.delete(code)) continue;
+      const room = this.rooms.get(code);
       if (!room) continue;
-      try { await this.store.saveRoom(room.s); } catch (e) { console.error('저장 실패', e); this.dirty.add(c); }
+      const save = this.store.saveRoom(room.s)
+        .catch(e => { console.error('저장 실패', e); this.dirty.add(code); })
+        .finally(() => this.saving.delete(code));
+      this.saving.set(code, save);
+      await save;
     }
   }
 
@@ -228,7 +239,7 @@ export class Hub {
       case 'rematch': {
         if (room.s.status !== 'finished' || !room.player(c.token)) return;
         if (!room.s.nextRoomCode) {
-          const next = this.createRoom(room.s.mode, { excludedArcs: room.s.plan.arcIds });
+          const next = this.createRoom(room.s.mode, { excludedArcs: room.s.plan.arcIds, settings: room.s.settings });
           room.s.nextRoomCode = next.s.code;
           this.dirty.add(room.s.code);
         }
@@ -246,7 +257,9 @@ export class Hub {
 
   /* ---------- HTTP ---------- */
   private http(req: http.IncomingMessage, res: http.ServerResponse) {
-    const url = new URL(req.url ?? '/', 'http://x');
+    let url: URL;
+    try { url = new URL(req.url ?? '/', 'http://x'); }
+    catch { return this.json(res, 400, { error: '잘못된 주소입니다' }); }
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
@@ -257,8 +270,22 @@ export class Hub {
       let body = '';
       req.on('data', d => { body += d; if (body.length > 4096) req.destroy(); });
       req.on('end', () => {
-        let mode: GameMode = 'friend', extra: { seed?: number; forced?: ForcedOutcomes; forcedArcs?: string[] } = {};
-        try { const p = JSON.parse(body || '{}'); if (MODES[p.mode as GameMode]) mode = p.mode; if (this.opts.allowTestHooks) extra = { seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs }; } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
+        let mode: GameMode = 'friend';
+        const extra: Parameters<Hub['createRoom']>[1] = {};
+        try {
+          const p = JSON.parse(body || '{}');
+          if (typeof p.mode === 'string' && Object.hasOwn(MODES, p.mode)) mode = p.mode;
+          if (p.settings !== undefined) {
+            const settings: unknown = p.settings;
+            if (!settings || typeof settings !== 'object' || Array.isArray(settings)
+              || Object.entries(settings).some(([key, value]) => !Object.hasOwn(ROOM_OPTIONS, key)
+                || typeof value !== 'number' || !ROOM_OPTIONS[key as keyof RoomSettings].includes(value))) {
+              return this.json(res, 400, { error: '선택할 수 없는 게임 설정입니다' });
+            }
+            extra.settings = settings as RoomSettings;
+          }
+          if (this.opts.allowTestHooks) Object.assign(extra, { seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs });
+        } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
         if (!this.allowCreate(req)) return this.json(res, 429, { error: '방을 너무 많이 만들었습니다. 잠시 후 다시 시도해 주세요' });
         const room = this.createRoom(mode, extra);
         this.json(res, 201, { code: room.s.code, mode });

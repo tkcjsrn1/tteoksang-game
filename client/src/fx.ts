@@ -26,14 +26,24 @@ export function fillTone(side: 'buy' | 'sell', trigger?: 'stop' | 'take' | null)
 
 /* ---------- 효과음 ---------- */
 const SOUND_KEY = 'tteoksang:sound';
+const VOLUME_KEY = 'tteoksang:volume';
+function readAudioSetting(key: string) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function saveAudioSetting(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* 저장 불가 환경 */ }
+}
 let ctx: AudioContext | null = null;
-let enabled = (() => { try { return localStorage.getItem(SOUND_KEY) !== 'off'; } catch { return true; } })();
+let master: GainNode | null = null;
+let enabled = readAudioSetting(SOUND_KEY) !== 'off';
+const savedVolume = Number(readAudioSetting(VOLUME_KEY) ?? '100');
+let volume = Number.isInteger(savedVolume) && savedVolume >= 0 && savedVolume <= 100 ? savedVolume : 100;
 const listeners = new Set<(on: boolean) => void>();
 
 export function soundOn() { return enabled; }
 export function setSound(on: boolean) {
   enabled = on;
-  try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); } catch { /* 저장 불가 환경 */ }
+  saveAudioSetting(SOUND_KEY, on ? 'on' : 'off');
   listeners.forEach(f => f(on));
   if (on) play('book');
 }
@@ -42,34 +52,48 @@ export function useSoundSetting(): [boolean, (on: boolean) => void] {
   useEffect(() => { listeners.add(setOn); return () => { listeners.delete(setOn); }; }, []);
   return [on, setSound];
 }
+export const masterVolume = () => volume;
+export function setMasterVolume(value: number) {
+  volume = value;
+  saveAudioSetting(VOLUME_KEY, String(value));
+  if (master && ctx) master.gain.setTargetAtTime(value / 100, ctx.currentTime, 0.02);
+}
 function audio(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AC) return null;
-  if (!ctx) { try { ctx = new AC(); } catch { return null; } }
-  if (ctx.state === 'suspended') void ctx.resume();
+  if (!ctx) {
+    try {
+      const next = new AC();
+      master = next.createGain();
+      master.gain.value = volume / 100;
+      master.connect(next.destination);
+      ctx = next;
+    } catch { return null; }
+  }
+  if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
   return ctx;
 }
 /* 첫 터치·클릭 때 오디오를 열어 둡니다(브라우저 자동 재생 정책). */
 if (typeof window !== 'undefined') {
-  const unlock = () => { audio(); window.removeEventListener('pointerdown', unlock); };
-  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('click', () => { audio(); syncMusic(); }, { once: true });
+  document.addEventListener('visibilitychange', syncMusic);
 }
-function note(ac: AudioContext, freq: number, start: number, dur: number, type: OscillatorType, gain: number) {
+function note(ac: AudioContext, freq: number, start: number, dur: number, type: OscillatorType, gain: number, output: AudioNode) {
   if (dur <= 0 || gain <= 0) return;
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(0, start);
   g.gain.linearRampToValueAtTime(gain, start + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  o.connect(g).connect(ac.destination);
+  o.connect(g).connect(output);
   o.start(start); o.stop(start + dur + 0.02);
 }
 /** 짧은 효과음을 냅니다. 소리를 껐거나 오디오를 못 쓰는 환경이면 아무것도 하지 않습니다. */
 export function play(tone: Tone) {
-  if (!enabled) return;
+  if (!enabled || volume === 0) return;
   const ac = audio();
-  if (!ac || ac.state !== 'running') return;
+  if (!ac || !master || ac.state !== 'running') return;
   const t = ac.currentTime;
   const seq: Record<Tone, [number, number, number, OscillatorType, number][]> = {
     tick:  [[880, 0, 0.05, 'sine', 0.05]],
@@ -89,7 +113,7 @@ export function play(tone: Tone) {
     sell:  [[880, 0, 0.08, 'triangle', 0.13], [587, 0.07, 0.14, 'triangle', 0.13]],
     trigger: [[740, 0, 0.1, 'sawtooth', 0.07], [554, 0.12, 0.1, 'sawtooth', 0.07], [740, 0.24, 0.1, 'sawtooth', 0.07], [554, 0.36, 0.22, 'sawtooth', 0.07]]
   };
-  for (const [f, at, d, type, g] of seq[tone]) note(ac, f, t + at, d, type, g);
+  for (const [f, at, d, type, g] of seq[tone]) note(ac, f, t + at, d, type, g, master);
 }
 
 /* ---------- 진동 ---------- */
@@ -118,7 +142,7 @@ export function useHapticSetting(): [boolean, (on: boolean) => void] {
 /* ---------- 배경음 ----------
    네 마디(가단조 → 바장조 → 다장조 → 사장조)를 여덟 박씩 도는 조용한 분산화음입니다. 파일 없이 그때그때 만듭니다. */
 const MUSIC_KEY = 'tteoksang:music';
-let musicOn = (() => { try { return localStorage.getItem(MUSIC_KEY) !== 'off'; } catch { return true; } })();
+let musicOn = readAudioSetting(MUSIC_KEY) !== 'off';
 const musicListeners = new Set<(on: boolean) => void>();
 const CHORDS: number[][] = [
   [220.00, 261.63, 329.63, 392.00],   // Am7
@@ -140,20 +164,21 @@ let musicTimer: ReturnType<typeof setInterval> | null = null;
 let musicNext = 0, musicI = 0, musicUrgent = false, musicWanted = false;
 function musicTick() {
   const ac = audio();
-  if (!ac || ac.state !== 'running') return;
+  if (!ac || !master || ac.state !== 'running') return;
   if (musicNext < ac.currentTime) musicNext = ac.currentTime + 0.05;
   /* 0.3초 앞까지만 미리 예약해서, 빠르기를 바꾸면 곧바로 반영되게 합니다 */
   while (musicNext < ac.currentTime + 0.3) {
     const beat = 60 / musicBpm(musicUrgent) / 2;
     const { freq, bass } = musicStep(musicI++);
-    note(ac, freq, musicNext, beat * 1.8, 'sine', 0.028);
-    if (bass) note(ac, bass, musicNext, beat * 7, 'triangle', 0.04);
-    if (musicUrgent && musicI % 2 === 0) note(ac, freq * 2, musicNext, beat * 0.6, 'sine', 0.012);
+    note(ac, freq, musicNext, beat * 1.8, 'sine', 0.028, master);
+    if (bass) note(ac, bass, musicNext, beat * 7, 'triangle', 0.04, master);
+    if (musicUrgent && musicI % 2 === 0) note(ac, freq * 2, musicNext, beat * 0.6, 'sine', 0.012, master);
     musicNext += beat;
   }
 }
 function syncMusic() {
-  const should = musicWanted && musicOn && enabled;
+  /* 장중일 때만, 효과음과 배경음이 모두 켜져 있고, 탭이 보일 때만 소리를 냅니다. */
+  const should = musicWanted && musicOn && enabled && typeof document !== 'undefined' && !document.hidden;
   if (should && !musicTimer) { musicNext = 0; musicTimer = setInterval(musicTick, 100); musicTick(); }
   if (!should && musicTimer) { clearInterval(musicTimer); musicTimer = null; }
 }
@@ -161,7 +186,7 @@ function syncMusic() {
 export function setMusicScene(playing: boolean, urgent = false) { musicWanted = playing; musicUrgent = urgent; syncMusic(); }
 export function setMusic(on: boolean) {
   musicOn = on;
-  try { localStorage.setItem(MUSIC_KEY, on ? 'on' : 'off'); } catch { /* 저장 불가 환경 */ }
+  saveAudioSetting(MUSIC_KEY, on ? 'on' : 'off');
   musicListeners.forEach(f => f(on));
   syncMusic();
 }
