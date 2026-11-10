@@ -31,8 +31,9 @@ export function Lessons({ lessonId, review }: { lessonId: string | null; review:
       <h1 className="h1">차트 연습실</h1>
       <p className="lede">예시를 보고, 직접 눌러 보고, 근거를 확인합니다. 모든 기업과 데이터는 가상입니다.</p>
       <div className="board">{LESSONS.map(l => (
-        <button key={l.id} className="row" disabled={!l.ready} onClick={() => navigate(`/lessons/${l.id}`)}>
-          <span className="row-main"><b>{l.no}. {l.title}</b><small>{l.goal}</small></span>
+        <button key={l.id} className="row lesson-row" aria-label={`수업 ${l.no}. ${l.title}`} disabled={!l.ready} onClick={() => navigate(`/lessons/${l.id}`)}>
+          <span className="avatar lesson-no" aria-hidden="true">{l.no}</span>
+          <span className="row-main"><b>{l.title}</b><small>{l.goal}</small></span>
           <span className="row-price"><small>{l.ready ? '시작' : '준비 중'}</small></span>
         </button>
       ))}</div>

@@ -106,6 +106,16 @@ await step('용어 사전과 퀴즈', async () => {
   await page.getByText('주문할 때 본 가격과 실제 체결된 가격의 차이').waitFor();
 });
 
+await step('차트 연습실 목록: 제목이 잘리지 않음', async () => {
+  await page.goto(base + '/#/lessons');
+  const rows = page.locator('.lesson-row');
+  await rows.first().waitFor();
+  ok(await rows.count() === 6, '수업이 6개가 아님');
+  const cut = await page.locator('.lesson-row .row-main b, .lesson-row .row-main small').evaluateAll(els =>
+    els.filter(e => e.scrollWidth > e.clientWidth + 1 || (e.textContent ?? '').length < 4 || e.getBoundingClientRect().width < 120).map(e => e.textContent));
+  ok(cut.length === 0, `잘린 글자: ${cut.join(', ')}`);
+});
+
 const answers: Record<string, string> = { orders: '10,040원', earnings: '루펠 배양액', risk: '약 79%' };
 for (const [id, label] of [['candle', '봉 하나 읽기'], ['compare', '봉 비교'], ['news', '뉴스와 주가'], ['orders', '주문 화면'], ['earnings', '기업 실적'], ['risk', '내 자산과 위험']] as const) {
   await step(`차트 연습실: ${label}`, async () => {

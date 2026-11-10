@@ -453,3 +453,7 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .replay { margin: 4px 0 0; }
 .replay svg { width: 100%; height: auto; display: block; }
 .replay .link.small { font-size: 12px; padding: 0; }
+/* 차트 연습실 목록: 번호 동그라미 + 제목. 제목과 설명은 줄바꿈해서 끝까지 보여 줍니다. */
+.lesson-no { background: var(--led); }
+.lesson-row .row-main b, .lesson-row .row-main small { white-space: normal; overflow: visible; text-overflow: clip; }
+.lesson-row .row-price small { color: var(--led); font-weight: 700; }
