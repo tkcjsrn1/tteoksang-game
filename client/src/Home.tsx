@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { navigate } from './App';
 import { createRoom, roomInfo, store } from './net';
 import { TERMS } from '../../shared/glossary';
+import { MODES, ROOM_OPTIONS } from '../../shared/rules';
+import type { RoomSettings } from '../../shared/types';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
 import { Chevron, Disclaimer, Logo } from './ui';
@@ -20,13 +22,21 @@ export function Home() {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settings, setSettings] = useState<RoomSettings>({ stocks: 30 });
+  const [dark, setDark] = useState(() => store.get('theme') === 'dark');
+  const toggleTheme = () => {
+    const theme = dark ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    store.set('theme', theme);
+    setDark(!dark);
+  };
   const { open, seen } = useGlossary();
   const games = parseRecords(store.get(RECORDS_KEY)).length;
   const run = async (f: () => Promise<void>) => {
     setBusy(true); setError(null);
     try { await f(); } catch (e) { setError(e instanceof Error && e.message !== 'Failed to fetch' ? e.message : '서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요'); } finally { setBusy(false); }
   };
-  const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode); navigate(`/room/${r.code}`); });
+  const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, settings); navigate(`/room/${r.code}`); });
   const academic = () => run(async () => {
     const r = await createRoom('academic');
     store.set(`operator:${r.code}`, r.operatorToken ?? '');
@@ -42,10 +52,30 @@ export function Home() {
   return (
     <main className="home">
       <section className="sec" style={{ paddingTop: 28 }}>
-        <Logo />
+        <div className="home-head">
+          <Logo />
+          <button className="ghost small" type="button" aria-pressed={dark} onClick={toggleTheme}>다크 모드</button>
+        </div>
         <h1 className="hero">같은 뉴스, 다른 판단.<br />누가 왜 이겼는지 바로 나와요</h1>
         <p className="lede">가상 기업과 가상 자금 1,000만 원으로 하는 주식 게임</p>
         <div className="home-actions">
+          <div className="room-settings" role="group" aria-label="혼자 연습과 친구 대전 설정">
+            <label>종목 수
+              <select value={settings.stocks} onChange={e => setSettings({ ...settings, stocks: Number(e.target.value) })}>
+                {ROOM_OPTIONS.stocks.map(n => <option key={n} value={n}>{n}개</option>)}
+              </select>
+            </label>
+            <label>라운드 수
+              <select value={settings.rounds ?? MODES.solo.rounds} onChange={e => setSettings({ ...settings, rounds: Number(e.target.value) })}>
+                {ROOM_OPTIONS.rounds.map(n => <option key={n} value={n}>{n}회</option>)}
+              </select>
+            </label>
+            <label>장 시간
+              <select value={settings.trade ?? MODES.solo.trade} onChange={e => setSettings({ ...settings, trade: Number(e.target.value) })}>
+                {ROOM_OPTIONS.trade.map(n => <option key={n} value={n}>{n}초</option>)}
+              </select>
+            </label>
+          </div>
           <button className="cta" disabled={busy} onClick={() => make('solo')}>혼자 연습 시작</button>
           <div className="btn-row">
             <button className="ghost" disabled={busy} onClick={() => make('friend')}>친구 방 만들기</button>

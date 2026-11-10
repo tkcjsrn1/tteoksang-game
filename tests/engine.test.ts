@@ -215,6 +215,12 @@ test('종목 풀 30개, 업종 6개 × 5종목, 판마다 10종목', () => {
   assert.deepEqual([...seen].sort(), STOCKS.map(s => s.code).sort());
   assert.notDeepEqual(buildPlan(1, 'friend').stockCodes, buildPlan(2, 'friend').stockCodes);
 });
+test('10라운드 방은 선택한 20종목을 사용하고 모든 라운드에 뉴스가 있다', () => {
+  const plan = buildPlan(5, 'solo', [], undefined, undefined, { stocks: 20, rounds: 10, trade: 60 });
+  assert.equal(plan.stockCodes?.length, 20);
+  assert.equal(plan.rounds.length, 10);
+  assert.ok(plan.rounds.every(round => round.stages.length > 0));
+});
 test('분산형 NPC는 업종마다 변동이 가장 작은 종목을 하나씩 고른다', () => {
   const codes = buildPlan(7, 'friend').stockCodes!;
   const picked = pickDiversified(codes);

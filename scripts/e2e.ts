@@ -55,10 +55,19 @@ await step('홈과 첫 방문 안내', async () => {
   await page.getByRole('button', { name: '건너뛰기' }).click();
   await page.getByRole('button', { name: '혼자 연습 시작' }).waitFor();
   ok(await page.getByText('투자 조언이 아닙니다').count(), '면책 문구 없음');
+  const theme = page.getByRole('button', { name: '다크 모드' });
+  await theme.click();
+  await page.reload();
+  await theme.waitFor();
+  ok(await theme.getAttribute('aria-pressed') === 'true', '다크 모드가 유지되지 않음');
+  ok(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme === 'dark'), '다크 모드 색상 미적용');
+  await theme.click();
 });
 
-await step('혼자 연습: 업종별 종목 10개', async () => {
+await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
+  await page.getByLabel('라운드 수').selectOption('3');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
+  await page.getByLabel('1라운드, 전체 3라운드').waitFor();
   await page.locator('.sectors').waitFor();
   ok(/1,000\.00/.test(await page.locator('.index-strip').innerText()), '떡상 지수가 1,000.00으로 시작하지 않음');
   const news = page.locator('main .news').first();
@@ -77,7 +86,7 @@ await step('혼자 연습: 업종별 종목 10개', async () => {
   await page.getByText('4. 시세를 지켜봐요', { exact: true }).waitFor();
   ok(await page.locator('.sector-head').count() >= 1, '업종 머리줄 없음');
   await page.getByRole('button', { name: '모두 펼치기' }).click();
-  ok(await page.locator('.sectors button.row').count() === 10, '종목이 10개가 아님');
+  ok(await page.locator('.sectors button.row').count() === 30, '종목이 30개가 아님');
 });
 
 await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
@@ -111,7 +120,7 @@ await step('호가창: 매도 5단계·매수 5단계, 가격을 누르면 지�
 
 await step('시장가 매수: 바로 체결', async () => {
   const go = page.locator('button.go');
-  await page.getByRole('button', { name: '25%' }).click();
+  await page.getByRole('button', { name: '25%', exact: true }).click();
   ok(await go.isEnabled(), '주문 버튼이 꺼져 있음');
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
@@ -136,7 +145,7 @@ await step('지정가 매도 예약과 취소', async () => {
   await limit.waitFor();
   /* 지금 시세보다 높은 가격에 걸어야 바로 체결되지 않고 예약됩니다 */
   for (let i = 0; i < 30; i++) await page.getByRole('button', { name: '지정가 10원 올리기' }).click();
-  await page.getByRole('button', { name: '최대' }).click();
+  await page.getByRole('button', { name: '최대', exact: true }).click();
   const go = page.locator('button.go');
   ok(/매도 예약$/.test((await go.textContent()) ?? ''), '지정가 버튼 문구가 "…매도 예약"이 아님');
   await go.click();
@@ -213,7 +222,7 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await page.getByRole('button', { name: '모두 펼치기' }).click().catch(() => {});
   await page.locator('.sectors button.row').first().click();
   await page.getByRole('button', { name: '시장가 · 바로 체결' }).click().catch(() => {});
-  await page.getByRole('button', { name: '25%' }).click();
+  await page.getByRole('button', { name: '25%', exact: true }).click();
   await page.locator('button.go').click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
   await page.keyboard.press('Escape');
