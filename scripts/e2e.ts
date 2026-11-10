@@ -149,6 +149,18 @@ await step('호가창: 매도 5단계·매수 5단계, 가격을 누르면 지�
   await page.getByRole('button', { name: '시장가 · 바로 체결' }).click();
 });
 
+await step('비용 안내: 살 때는 수수료만, 팔 때는 거래세까지', async () => {
+  const sheet = page.locator('.sheet'), side = sheet.locator('.seg.side');
+  await sheet.locator('.pcts').getByRole('button', { name: '25%' }).click();
+  await sheet.getByText('수수료 0.10%').waitFor();
+  ok(await sheet.getByText('증권거래세 0.20%').count() === 0, '매수인데 증권거래세가 보임');
+  await side.locator('[data-s=sell]').click();
+  await sheet.locator('.pcts').getByRole('button', { name: '25%' }).click();
+  await sheet.getByText('증권거래세 0.20%').waitFor();
+  /* 다음 단계가 매수로 시작하도록 되돌립니다 */
+  await side.locator('[data-s=buy]').click();
+});
+
 await step('시장가 매수: 바로 체결', async () => {
   const go = page.locator('button.go');
   await page.getByRole('button', { name: '25%', exact: true }).click();

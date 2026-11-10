@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aggregate, buildCandle, movingAverage } from '../shared/candles';
-import { checkOrder, computeClose, feeOf, GROUPS, LEADERS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit } from '../shared/rules';
+import { chargeOf, checkOrder, computeClose, feeOf, GROUPS, LEADERS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, taxOf } from '../shared/rules';
 import { ARCS, CARDS } from '../server/src/content';
 import { buildPlan, STOCKS_PER_GAME } from '../server/src/plan';
 import { pickDiversified } from '../server/src/npc';
@@ -33,25 +33,32 @@ test('−4.6% 요약 문구 형식', () => {
   assert.equal(b.closePrice, 9540);
   assert.equal(b.summary, '−4.6% · 기대에 못 미친 계약 규모');
 });
-test('수수료는 주문별 0.20%를 원 단위로 올림', () => {
-  assert.equal(feeOf(1240000), 2480);
-  assert.equal(feeOf(1001), 3);
+test('수수료는 0.10%를 원 단위로 올리고, 거래세 0.20%는 팔 때만 원 미만을 버리고 낸다', () => {
+  assert.equal(feeOf(1240000), 1240);
+  assert.equal(feeOf(1001), 2);
+  assert.equal(taxOf(1240000), 2480);
+  assert.equal(taxOf(499), 0, '원 미만은 버림');
+  assert.equal(chargeOf('buy', 1240000), 1240, '살 때는 세금 없음');
+  assert.equal(chargeOf('sell', 1240000), 1240 + 2480);
+  /* 팔 때 받을 돈에서 수수료와 거래세가 함께 빠집니다 */
+  const sell = checkOrder({ cash: 0, holdings: { G01: { qty: 100, avgCost: 10000, sinceRound: 1 } }, orders: {} }, 'G01', 'sell', 100, 10000, { limit: 10000 });
+  assert.equal(sell.ok && sell.fee, 1000 + 2000);
 });
 test('예약금: 시장가는 걸어 둔 예약금을 쓸 수 없고, 지정가는 같은 종목 예약을 새 예약으로 바꿔 검증', () => {
-  const o = { code: 'G01' as const, side: 'buy' as const, qty: 500, kind: 'limit' as const, price: 10000, gross: 5_000_000, fee: 10_000, reserve: 5_010_000, requestId: 'a', placedAt: 0 };
+  const o = { code: 'G01' as const, side: 'buy' as const, qty: 500, kind: 'limit' as const, price: 10000, gross: 5_000_000, fee: 5_000, reserve: 5_005_000, requestId: 'a', placedAt: 0 };
   const ctx = { cash: 10_000_000, holdings: {}, orders: { G01: o } };
-  /* 시장가: 예약금 501만 원을 뺀 499만 원 안에서만 */
+  /* 시장가: 예약금 500만 5천 원을 뺀 499만 5천 원 안에서만 */
   assert.equal(checkOrder(ctx, 'G02', 'buy', 500, 10000).ok, false);
   assert.equal(checkOrder(ctx, 'G02', 'buy', 497, 10000).ok, true);   // 슬리피지 15bp 포함
   assert.equal(checkOrder(ctx, 'G01', 'buy', 497, 10000).ok, true);
   assert.equal(checkOrder(ctx, 'G01', 'buy', 500, 10000).ok, false);
   /* 지정가: 같은 종목 기존 예약은 돌려받았다고 봅니다. 슬리피지 없이 지정가 × 수량 + 수수료 */
-  assert.equal(checkOrder(ctx, 'G01', 'buy', 998, 10000, { limit: 10000 }).ok, true);
-  assert.equal(checkOrder(ctx, 'G01', 'buy', 999, 10000, { limit: 10000 }).ok, false);
+  assert.equal(checkOrder(ctx, 'G01', 'buy', 999, 10000, { limit: 10000 }).ok, true);
+  assert.equal(checkOrder(ctx, 'G01', 'buy', 1000, 10000, { limit: 10000 }).ok, false);
   assert.equal(checkOrder(ctx, 'G02', 'buy', 505, 10000, { limit: 9900 }).ok, false, '다른 종목 예약금은 그대로');
   assert.equal(checkOrder(ctx, 'G02', 'buy', 500, 10000, { limit: 9900 }).ok, true);
   /* 지정가 최대 수량은 지정가 × 수량 + 수수료 */
-  assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 10000, { limit: 10000 }), 998);
+  assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 10000, { limit: 10000 }), 999);
   /* 매도 예약에 묶인 수량은 시장가로 팔 수 없습니다 */
   const s = { code: 'G03' as const, side: 'sell' as const, qty: 70, kind: 'limit' as const, price: 9000, gross: 630_000, fee: 1260, reserve: 0, requestId: 'b', placedAt: 0 };
   const held = { cash: 0, holdings: { G03: { qty: 100, avgCost: 8000, sinceRound: 1 } }, orders: { G03: s } };
