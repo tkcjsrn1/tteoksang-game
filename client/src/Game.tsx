@@ -130,6 +130,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
         {tab === 'market' && view.phase !== 'recap' && <>
           <Standing view={view} />
           <IndexStrip view={view} />
+          <DividendNotice view={view} />
           {(view.phase === 'news' || view.phase === 'trade') && <CurrentNews view={view} />}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send2} />}
           {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send2} />}
@@ -517,6 +518,22 @@ function OrderBook({ book, price, open, onPick }: { book: QuoteBook; price: numb
   );
 }
 /** 떡상 지수: 이번 판 10종목의 시가총액 가중 지수(시작 1,000). 라운드 종료 값과 지금 값을 작은 그래프로 */
+/** 배당 일정 안내: 기준일 전·당일·배당락 라운드에 보여 줍니다. */
+function DividendNotice({ view }: { view: RoomView }) {
+  const d = view.dividend;
+  if (!d || d.status === 'before' || d.status === 'done') return null;
+  const list = d.items.map(i => `${i.name} 주당 ${won(i.dps)}`).join(', ');
+  const mine = (view.portfolio?.dividendLog ?? []).filter(x => x.round === view.round);
+  const got = mine.reduce((a, x) => a + x.amount, 0);
+  return (
+    <section className="panel dividend-note" aria-label="배당 안내">
+      <p className="news-meta"><span className="chip">배당</span></p>
+      {d.status === 'upcoming' && <p><b>다음 라운드 장 마감이 <TermLink id="record-date">배당 기준일</TermLink>이에요.</b> {list}. 기준일 장 마감 때 가진 주식만 받아요.</p>}
+      {d.status === 'record' && <p><b>오늘 장 마감 때 가진 주식에 배당이 확정돼요.</b> {list}. 다음 라운드 시작 때 배당금이 들어오고, 시가는 배당금만큼 낮아져요(<TermLink id="ex-dividend">배당락</TermLink>).</p>}
+      {d.status === 'ex' && <p><b><TermLink id="ex-dividend">배당락</TermLink>: 배당주의 시가가 배당금만큼 낮아졌어요.</b> {got ? <>내 배당금 <span className="up">+{won(got)}</span> 입금. 받은 돈과 떨어진 가격이 같아 평가액은 그대로예요.</> : '기준일에 가진 주식이 없어 받은 배당금은 없어요.'}</p>}
+    </section>
+  );
+}
 function IndexStrip({ view }: { view: RoomView }) {
   const now = indexValue(view.stocks);
   const rounds = Math.max(0, ...view.stocks.map(s => s.history.length));
@@ -574,6 +591,10 @@ function Assets({ view, cancel, toast }: { view: RoomView; cancel: PlayProps['ca
       {p.holdings.length ? <ul className="list">{p.holdings.map(h => <li key={h.code}><span>{h.name}<small>{h.qty.toLocaleString('ko-KR')}주 · 평균 {won(h.avgCost)}</small></span><span className={dir(h.pnl)}>{signedWon(h.pnl)}</span></li>)}</ul> : <p className="hint">아직 보유 종목이 없습니다.</p>}
       <h3 className="h small">걸어 둔 <TermLink id="limit-order">지정가</TermLink> 예약</h3>
       {p.orders.length ? <ul className="list">{p.orders.map(o => <li key={o.code}><span>{view.stocks.find(s => s.code === o.code)!.name}<small>{o.side === 'buy' ? '매수' : '매도'} {o.qty.toLocaleString('ko-KR')}주 · 지정가 {won(o.price)}</small></span><button className="ghost small" disabled={view.phase !== 'trade'} onClick={async () => { const r = await cancel(o.code); toast(r.ok ? '예약을 취소했습니다' : r.reason ?? '취소하지 못했습니다'); }}>취소</button></li>)}</ul> : <p className="hint">예약한 주문이 없습니다.</p>}
+      {!!p.dividendLog?.length && <>
+        <h3 className="h small">받은 <TermLink id="dividend">배당금</TermLink></h3>
+        <ul className="list">{p.dividendLog.map((d, i) => <li key={i}><span>R{d.round} {view.stocks.find(s => s.code === d.code)!.name}<small>{d.qty.toLocaleString('ko-KR')}주 × {won(d.dps)}</small></span><span className="up">+{won(d.amount)}</span></li>)}</ul>
+      </>}
       <h3 className="h small">체결 내역</h3>
       {p.fillLog.length ? <ul className="list">{p.fillLog.slice().reverse().map((f, i) => <li key={i}><span>R{f.round} {view.stocks.find(s => s.code === f.code)!.name}<small>{f.side === 'buy' ? '매수' : '매도'} {f.qty.toLocaleString('ko-KR')}주 · {won(f.price)} · 수수료 {won(f.fee)}</small></span></li>)}</ul> : <p className="hint">아직 체결된 주문이 없습니다.</p>}
     </div>

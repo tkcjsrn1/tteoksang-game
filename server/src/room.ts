@@ -1,8 +1,8 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, feeOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
-import type { CardView, Contribution, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PredictionView, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
+import { checkOrder, computeClose, dividendRound, exDividendPrice, feeOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PredictionView, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
 import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
@@ -25,6 +25,8 @@ export interface Player {
   fills: Fill[]; fees: number; valueHist: number[]; rankHist: number[]; results: RoundResult[];
   cards: Record<number, 'A' | 'B'>; predictions: Record<number, { stageId: string; choice: 'A' | 'B'; confidence: number; correct: boolean | null }>;
   observations: Observation[];
+  /** 받은 배당금. 예전 저장 데이터에는 없습니다 */
+  dividends?: DividendPaid[];
   /** 손절·익절 자동 주문. 예전 저장 데이터에는 없습니다 */
   stops?: Partial<Record<StockCode, StopOrder>>;
 }
@@ -35,6 +37,8 @@ export interface RoomState {
   players: Player[]; spectators: string[];
   prices: Record<StockCode, number>; history: Record<StockCode, PriceBreakdown[]>;
   settled: number[]; nextRoomCode: string | null;
+  /** 배당락을 적용한 라운드(중복 방지). 예전 저장 데이터에는 없습니다 */
+  exDividendRound?: number | null;
   /** 장중 시세. 예전 저장 데이터에는 없습니다 */
   live?: LiveState | null;
 }
@@ -149,7 +153,33 @@ export class GameRoom {
     });
     this.s.secondRevealed = false;
     this.s.newsStartedAt = now;
+    if (r === dividendRound(this.config.rounds) + 1) this.payDividends(r);
     this.setPhase('news', this.config.news, now);
+  }
+  /** 배당 종목(이번 판에서 주당 배당금이 있는 종목) */
+  private dividendItems() { return this.stocks.filter(st => fundOf(st.code).dps > 0).map(st => ({ code: st.code, name: st.name, dps: fundOf(st.code).dps })); }
+  /** 기준일 다음 라운드 시작: 기준일 장 마감 때 가진 사람에게 배당금을 넣고, 시가를 배당금만큼 낮춥니다(배당락).
+      입금과 가격 하락이 같은 순간이라 평가액은 그대로입니다. */
+  private payDividends(r: number) {
+    if (this.s.exDividendRound === r) return;
+    this.s.exDividendRound = r;
+    for (const it of this.dividendItems()) {
+      for (const p of this.s.players) {
+        const qty = p.holdings[it.code]?.qty ?? 0;
+        if (!qty) continue;
+        const amount = qty * it.dps;
+        p.cash += amount;
+        (p.dividends ??= []).push({ round: r, code: it.code, qty, dps: it.dps, amount });
+      }
+      this.s.prices[it.code] = exDividendPrice(this.s.prices[it.code], it.dps);
+    }
+  }
+  private dividendView(): DividendView | null {
+    const items = this.dividendItems();
+    if (!items.length || this.s.status === 'lobby') return null;
+    const rd = dividendRound(this.config.rounds), r = this.s.round;
+    const status = r < rd - 1 ? 'before' : r === rd - 1 ? 'upcoming' : r === rd ? 'record' : r === rd + 1 ? 'ex' : 'done';
+    return { recordRound: rd, status, items };
   }
   /** 시간이 된 전환을 수행합니다. 'settled'를 돌려주면 저장 후 beginRecap을 불러야 합니다. */
   /** 'tick'이면 장중 시세 한 칸이 지났습니다(가벼운 시세 메시지만 보내면 됨). */
@@ -479,7 +509,8 @@ export class GameRoom {
       const path = live?.paths[st.code] ?? [bases[st.code]];
       let buyQty = 0, sellQty = 0;
       roundFills.forEach(fs => fs.forEach(f => { if (f.code === st.code) { if (f.side === 'buy') buyQty += f.qty; else sellQty += f.qty; } }));
-      const b: PriceBreakdown = { ...c, high: Math.max(c.closePrice, ...path), low: Math.min(c.closePrice, ...path), preClose: preClose[st.code], volume: buyQty + sellQty, buyQty, sellQty };
+      const ex = this.s.exDividendRound === round && fundOf(st.code).dps > 0 ? fundOf(st.code).dps : undefined;
+      const b: PriceBreakdown = { ...c, high: Math.max(c.closePrice, ...path), low: Math.min(c.closePrice, ...path), preClose: preClose[st.code], volume: buyQty + sellQty, buyQty, sellQty, ...(ex ? { exDividend: ex } : {}) };
       this.s.history[st.code].push(b);
       this.s.prices[st.code] = b.closePrice;
     });
@@ -598,9 +629,11 @@ export class GameRoom {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),
         orders: Object.values(p.orders) as Order[],
-        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, ...(f.trigger ? { trigger: f.trigger } : {}) }))
+        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, ...(f.trigger ? { trigger: f.trigger } : {}) })),
+        dividendLog: p.dividends ?? []
       } : null,
       lastResult: p && !inSettling ? p.results[p.results.length - 1] ?? null : null,
+      dividend: this.dividendView(),
       report: p && this.s.status === 'finished' ? buildReport(this, p) : null,
       nextRoomCode: this.s.nextRoomCode
     };

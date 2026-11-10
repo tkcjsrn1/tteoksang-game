@@ -32,6 +32,8 @@ export interface PriceBreakdown {
   /** 봉 차트용 고가·저가. 장중 시세(1초 단위)와 종료가 중 가장 높은·낮은 값입니다. 예전 저장 데이터에는 없습니다. */
   high?: number;
   low?: number;
+  /** 이 라운드 시작 때 배당락으로 이전가를 낮춘 금액(주당 배당금). 없으면 없음 */
+  exDividend?: number;
   /** 장중 시세가 끝난 가격(결과 공개 직전). 여기서 종료가까지가 사건 결과 공개로 움직인 몫입니다. */
   preClose?: number;
   /** 이번 라운드에 체결된 수량(참가자 + NPC). 예전 저장 데이터에는 없습니다. */
@@ -111,7 +113,12 @@ export interface Portfolio {
   holdings: { code: StockCode; name: string; qty: number; avgCost: number; price: number; pnl: number; stop?: number | null; take?: number | null }[];
   orders: Order[];
   fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; trigger?: 'stop' | 'take' }[];
+  /** 받은 배당금 */
+  dividendLog?: DividendPaid[];
 }
+export interface DividendPaid { round: number; code: StockCode; qty: number; dps: number; amount: number }
+/** 이번 판 배당 일정. upcoming: 다음 라운드가 기준일, record: 이번 라운드가 기준일, ex: 이번 라운드 시작 때 배당락·입금, done: 끝 */
+export interface DividendView { recordRound: number; status: 'before' | 'upcoming' | 'record' | 'ex' | 'done'; items: { code: StockCode; name: string; dps: number }[] }
 export interface RoomView {
   code: string; mode: GameMode; status: RoomStatus; phase: Phase | null;
   round: number; totalRounds: number;
@@ -125,6 +132,7 @@ export interface RoomView {
   prediction: PredictionView | null;
   portfolio: Portfolio | null;
   lastResult: RoundResult | null;
+  dividend?: DividendView | null;
   report: FinalReport | null;
   nextRoomCode: string | null;
   operatorToken?: string;

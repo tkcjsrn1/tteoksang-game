@@ -84,6 +84,10 @@ export function perOf(code: StockCode, price: number): number | null {
 }
 /** 배당수익률(bp) = 주당 배당금 ÷ 주가 */
 export const dividendYieldBp = (code: StockCode, price: number) => Math.round(fundOf(code).dps * 10000 / price);
+/** 배당 기준일 라운드(이 라운드 장 마감 때 가진 주식에 배당). 다음 라운드 시작 때 배당금 입금과 배당락. */
+export const dividendRound = (rounds: number) => Math.ceil(rounds * 0.6);
+/** 배당락 뒤 시가: 배당금만큼 낮춰 10원 단위로 반올림, 최저 100원 */
+export const exDividendPrice = (price: number, dps: number) => Math.max(100, Math.round((price - dps) / 10) * 10);
 /** 이번 판 종목으로 만든 시가총액 가중 지수. 판 시작 = 1000 */
 export const INDEX_BASE = 1000;
 export function indexValue(stocks: { code: StockCode; price: number; startPrice: number }[]): number {

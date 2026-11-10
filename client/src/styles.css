@@ -500,3 +500,4 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .stop-grid label { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 8px; font-size: 14px; }
 .stop-grid input { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; }
 .stops .btn-row { margin-top: 8px; }
+.dividend-note p { margin: 0; font-size: 14px; }

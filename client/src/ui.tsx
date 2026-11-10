@@ -54,6 +54,7 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
         <li><span><TermLink id="volatility">종목 변동</TermLink></span><span className={`num ${dir(b.stockBp)}`}>{bpText(b.stockBp)}</span></li>
         <li className="bd-sum"><span>합계</span><span className={`num ${dir(b.rawBp)}`}>{bpText(b.rawBp)}</span></li>
       </ul>
+      {b.exDividend && <p className="note"><TermLink id="ex-dividend">배당락</TermLink>으로 이전가가 배당금 {won(b.exDividend)}만큼 낮아진 뒤 시작한 라운드입니다.</p>}
       {b.capped && <p className="note">±2,000<TermLink id="bp">bp</TermLink> 제한이 적용되어 합계 {bpText(b.rawBp)} 대신 {bpText(b.cappedBp)}을 썼습니다.</p>}
       {b.limit && <p className="note"><TermLink id="price-limit">{b.limit === 'upper' ? '상한가' : '하한가'}</TermLink> {won(b.limit === 'upper' ? b.upperLimit : b.lowerLimit)}가 적용되었습니다.</p>}
       {b.roundingWon !== 0 && <p className="note">10원 단위 반올림으로 가격이 {signedWon(b.roundingWon)} 조정되어, 실제 등락률이 합계와 조금 다를 수 있습니다.</p>}
