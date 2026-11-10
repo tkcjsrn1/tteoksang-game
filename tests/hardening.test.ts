@@ -1,5 +1,7 @@
 /* 서버를 죽이거나 상태를 무한히 키울 수 있는 입력을 막는지 확인합니다. */
 import assert from 'node:assert/strict';
+import { IncomingMessage, ServerResponse } from 'node:http';
+import { Socket } from 'node:net';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -25,6 +27,16 @@ test('잘못된 % 인코딩 주소는 400이고 서버는 계속 살아 있다',
   assert.equal(ok.status, 200);
   const page = await fetch(`http://localhost:${port}/room/123456`);
   assert.equal(page.status, 200);
+});
+
+test('URL 생성이 실패하는 요청은 400이고 서버는 계속 살아 있다', async () => {
+  const req = new IncomingMessage(new Socket());
+  req.url = '//[';
+  const res = new ServerResponse(req);
+  hub.server.emit('request', req, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.writableEnded, true);
+  assert.equal((await fetch(`http://localhost:${port}/api/health`)).status, 200);
 });
 
 test('경로 이동(../)으로 정적 폴더 밖 파일을 읽지 못한다', async () => {
