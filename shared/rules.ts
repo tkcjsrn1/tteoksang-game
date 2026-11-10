@@ -128,23 +128,27 @@ export function viDirection(open: number, price: number): 1 | -1 | 0 {
 }
 
 /* ---------- 투자자별 매매(수급) ----------
-   외국인·기관·개인의 순매수 금액입니다. 셋을 더하면 0이 됩니다(누가 사면 누가 팝니다).
-   정산이 끝난 뒤에만 공개합니다. 시드로 정해져서 같은 판을 다시 보면 같은 값이 나옵니다. */
+   실제 체결에서 바로 뽑습니다. 지어낸 숫자가 아닙니다.
+   - 개인: 사람 참가자들이 산 금액 − 판 금액
+   - 기관: NPC들이 산 금액 − 판 금액
+   - 외국인: 그 둘을 받아 준 호가창(가상 유동성). 누가 사면 누가 팔기 때문에 셋을 더하면 0입니다.
+   실제 시장의 외국인·기관과는 다르다는 점을 용어 사전 '이 게임에서는' 칸에 적었습니다. */
 export const INVESTORS = ['foreign', 'institution', 'retail'] as const;
 export type Investor = typeof INVESTORS[number];
 export const INVESTOR_LABEL: Record<Investor, string> = { foreign: '외국인', institution: '기관', retail: '개인' };
-/** 순매수 금액을 "+12.4억", "−3.0억"처럼 (0에 가까우면 "0") */
+/** 순매수 금액을 "+1,240만", "−30만"처럼. 0에 가까우면 "0" */
 export function formatFlow(won: number): string {
-  const eok = won / 100_000_000;
-  if (Math.abs(eok) < 0.05) return '0';
-  return `${eok > 0 ? '+' : '−'}${Math.abs(eok).toFixed(1)}억`;
+  if (Math.abs(won) < 10_000) return '0';
+  const man = Math.round(won / 10_000);
+  return `${man > 0 ? '+' : '−'}${Math.abs(man).toLocaleString('ko-KR')}만`;
 }
-/** 한 라운드 한 종목의 투자자별 순매수(원). 오른 날은 외국인·기관이 사고 개인이 파는 쪽으로 기웁니다. */
-export function netFlows(rnd: () => number, changeBp: number, turnoverWon: number): Record<Investor, number> {
-  const tilt = Math.max(-1, Math.min(1, changeBp / 600));
-  const foreign = Math.round(turnoverWon * (tilt * 0.35 + (rnd() - 0.5) * 0.3));
-  const institution = Math.round(turnoverWon * (tilt * 0.2 + (rnd() - 0.5) * 0.3));
-  return { foreign, institution, retail: -(foreign + institution) };
+/** 체결 하나하나를 투자자별 순매수(산 금액 − 판 금액)로 모읍니다. 셋을 더하면 0이 됩니다. */
+export function sumFlows(fills: { investor: Investor; side: Side; gross: number }[]): Record<Investor, number> {
+  const out: Record<Investor, number> = { foreign: 0, institution: 0, retail: 0 };
+  for (const f of fills) out[f.investor] += f.side === 'buy' ? f.gross : -f.gross;
+  /* 참가자와 NPC가 산 만큼을 호가창이 팔았습니다(그 반대도 마찬가지). */
+  out.foreign = -(out.institution + out.retail) || 0;   /* -0이 나오지 않게 */
+  return out;
 }
 
 export const dividendRound = (rounds: number) => Math.ceil(rounds * 0.6);

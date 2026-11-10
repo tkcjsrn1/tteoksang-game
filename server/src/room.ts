@@ -1,7 +1,8 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, netFlows, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import { checkOrder, computeClose, sumFlows, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import type { Investor } from '../../shared/rules';
 import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
@@ -482,6 +483,8 @@ export class GameRoom {
     this.s.players.forEach(p => { p.orders = {}; });
     const preClose = Object.fromEntries(this.stocks.map(st => [st.code, this.markPrice(st.code)])) as Record<StockCode, number>;
     const roundFills = new Map(this.s.players.map(p => [p.id, p.fills.filter(f => f.round === round)]));
+    /* 투자자별 순매수용: 사람 참가자는 개인, NPC는 기관으로 묶습니다. */
+    const flowFills = this.s.players.flatMap(p => (roundFills.get(p.id) ?? []).map(f => ({ code: f.code, side: f.side, gross: f.gross, investor: (p.kind === 'human' ? 'retail' : 'institution') as Investor })));
     const headline: Partial<Record<StockCode, 1 | -1>> = {};
     const beatOf: Partial<Record<StockCode, boolean>> = {};
     plan.stages.forEach(st => {
@@ -534,10 +537,8 @@ export class GameRoom {
       let buyQty = 0, sellQty = 0;
       roundFills.forEach(fs => fs.forEach(f => { if (f.code === st.code) { if (f.side === 'buy') buyQty += f.qty; else sellQty += f.qty; } }));
       const ex = this.s.exDividendRound === round && fundOf(st.code).dps > 0 ? fundOf(st.code).dps : undefined;
-      /* 투자자별 순매수: 시드로 정해져 같은 판을 다시 봐도 같습니다. 거래대금은 종료가 × 체결 수량에 가상 기관 물량을 더해 잡습니다. */
-      const fRnd = mulberry(this.s.seed ^ Math.imul(round, 0x27D4EB2F) ^ Math.imul(Number(st.code.slice(1)), 0xC2B2AE35));
-      const turnover = (buyQty + sellQty + 20_000 + Math.floor(fRnd() * 80_000)) * c.closePrice;
-      const flows = netFlows(fRnd, c.changeBp, turnover);
+      /* 투자자별 순매수: 이번 라운드 실제 체결에서 바로 뽑습니다(사람=개인, NPC=기관, 호가창=외국인). */
+      const flows = sumFlows(flowFills.filter(f => f.code === st.code));
       const b: PriceBreakdown = { ...c, high: Math.max(c.closePrice, ...path), low: Math.min(c.closePrice, ...path), preClose: preClose[st.code], volume: buyQty + sellQty, buyQty, sellQty, flows, ...(ex ? { exDividend: ex } : {}) };
       this.s.history[st.code].push(b);
       this.s.prices[st.code] = b.closePrice;
