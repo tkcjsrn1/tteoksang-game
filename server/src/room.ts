@@ -1,8 +1,9 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
-import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
+import { checkOrder, computeClose, sumFlows, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import type { Investor } from '../../shared/rules';
+import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
 import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
@@ -11,7 +12,9 @@ import { buildReport } from './report';
 /** refPrice: 체결 순간의 장중 시세. kind: 시장가(바로 체결)·지정가(예약). k: 주문 시간 시작부터 지난 초 */
 export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; refPrice?: number; /** 수수료 + 거래세 */ fee: number; /** 그중 거래세(매도만) */ tax?: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string; kind?: OrderKind; k?: number; trigger?: 'stop' | 'take' }
 /** 이번 라운드 장중 시세. paths[code][k]가 k초의 가격입니다. done이면 종료가가 정해진 뒤입니다. */
-export interface LiveState { round: number; startedAt: number; steps: number; k: number; breakAt: number | null; paths: Record<StockCode, number[]>; done: boolean }
+export interface LiveState { round: number; startedAt: number; steps: number; k: number; breakAt: number | null; paths: Record<StockCode, number[]>; done: boolean;
+  /** 변동성 완화장치(VI)로 거래를 멈춘 종목: 멈춘 시각(k)과 풀리는 시각(k). 예전 저장 데이터에는 없습니다 */
+  halts?: Partial<Record<StockCode, { from: number; until: number; dir: 1 | -1 }>>; }
 export interface Observation {
   round: number;
   paperGain: number; paperLoss: number; realizedGain: number; realizedLoss: number;
@@ -191,6 +194,7 @@ export class GameRoom {
       while (s.live.k < k) {
         s.live.k++;
         out = out === 'none' ? 'tick' : out;
+        if (this.checkVi()) out = 'changed';
         this.matchLimits(now);
         this.checkStops(now);
         /* 장중 속보: 주문 시간 중간에 두 번째 뉴스가 뜨고, 같은 순간 시세가 헤드라인 방향으로 튑니다. */
@@ -241,8 +245,36 @@ export class GameRoom {
       paths[st.code] = intradayPath(rnd, this.s.prices[st.code], r.marketBp + (r.stockBp[st.code] ?? 0) + react, steps, st.maxMoveBp * WIGGLE_X,
         breakAt !== null && react ? { at: breakAt, bp: react } : undefined);
     });
-    this.s.live = { round: this.s.round, startedAt: now, steps, k: 0, breakAt, paths, done: false };
+    this.s.live = { round: this.s.round, startedAt: now, steps, k: 0, breakAt, paths, done: false, halts: {} };
   }
+  /* ---------- 변동성 완화장치(VI) ---------- */
+  /** 이 종목이 지금 VI로 멈춰 있는지. 멈춰 있으면 풀릴 때까지 남은 초, 아니면 0 */
+  haltLeft(code: StockCode): number {
+    const l = this.s.live;
+    if (!l || l.done || l.round !== this.s.round || this.s.phase !== 'trade') return 0;
+    const h = l.halts?.[code];
+    return h && l.k < h.until ? h.until - l.k : 0;
+  }
+  /** 시가 대비 ±10%를 넘긴 종목의 거래를 잠깐 멈춥니다. 한 라운드에 종목마다 한 번만 걸립니다. */
+  private checkVi(): boolean {
+    const l = this.s.live;
+    if (!l || l.done) return false;
+    if (!l.halts) l.halts = {};
+    let changed = false;
+    for (const st of this.stocks) {
+      if (l.halts[st.code]) continue;                 // 이번 라운드에 이미 걸렸던 종목은 넘어갑니다
+      const path = l.paths[st.code];
+      if (!path) continue;
+      const dir = viDirection(path[0], path[Math.min(l.k, l.steps)]);
+      if (!dir) continue;
+      l.halts[st.code] = { from: l.k, until: Math.min(l.steps, l.k + VI_SECONDS), dir };
+      /* 멈춰 있는 동안 걸어 둔 예약은 취소합니다(실제로도 단일가로 넘어가며 호가가 정리됩니다). */
+      for (const p of this.s.players) if (p.orders[st.code]) { delete p.orders[st.code]; this.touched.add(p.id); }
+      changed = true;
+    }
+    return changed;
+  }
+
   /** 지금 가격. 주문 시간에는 장중 시세, 그 밖에는 직전 종료가 */
   markPrice(code: StockCode): number {
     const l = this.s.live;
@@ -302,6 +334,8 @@ export class GameRoom {
     if (!stockOf(code) || !gameCodes(this.s.plan).includes(code)) return { ok: false, reason: '없는 종목입니다' };
     if (side !== 'buy' && side !== 'sell') return { ok: false, reason: '잘못된 주문입니다' };
     if (kind !== 'market' && kind !== 'limit') return { ok: false, reason: '잘못된 주문입니다' };
+    const halt = this.haltLeft(code);
+    if (halt) return { ok: false, reason: `변동성 완화장치(VI)로 거래가 멈췄습니다. ${halt}초 뒤에 다시 주문할 수 있어요` };
     const res = this.applyOrder(p, requestId, code, side, qty, now, kind, limit);
     p.requests[requestId] = { ok: res.ok, reason: res.reason, round: this.s.round };
     return res;
@@ -386,6 +420,7 @@ export class GameRoom {
   private checkStops(now: number) {
     if (this.s.phase !== 'trade') return;
     for (const p of this.s.players) for (const [code, st] of Object.entries(p.stops ?? {}) as [StockCode, StopOrder][]) {
+      if (this.haltLeft(code)) continue;   // VI로 멈춘 동안에는 손절·익절도 걸리지 않습니다
       const price = this.markPrice(code);
       const trigger = st.stop !== null && price <= st.stop ? 'stop' : st.take !== null && price >= st.take ? 'take' : null;
       if (!trigger) continue;
@@ -401,7 +436,7 @@ export class GameRoom {
   /** 걸어 둔 지정가 주문 중 시세가 닿은 것을 지정가에 체결합니다. */
   private matchLimits(now: number) {
     for (const p of this.s.players) for (const o of Object.values(p.orders)) {
-      if (!o || o.kind !== 'limit') continue;
+      if (!o || o.kind !== 'limit' || this.haltLeft(o.code)) continue;
       const price = this.markPrice(o.code);
       /* 매수 예약은 매도 호가(=시세)가, 매도 예약은 매수 호가(=시세 − 10원)가 지정가에 닿으면 체결 */
       const bid = this.bestBid(o.code);
@@ -448,6 +483,8 @@ export class GameRoom {
     this.s.players.forEach(p => { p.orders = {}; });
     const preClose = Object.fromEntries(this.stocks.map(st => [st.code, this.markPrice(st.code)])) as Record<StockCode, number>;
     const roundFills = new Map(this.s.players.map(p => [p.id, p.fills.filter(f => f.round === round)]));
+    /* 투자자별 순매수용: 사람 참가자는 개인, NPC는 기관으로 묶습니다. */
+    const flowFills = this.s.players.flatMap(p => (roundFills.get(p.id) ?? []).map(f => ({ code: f.code, side: f.side, gross: f.gross, investor: (p.kind === 'human' ? 'retail' : 'institution') as Investor })));
     const headline: Partial<Record<StockCode, 1 | -1>> = {};
     const beatOf: Partial<Record<StockCode, boolean>> = {};
     plan.stages.forEach(st => {
@@ -500,7 +537,9 @@ export class GameRoom {
       let buyQty = 0, sellQty = 0;
       roundFills.forEach(fs => fs.forEach(f => { if (f.code === st.code) { if (f.side === 'buy') buyQty += f.qty; else sellQty += f.qty; } }));
       const ex = this.s.exDividendRound === round && fundOf(st.code).dps > 0 ? fundOf(st.code).dps : undefined;
-      const b: PriceBreakdown = { ...c, high: Math.max(c.closePrice, ...path), low: Math.min(c.closePrice, ...path), preClose: preClose[st.code], volume: buyQty + sellQty, buyQty, sellQty, ...(ex ? { exDividend: ex } : {}) };
+      /* 투자자별 순매수: 이번 라운드 실제 체결에서 바로 뽑습니다(사람=개인, NPC=기관, 호가창=외국인). */
+      const flows = sumFlows(flowFills.filter(f => f.code === st.code));
+      const b: PriceBreakdown = { ...c, high: Math.max(c.closePrice, ...path), low: Math.min(c.closePrice, ...path), preClose: preClose[st.code], volume: buyQty + sellQty, buyQty, sellQty, flows, ...(ex ? { exDividend: ex } : {}) };
       this.s.history[st.code].push(b);
       this.s.prices[st.code] = b.closePrice;
     });
@@ -554,6 +593,25 @@ export class GameRoom {
     });
   }
 
+  /** 다음 라운드에 발표가 예정된 종목. 실제 시장의 실적 발표 일정표에 해당합니다.
+      어떤 회사 소식이 나올지만 알려 주고, 헤드라인과 결과는 담지 않습니다. */
+  private scheduleView(): ScheduleItem[] {
+    const next = this.s.plan.rounds[this.s.round];      // 다음 라운드(0-base)
+    if (this.s.status !== 'playing' || !next) return [];
+    /* 이미 공개된 사건의 제목만 보여 줍니다. 처음 나오는 사건은 제목이 곧 내용이라 숨깁니다. */
+    const shown = new Set<string>();
+    for (let r = 1; r <= this.s.round; r++)
+      for (const ps of this.s.plan.rounds[r - 1].stages) { const id = arcOfStage.get(ps.stageId)?.id; if (id) shown.add(id); }
+    const out: ScheduleItem[] = [];
+    for (const ps of next.stages) {
+      const stage = stageById.get(ps.stageId);
+      const code = stage?.targets[0];
+      if (!stage || !code || out.some(x => x.code === code)) continue;
+      const arc = arcOfStage.get(stage.id);
+      out.push({ round: next.round, code, name: stockOf(code).name, arcTitle: arc && shown.has(arc.id) ? arc.title : '' });
+    }
+    return out;
+  }
   private newsView(): RoundNews[] {
     const out: RoundNews[] = [];
     for (let r = 1; r <= this.s.round; r++) {
@@ -587,7 +645,8 @@ export class GameRoom {
       if (path && this.s.phase === 'trade' && !l!.done) { ticks = path.slice(0, Math.min(l!.k, l!.steps) + 1); price = ticks[ticks.length - 1]; open = path[0]; }
       else if (path && hideLast) { ticks = path.slice(); price = path[path.length - 1]; open = path[0]; }
       else if (path && this.s.phase === 'recap') { ticks = path.slice(); open = path[0]; }
-      return { code: st.code, name: st.name, sector: st.sector, desc: st.desc, price, openPrice: open, startPrice: st.start, lastChangeBp: last ? last.changeBp : null, history, ticks };
+      const halt = this.haltLeft(st.code);
+      return { code: st.code, name: st.name, sector: st.sector, desc: st.desc, price, openPrice: open, startPrice: st.start, lastChangeBp: last ? last.changeBp : null, history, ticks, ...(halt ? { haltLeft: halt } : {}) };
     });
   }
   private cardView(p: Player | null): CardView | null {
@@ -613,7 +672,7 @@ export class GameRoom {
       humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */
       leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
-      stocks, news: this.newsView(), breakingAt, card: this.cardView(p),
+      stocks, news: this.newsView(), schedule: this.scheduleView(), breakingAt, card: this.cardView(p),
       portfolio: p ? {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),

@@ -12,6 +12,8 @@ export type NpcType = 'chaser' | 'waiter' | 'diversifier';
 export interface EventImpact { stageId: string; label: string; bp: number; reason: string }
 
 /** 그래프 점 하나를 눌렀을 때 보여 주는 가격 변동 근거 */
+/** 그 라운드 투자자별 순매수(원). 셋을 더하면 0입니다. 정산 뒤에만 들어옵니다 */
+export interface NetFlows { foreign: number; institution: number; retail: number }
 export interface PriceBreakdown {
   round: number;
   basePrice: number;
@@ -39,6 +41,8 @@ export interface PriceBreakdown {
   preClose?: number;
   /** 이번 라운드에 체결된 수량(참가자 + NPC). 예전 저장 데이터에는 없습니다. */
   volume?: number;
+  /** 투자자별 순매수(원). 정산 뒤에만 */
+  flows?: NetFlows;
   buyQty?: number;
   sellQty?: number;
 }
@@ -75,6 +79,8 @@ export interface StockView {
   openPrice: number;
   /** 이번 라운드 장중 시세(1초 간격). 주문 시간에는 지금까지, 결과 시간에는 라운드 전체. 그 밖에는 없음 */
   ticks?: number[];
+  /** 변동성 완화장치(VI)로 멈춘 동안 남은 초. 멈추지 않았으면 없음 */
+  haltLeft?: number;
 }
 export interface CardView {
   id: string; title: string; body: string; concept: string;
@@ -118,6 +124,8 @@ export interface Portfolio {
 export interface DividendPaid { round: number; code: StockCode; qty: number; dps: number; amount: number }
 /** 이번 판 배당 일정. upcoming: 다음 라운드가 기준일, record: 이번 라운드가 기준일, ex: 이번 라운드 시작 때 배당락·입금, done: 끝 */
 export interface DividendView { recordRound: number; status: 'before' | 'upcoming' | 'record' | 'ex' | 'done'; items: { code: StockCode; name: string; dps: number }[] }
+/** 다음 라운드에 발표가 예정된 종목. 결과는 담지 않습니다 */
+export interface ScheduleItem { round: number; code: StockCode; name: string; arcTitle: string }
 export interface RoomView {
   code: string; mode: GameMode; status: RoomStatus; phase: Phase | null;
   round: number; totalRounds: number;
@@ -129,6 +137,8 @@ export interface RoomView {
   news: RoundNews[];
   /** 이번 라운드에 공개된 속보가 나온 시점. 개장부터 지난 초 */
   breakingAt?: number;
+  /** 다음 라운드 발표 예정(일정 예고). 마지막 라운드에는 빈 배열 */
+  schedule: ScheduleItem[];
   card: CardView | null;
   portfolio: Portfolio | null;
   lastResult: RoundResult | null;
