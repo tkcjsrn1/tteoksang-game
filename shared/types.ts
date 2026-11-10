@@ -29,21 +29,27 @@ export interface PriceBreakdown {
   limit: 'upper' | 'lower' | null;
   upperLimit: number;
   lowerLimit: number;
-  /** 봉 차트용 고가·저가. 라운드 안 가격 움직임은 계산하지 않으므로 '연출'입니다(stagedWicks). 예전 저장 데이터에는 없습니다. */
+  /** 봉 차트용 고가·저가. 장중 시세(1초 단위)와 종료가 중 가장 높은·낮은 값입니다. 예전 저장 데이터에는 없습니다. */
   high?: number;
   low?: number;
-  /** 이번 라운드에 체결된 수량(참가자 + NPC). 매수·매도 합계와 그 차이가 꼬리 길이에 반영됩니다. 예전 저장 데이터에는 없습니다. */
+  /** 장중 시세가 끝난 가격(결과 공개 직전). 여기서 종료가까지가 사건 결과 공개로 움직인 몫입니다. */
+  preClose?: number;
+  /** 이번 라운드에 체결된 수량(참가자 + NPC). 예전 저장 데이터에는 없습니다. */
   volume?: number;
   buyQty?: number;
   sellQty?: number;
 }
 
+export type OrderKind = 'market' | 'limit';
+/** 걸어 둔 지정가 주문(예약). 시장가 주문은 바로 체결되므로 여기에 남지 않습니다. */
 export interface Order {
-  code: StockCode; side: Side; qty: number;
-  /** 체결 예정가(슬리피지 반영). refPrice는 주문 때 기준가 */
+  code: StockCode; side: Side; qty: number; kind?: OrderKind;
+  /** 지정가. 시세가 이 가격에 닿으면 이 가격에 체결됩니다 */
   price: number; refPrice?: number; slipBp?: number;
   gross: number; fee: number; reserve: number; requestId: string; placedAt: number;
 }
+/** 체결 한 건 */
+export interface FillInfo { code: StockCode; side: Side; qty: number; price: number; fee: number; kind: OrderKind }
 export interface Holding { qty: number; avgCost: number; sinceRound: number }
 
 export interface NewsCard {
@@ -58,7 +64,12 @@ export interface RoundNews { round: number; cards: { card: NewsCard; result: New
 
 export interface StockView {
   code: StockCode; name: string; sector: string; desc: string;
+  /** 지금 가격. 주문 시간에는 장중 시세 */
   price: number; lastChangeBp: number | null; history: PriceBreakdown[]; startPrice: number;
+  /** 이번 라운드 시가(직전 종료가) */
+  openPrice: number;
+  /** 이번 라운드 장중 시세(1초 간격). 주문 시간에는 지금까지, 결과 시간에는 라운드 전체. 그 밖에는 없음 */
+  ticks?: number[];
 }
 export interface CardView {
   id: string; title: string; body: string; concept: string;
@@ -120,7 +131,7 @@ export interface RoomView {
 export type ClientMsg =
   | { t: 'hello'; code: string; token?: string | null; operatorToken?: string | null; display?: boolean }
   | { t: 'start' }
-  | { t: 'order'; requestId: string; code: StockCode; side: Side; qty: number }
+  | { t: 'order'; requestId: string; code: StockCode; side: Side; qty: number; kind?: OrderKind; limit?: number }
   | { t: 'cancel'; requestId: string; code: StockCode }
   | { t: 'card'; choice: 'A' | 'B' }
   | { t: 'predict'; choice: 'A' | 'B'; confidence: number }
@@ -131,6 +142,8 @@ export type ClientMsg =
 export type ServerMsg =
   | { t: 'welcome'; token: string | null; role: Role; label: string | null; code: string }
   | { t: 'view'; view: RoomView }
-  | { t: 'ack'; requestId: string; ok: boolean; reason?: string }
+  | { t: 'ack'; requestId: string; ok: boolean; reason?: string; fill?: FillInfo | null }
+  /** 장중 시세 한 칸(1초). k는 주문 시간 시작부터 지난 초 */
+  | { t: 'tick'; round: number; k: number; prices: Partial<Record<StockCode, number>> }
   | { t: 'error'; reason: string }
   | { t: 'pong' };

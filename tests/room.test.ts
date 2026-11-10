@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
 import { ARCS } from '../server/src/content';
-import { GROUPS, stockOf, STOCKS } from '../shared/rules';
+import { GROUPS, lowerLimit, stockOf, STOCKS } from '../shared/rules';
 import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
@@ -45,7 +45,7 @@ test('시작 후 처음 온 사람은 관전자이고 기존 참가자는 토큰
   room.disconnect(a, end);
   const again = room.join(a, end + 1);
   assert.equal(again.role, 'player');
-  assert.equal(room.player(a)!.orders.G01!.qty, 10);
+  assert.equal(room.player(a)!.holdings.G01!.qty, 10);
   const spectator = room.join(null, end);
   assert.equal(spectator.role, 'spectator');
   assert.equal(room.join(spectator.token, end).role, 'spectator');
@@ -53,13 +53,17 @@ test('시작 후 처음 온 사람은 관전자이고 기존 참가자는 토큰
   const v = room.view(spectator.token, 'spectator', end);
   assert.equal(v.portfolio, null);
 });
-test('접속이 끊겨도 접수된 주문은 마감 때 체결된다', () => {
+test('접속이 끊겨도 걸어 둔 지정가 예약은 시세가 닿으면 체결된다', () => {
   const { room, a } = setup();
-  const end = toTrade(room);
-  room.placeOrder(a, 'r1', 'G06', 'buy', 100, end);
-  room.disconnect(a, end);
-  next(room);
+  toTrade(room);
+  const live = room.s.live!, path = live.paths.G06;
+  const k = path.findIndex((p, i) => i > 0 && p < path[0]);
+  assert.ok(k > 0);
+  assert.equal(room.placeOrder(a, 'r1', 'G06', 'buy', 100, live.startedAt, 'limit', path[k]).ok, true);
+  room.disconnect(a, live.startedAt);
+  room.tick(live.startedAt + k * 1000);
   assert.equal(room.player(a)!.holdings.G06!.qty, 100);
+  assert.equal(room.player(a)!.fills[0].price, path[k]);
 });
 test('마감 시각과 같거나 늦은 주문은 거절하고, 직전 주문은 받는다', () => {
   const { room, a } = setup();
@@ -76,39 +80,67 @@ test('같은 요청이 다시 와도 주문과 체결은 하나다. 정산을 �
   room.placeOrder(a, 'dup', 'G01', 'buy', 10, end);
   const second = room.placeOrder(a, 'dup', 'G01', 'buy', 999, end);
   assert.equal(second.duplicate, true);
-  assert.equal(p.orders.G01!.qty, 10);
+  assert.equal(p.holdings.G01!.qty, 10);
+  assert.equal(p.fills.length, 1);
   next(room);
   const round = room.s.round, cash = p.cash, fills = p.fills.length, prices = { ...room.s.prices };
   assert.equal(room.settle(round, end), false);
   assert.equal(p.cash, cash); assert.equal(p.fills.length, fills); assert.deepEqual(room.s.prices, prices);
 });
-test('변경에 실패하면 원래 주문을 유지하고, 성공하면 예약금을 다시 잡는다', () => {
+test('지정가 예약: 변경에 실패하면 원래 예약을 유지하고, 성공하면 예약금을 다시 잡고, 취소하면 풀린다', () => {
   const { room, a } = setup();
   const end = toTrade(room);
   const p = room.player(a)!;
-  room.placeOrder(a, 'o1', 'G01', 'buy', 10, end);
-  const fail = room.placeOrder(a, 'o2', 'G01', 'buy', 100000, end);
-  assert.equal(fail.ok, false);
+  const low = room.markPrice('G01') - 500;   // 지금 시세보다 낮아 바로 체결되지 않음
+  assert.deepEqual(room.placeOrder(a, 'o1', 'G01', 'buy', 10, end, 'limit', low), { ok: true, fill: null });
   assert.equal(p.orders.G01!.qty, 10);
-  assert.equal(room.placeOrder(a, 'o3', 'G01', 'buy', 20, end).ok, true);
+  assert.equal(p.orders.G01!.reserve, low * 10 + Math.ceil(low * 10 * 20 / 10000));
+  assert.equal(room.placeOrder(a, 'o2', 'G01', 'buy', 100000, end, 'limit', low).ok, false);
+  assert.equal(p.orders.G01!.qty, 10);
+  assert.equal(room.placeOrder(a, 'o3', 'G01', 'buy', 20, end, 'limit', low).ok, true);
   assert.equal(p.orders.G01!.qty, 20);
+  assert.equal(room.view(a, 'player', end).portfolio!.reserved, p.orders.G01!.reserve);
   assert.equal(room.cancelOrder(a, 'o4', 'G01', end).ok, true);
   assert.equal(p.orders.G01, undefined);
   assert.equal(room.view(a, 'player', end).portfolio!.reserved, 0);
+  /* 10원 단위가 아니거나 가격 제한폭 밖이면 거절 */
+  assert.equal(room.placeOrder(a, 'o5', 'G01', 'buy', 1, end, 'limit', low + 5).ok, false);
+  assert.equal(room.placeOrder(a, 'o6', 'G01', 'buy', 1, end, 'limit', room.s.prices.G01 * 2).ok, false);
+  /* 지금 시세보다 유리한 지정가는 바로 체결(지정가보다 불리하게는 체결하지 않음) */
+  const high = room.markPrice('G02') + 300;
+  const r = room.placeOrder(a, 'o7', 'G02', 'buy', 10, end, 'limit', high);
+  assert.equal(r.ok, true);
+  assert.ok(r.fill && r.fill.price <= high && r.fill.price === room.markPrice('G02'));
 });
-test('매도 대금은 다음 라운드부터, 새로 산 주식은 이번 라운드에 팔 수 없다', () => {
+test('끝까지 시세가 닿지 않은 예약은 마감 때 자동 취소되고 예약금이 풀린다', () => {
   const { room, a } = setup();
   const end = toTrade(room);
-  const buyAll = Math.floor(9_900_000 / 12400);
-  assert.equal(room.placeOrder(a, 'b1', 'G01', 'buy', buyAll, end).ok, true);
-  assert.equal(room.placeOrder(a, 's1', 'G02', 'sell', 1, end).ok, false);
-  next(room); next(room); next(room);
-  assert.equal(room.s.phase, 'trade');
-  const e2 = room.s.phaseEndsAt! - 1;
   const p = room.player(a)!;
-  assert.equal(room.placeOrder(a, 's2', 'G01', 'sell', p.holdings.G01!.qty, e2).ok, true);
-  const before = p.cash;
-  assert.equal(room.placeOrder(a, 'b2', 'G02', 'buy', Math.floor(before / room.s.prices.G02) + 5, e2).ok, false);
+  const path = room.s.live!.paths.G03;
+  const never = Math.floor((Math.min(...path) - 100) / 10) * 10;
+  assert.ok(never >= lowerLimit(room.s.prices.G03), '이 시드는 하한가까지 여유가 있음');
+  assert.equal(room.placeOrder(a, 'n1', 'G03', 'buy', 5, end, 'limit', never).ok, true);
+  const cash = p.cash;
+  next(room);
+  assert.equal(p.orders.G03, undefined);
+  assert.equal(p.holdings.G03, undefined);
+  assert.equal(p.cash, cash);
+});
+test('시장가: 산 주식은 바로 팔 수 있고, 판 돈으로 바로 살 수 있다. 없는 주식은 못 판다', () => {
+  const { room, a } = setup();
+  const end = toTrade(room);
+  const p = room.player(a)!;
+  const r1 = room.placeOrder(a, 'b1', 'G01', 'buy', 100, end);
+  assert.ok(r1.ok && r1.fill && r1.fill.qty === 100);
+  assert.equal(p.holdings.G01!.qty, 100);
+  assert.equal(p.cash, 10_000_000 - r1.fill!.price * 100 - r1.fill!.fee);
+  assert.equal(room.placeOrder(a, 's0', 'G02', 'sell', 1, end).ok, false);
+  const r2 = room.placeOrder(a, 's1', 'G01', 'sell', 100, end);
+  assert.ok(r2.ok);
+  assert.equal(p.holdings.G01, undefined);
+  const max = Math.floor(p.cash / room.markPrice('G02'));
+  assert.equal(room.placeOrder(a, 'b2', 'G02', 'buy', max + 5, end).ok, false);
+  assert.equal(room.placeOrder(a, 'b3', 'G02', 'buy', 10, end).ok, true);
 });
 test('1만 대 기대에 6천 대: 하락 근거가 그래프 점에 기록된다', () => {
   const { room, a } = setup({ forcedArcs: ['nuvakan', 'rate'], forced: { 'nu-1': 'pass', 'nu-2a': 'approved', 'nu-3a': 'short' } });
@@ -158,33 +190,78 @@ test('이번 판에 없는 종목은 주문할 수 없다', () => {
   assert.equal(r.ok, false);
   assert.equal(room.placeOrder(a, 'x2', 'G99' as StockCode, 'buy', 1, t).ok, false);
 });
-test('슬리피지는 큰 주문을 낸 사람에게만 적용되고 종료가는 바꾸지 않는다. 체결 수량은 거래량·꼬리에 기록된다', () => {
+test('슬리피지는 큰 시장가 주문을 낸 사람에게만 적용되고 시세·종료가는 바꾸지 않는다. 체결 수량은 거래량에 기록된다', () => {
   const run = (bigQty: number) => {
     const { room, a, b } = setup({ seed: 11 });
     const t = toTrade(room);
-    const ref = room.s.prices.G03;
+    const ref = room.markPrice('G03');
     assert.equal(room.placeOrder(a, 'big', 'G03', 'buy', bigQty, t).ok, true);
     assert.equal(room.placeOrder(b, 'small', 'G03', 'buy', 10, t).ok, true);
     const pa = room.player(a)!, pb = room.player(b)!;
+    const path = room.s.live!.paths.G03.slice();
     next(room);
-    return { room, pa, pb, ref, h: room.s.history.G03[0] };
+    return { room, pa, pb, ref, path, h: room.s.history.G03[0] };
   };
   const big = run(900), small = run(1);
   const fa = big.pa.fills[0], fb = big.pb.fills[0];
-  assert.ok(fa.price > big.ref, '큰 주문은 기준가보다 비싸게');
+  assert.ok(fa.price > big.ref, '큰 주문은 지금 시세보다 비싸게');
   assert.equal(fa.refPrice, big.ref);
-  assert.equal(fb.price, big.ref, '작은 주문은 기준가 그대로');
+  assert.equal(fb.price, big.ref, '작은 주문은 지금 시세 그대로');
   const r = big.pa.results[0];
-  assert.equal(r.slippage, (fa.price - big.ref) * 900);
-  assert.equal(r.delta, r.contributions.reduce((x, c) => x + c.won, 0) - r.fees - r.slippage!);
-  /* 종료가는 주문과 무관합니다 */
+  assert.equal(r.slippage, (fa.price - big.ref) * 900, '슬리피지는 정보로만 표시(체결가에 이미 포함)');
+  assert.equal(r.delta, r.contributions.reduce((x, c) => x + c.won, 0) - r.fees);
+  /* 장중 시세와 종료가는 주문과 무관합니다 */
+  assert.deepEqual(big.path, small.path);
   assert.equal(big.h.closePrice, small.h.closePrice);
   /* 거래량: 참가자 + NPC 체결 수량 */
   const npcQty = (room: GameRoom) => room.s.players.filter(p => p.kind === 'npc').flatMap(p => p.fills).filter(f => f.code === 'G03').reduce((x, f) => x + f.qty, 0);
   assert.equal(big.h.volume, 900 + 10 + npcQty(big.room));
   assert.equal(big.h.buyQty! + big.h.sellQty!, big.h.volume);
-  /* 매수가 몰리면 위 꼬리가 같거나 길어집니다(연출) */
-  assert.ok(big.h.high! >= small.h.high!);
+  /* 고가·저가는 장중 시세와 종료가에서 나옵니다(연출 아님) */
+  assert.equal(big.h.high, Math.max(...big.path, big.h.closePrice));
+  assert.equal(big.h.low, Math.min(...big.path, big.h.closePrice));
+  assert.equal(big.h.preClose, big.path[big.path.length - 1]);
+});
+test('장중 시세: 결말을 담지 않고, 속보는 주문 시간 중간에 뜨며, 화면 시세는 지금까지만 보인다', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const { room, a } = setup({ seed });
+    toTrade(room);
+    const live = room.s.live!;
+    const plan = room.s.plan.rounds[0];
+    const hasBreaking = plan.stages.some(st => st.breaking);
+    /* 뉴스 시간에는 속보가 안 보입니다 */
+    assert.equal(live.breakAt === null, !hasBreaking);
+    const v0 = room.view(a, 'player', live.startedAt);
+    assert.equal(v0.news[0].cards.some(c => c.card.breaking), false, `${seed}: 속보는 아직`);
+    assert.ok(v0.stocks.every(s => s.ticks!.length === 1 && s.price === s.openPrice));
+    /* 경로 끝 = 시가 × (1 + 시장 + 종목 + 속보 반응). 사건 결과는 마감 때 */
+    for (const st of v0.stocks) {
+      const path = live.paths[st.code];
+      assert.equal(path[0], room.s.prices[st.code]);
+    }
+    const mid = live.startedAt + Math.floor(live.steps / 2) * 1000;
+    room.tick(mid);
+    const v1 = room.view(a, 'player', mid);
+    assert.equal(v1.news[0].cards.some(c => c.card.breaking), hasBreaking, `${seed}: 중간에 속보`);
+    assert.ok(v1.stocks.every(s => s.ticks!.length === Math.floor(live.steps / 2) + 1));
+    assert.ok(v1.stocks.every(s => s.price === live.paths[s.code][Math.floor(live.steps / 2)]));
+    /* 결말 문구는 마감 전까지 어디에도 없습니다 */
+    const secrets = plan.stages.map(st => ARCS.flatMap(x => x.stages).find(x => x.id === st.stageId)!.outcomes.find(o => o.id === st.outcomeId)!.actual);
+    const js = JSON.stringify(v1);
+    secrets.forEach(t => assert.equal(js.includes(`"${t}"`), false));
+    /* 마감: 시세 끝에서 종료가까지가 사건 결과 몫 */
+    next(room);
+    for (const st of room.stocks) {
+      const h = room.s.history[st.code][0];
+      const path = live.paths[st.code];
+      assert.equal(h.preClose, path[path.length - 1]);
+      if (!h.capped && !h.limit && h.eventBp === 0) {
+        const endBp = plan.marketBp + (plan.stockBp[st.code] ?? 0);
+        const reactOnly = Math.round((path[path.length - 1] / path[0] - 1) * 10000) - endBp;
+        assert.ok(Math.abs(reactOnly) <= 125, `${seed} ${st.code}: 사건이 없으면 시세 끝 ≈ 종료가 (${reactOnly}bp)`);
+      }
+    }
+  }
 });
 test('한 판 전체: 평가액 변화 = 종목 기여 합계 − 수수료, 같은 방은 같은 시장, 그래프 값과 현재가 일치', () => {
   const { room, a, b } = setup();
@@ -322,9 +399,14 @@ test('저장한 상태에서 그대로 복구한다', () => {
   const { room, a } = setup();
   const end = toTrade(room);
   room.placeOrder(a, 'keep', 'G01', 'buy', 5, end);
+  const low = room.markPrice('G02') - 300;
+  room.placeOrder(a, 'wait', 'G02', 'buy', 3, end, 'limit', low);
   const restored = new GameRoom(JSON.parse(JSON.stringify(room.s)));
-  assert.equal(restored.player(a)!.orders.G01!.qty, 5);
+  assert.equal(restored.player(a)!.holdings.G01!.qty, 5);
+  assert.equal(restored.player(a)!.orders.G02!.price, low);
+  assert.deepEqual(restored.s.live, room.s.live, '장중 시세도 그대로');
   restored.tick(restored.s.phaseEndsAt!);
   restored.beginRecap(0);
   assert.equal(restored.player(a)!.holdings.G01!.qty, 5);
+  assert.equal(restored.player(a)!.orders.G02, undefined);
 });

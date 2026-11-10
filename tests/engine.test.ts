@@ -37,18 +37,53 @@ test('수수료는 주문별 0.20%를 원 단위로 올림', () => {
   assert.equal(feeOf(1240000), 2480);
   assert.equal(feeOf(1001), 3);
 });
-test('매수 예약금 합계는 라운드 시작 현금 이내, 변경은 기존 주문을 돌려받고 검증', () => {
-  const o = { code: 'G01' as const, side: 'buy' as const, qty: 500, price: 10000, gross: 5_000_000, fee: 10_000, reserve: 5_010_000, requestId: 'a', placedAt: 0 };
+test('예약금: 시장가는 걸어 둔 예약금을 쓸 수 없고, 지정가는 같은 종목 예약을 새 예약으로 바꿔 검증', () => {
+  const o = { code: 'G01' as const, side: 'buy' as const, qty: 500, kind: 'limit' as const, price: 10000, gross: 5_000_000, fee: 10_000, reserve: 5_010_000, requestId: 'a', placedAt: 0 };
   const ctx = { cash: 10_000_000, holdings: {}, orders: { G01: o } };
+  /* 시장가: 예약금 501만 원을 뺀 499만 원 안에서만 */
   assert.equal(checkOrder(ctx, 'G02', 'buy', 500, 10000).ok, false);
-  /* 기존 G01 주문은 돌려받았다고 봅니다. 998주는 슬리피지 40bp(10,040원) 때문에 1,000만 원을 넘습니다 */
-  assert.equal(checkOrder(ctx, 'G01', 'buy', 998, 10000).ok, false);
-  assert.equal(checkOrder(ctx, 'G01', 'buy', 994, 10000).ok, true);
+  assert.equal(checkOrder(ctx, 'G02', 'buy', 497, 10000).ok, true);   // 슬리피지 15bp 포함
+  assert.equal(checkOrder(ctx, 'G01', 'buy', 497, 10000).ok, true);
+  assert.equal(checkOrder(ctx, 'G01', 'buy', 500, 10000).ok, false);
+  /* 지정가: 같은 종목 기존 예약은 돌려받았다고 봅니다. 슬리피지 없이 지정가 × 수량 + 수수료 */
+  assert.equal(checkOrder(ctx, 'G01', 'buy', 998, 10000, { limit: 10000 }).ok, true);
+  assert.equal(checkOrder(ctx, 'G01', 'buy', 999, 10000, { limit: 10000 }).ok, false);
+  assert.equal(checkOrder(ctx, 'G02', 'buy', 505, 10000, { limit: 9900 }).ok, false, '다른 종목 예약금은 그대로');
+  assert.equal(checkOrder(ctx, 'G02', 'buy', 500, 10000, { limit: 9900 }).ok, true);
+  /* 시장가 최대 수량은 슬리피지·수수료 포함 */
   assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 12400), 801);
   assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 10000), 994);
+  assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 10000, { limit: 10000 }), 998);
+  /* 매도 예약에 묶인 수량은 시장가로 팔 수 없습니다 */
+  const s = { code: 'G03' as const, side: 'sell' as const, qty: 70, kind: 'limit' as const, price: 9000, gross: 630_000, fee: 1260, reserve: 0, requestId: 'b', placedAt: 0 };
+  const held = { cash: 0, holdings: { G03: { qty: 100, avgCost: 8000, sinceRound: 1 } }, orders: { G03: s } };
+  assert.equal(checkOrder(held, 'G03', 'sell', 30, 9000).ok, true);
+  assert.equal(checkOrder(held, 'G03', 'sell', 31, 9000).ok, false);
+  assert.equal(checkOrder(held, 'G03', 'sell', 100, 9000, { limit: 9100 }).ok, true, '새 예약은 기존 예약을 대신함');
   assert.equal(checkOrder(ctx, 'G03', 'sell', 1, 10000).ok, false);
   assert.equal(checkOrder(ctx, 'G01', 'buy', 0, 10000).ok, false);
   assert.equal(checkOrder(ctx, 'G01', 'buy', 1.5, 10000).ok, false);
+});
+test('장중 시세 경로: 시가에서 출발해 목표에 닿고, 10원 단위·가격 제한폭 안, 같은 시드면 같은 경로', async () => {
+  const { intradayPath } = await import('../shared/rules');
+  const { mulberry } = await import('../server/src/plan');
+  for (let seed = 1; seed < 200; seed++) {
+    const base = [4300, 7200, 12400, 23400][seed % 4];
+    const end = (seed % 7 - 3) * 40;
+    const jump = seed % 3 === 0 ? { at: 45, bp: seed % 2 ? 120 : -120 } : undefined;
+    const path = intradayPath(mulberry(seed), base, end, 90, 150, jump);
+    assert.equal(path.length, 91);
+    assert.equal(path[0], base);
+    assert.ok(path.every(p => p % 10 === 0 && p >= lowerLimit(base) && p <= upperLimit(base)));
+    const want = Math.round(base * (10000 + end) / 100000) * 10;
+    assert.ok(Math.abs(path[90] - want) <= 10, `${seed}: 끝 ${path[90]} 목표 ${want}`);
+    assert.deepEqual(intradayPath(mulberry(seed), base, end, 90, 150, jump), path);
+  }
+  /* 속보 반응은 그 초에 한 번에 튑니다 */
+  const flat = intradayPath(mulberry(5), 10000, 120, 90, 0, { at: 45, bp: 120 });
+  assert.equal(flat[44], 10000);
+  assert.equal(flat[45], 10120);
+  assert.equal(flat[90], 10120);
 });
 test('슬리피지: 200만 원까지 0, 그 뒤 100만 원마다 5bp, 최대 40bp. 매수는 비싸게, 매도는 싸게', () => {
   assert.equal(slippageBp(0), 0);

@@ -95,6 +95,8 @@ export interface OrderContext { cash: number; holdings: Partial<Record<StockCode
 export type OrderCheck =
   | { ok: true; price: number; slipBp: number; gross: number; fee: number; reserve: number }
   | { ok: false; reason: string };
+/** limit: 지정가(이 가격에 체결, 슬리피지 없음). replace: 같은 종목에 걸어 둔 예약을 대신하는 주문이면 true(그 예약금·수량은 돌려받았다고 봄). */
+export interface OrderOpts { limit?: number; replace?: boolean }
 
 /* ---------- 슬리피지(게임 규칙) ----------
    큰 주문일수록 내 주문만 조금 불리한 가격에 체결됩니다. 다른 사람의 가격·종료가에는 영향을 주지 않습니다
@@ -115,57 +117,65 @@ export function fillPrice(ref: number, side: Side, qty: number): { price: number
   const price = side === 'buy' ? Math.ceil(ref * (10000 + slipBp) / 10000) : Math.floor(ref * (10000 - slipBp) / 10000);
   return { price, slipBp };
 }
-const reservedByOthers = (ctx: OrderContext, code: StockCode) => Object.values(ctx.orders).reduce((a, o) => a + (o && o.code !== code ? o.reserve : 0), 0);
+const reservedExcept = (ctx: OrderContext, code: StockCode | null) => Object.values(ctx.orders).reduce((a, o) => a + (o && o.code !== code ? o.reserve : 0), 0);
 
-/** 같은 종목의 기존 주문은 돌려받았다고 보고 검증합니다. 실패해도 기존 주문은 그대로입니다. ref는 기준가입니다. */
-export function checkOrder(ctx: OrderContext, code: StockCode, side: Side, qty: number, ref: number): OrderCheck {
+/** 주문 검증. ref는 지금 가격(장중 시세)입니다.
+    - 시장가: 지금 가격에 슬리피지를 붙여 바로 체결합니다. 걸어 둔 예약의 예약금·수량은 쓸 수 없습니다.
+    - 지정가(opts.limit): 그 가격에 체결될 때를 기준으로 예약금을 잡습니다. 같은 종목 예약은 새 예약으로 바뀝니다. */
+export function checkOrder(ctx: OrderContext, code: StockCode, side: Side, qty: number, ref: number, opts: OrderOpts = {}): OrderCheck {
   if (!Number.isSafeInteger(qty) || qty < 1) return { ok: false, reason: '수량은 1주 이상 정수여야 합니다' };
-  if (side === 'sell' && qty > (ctx.holdings[code]?.qty ?? 0)) return { ok: false, reason: '라운드 시작 보유 수량을 넘었습니다' };
-  if (side === 'buy' && ref * qty > ctx.cash) return { ok: false, reason: '주문 가능 현금이 부족합니다' };   // 큰 수 곱셈 전에 먼저 거릅니다
-  const { price, slipBp } = fillPrice(ref, side, qty);
+  const replace = opts.replace ?? opts.limit !== undefined;
+  const same = ctx.orders[code];
+  const lockedSell = !replace && same?.side === 'sell' ? same.qty : 0;
+  if (side === 'sell' && qty > (ctx.holdings[code]?.qty ?? 0) - lockedSell) return { ok: false, reason: lockedSell ? '매도 예약에 묶인 수량을 빼면 보유 수량이 모자랍니다' : '보유 수량을 넘었습니다' };
+  const unit = opts.limit ?? ref;
+  if (side === 'buy' && unit * qty > ctx.cash) return { ok: false, reason: '주문 가능 현금이 부족합니다' };   // 큰 수 곱셈 전에 먼저 거릅니다
+  const { price, slipBp } = opts.limit !== undefined ? { price: opts.limit, slipBp: 0 } : fillPrice(ref, side, qty);
   const gross = price * qty, fee = feeOf(gross);
   if (side === 'buy') {
     const reserve = gross + fee;
-    if (reservedByOthers(ctx, code) + reserve > ctx.cash) return { ok: false, reason: '주문 가능 현금이 부족합니다' };
+    if (reservedExcept(ctx, replace ? code : null) + reserve > ctx.cash) return { ok: false, reason: '주문 가능 현금이 부족합니다' };
     return { ok: true, price, slipBp, gross, fee, reserve };
   }
   return { ok: true, price, slipBp, gross, fee, reserve: 0 };
 }
-/** 슬리피지와 수수료까지 넣어 살 수 있는 최대 수량 */
-export function maxBuyQty(ctx: OrderContext, code: StockCode, ref: number): number {
-  const av = ctx.cash - reservedByOthers(ctx, code);
-  let q = Math.max(0, Math.floor(av / ref));
-  const cost = (n: number) => { const g = fillPrice(ref, 'buy', n).price * n; return g + feeOf(g); };
+/** 슬리피지와 수수료까지 넣어 살 수 있는 최대 수량. 지정가면 그 가격 기준 */
+export function maxBuyQty(ctx: OrderContext, code: StockCode, ref: number, opts: OrderOpts = {}): number {
+  const replace = opts.replace ?? opts.limit !== undefined;
+  const av = ctx.cash - reservedExcept(ctx, replace ? code : null);
+  const unit = opts.limit ?? ref;
+  let q = Math.max(0, Math.floor(av / unit));
+  const cost = (n: number) => { const g = (opts.limit ?? fillPrice(ref, 'buy', n).price) * n; return g + feeOf(g); };
   while (q > 0 && cost(q) > av) q--;
   return q;
 }
 
-/* ---------- 봉 꼬리(연출) ----------
-   이 게임은 라운드 안의 가격 움직임을 계산하지 않습니다. 봉의 몸통(시가=직전 종가, 종가=이번 종가)은 실제 계산값이고,
-   꼬리(고가·저가)는 같은 입력이면 항상 같은 값이 나오는 결정적 연출입니다. 가격 제한폭과 10원 단위를 지키고,
-   상한가로 끝나면 고가 = 종가, 하한가로 끝나면 저가 = 종가입니다. 화면에 '꼬리는 연출'이라고 밝힙니다.
-   주문 흐름(flow)을 주면 꼬리 길이에 반영합니다. 체결 금액이 클수록 꼬리가 길어지고, 매수가 많으면 위 꼬리,
-   매도가 많으면 아래 꼬리가 더 깁니다. 주문은 종료가를 바꾸지 않으므로 이것도 연출입니다. */
-export interface OrderFlow { buyQty: number; sellQty: number; turnover: number }
-/** 체결 금액이 이 정도면 주문 흐름 효과가 최대입니다(2명이 가진 돈 전부). */
-export const FLOW_FULL_WON = 20_000_000;
-function hash01(text: string, salt: number): number {
-  let h = 2166136261 ^ salt;
-  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return ((h >>> 0) % 10000) / 10000;
-}
-export function stagedWicks(code: StockCode, b: Pick<PriceBreakdown, 'round' | 'basePrice' | 'closePrice' | 'changeBp' | 'limit' | 'upperLimit' | 'lowerLimit' | 'marketBp' | 'stockBp'>, flow?: OrderFlow): { high: number; low: number } {
-  const key = `${code}:${b.round}:${b.basePrice}:${b.closePrice}:${b.marketBp}:${b.stockBp}`;
-  const span = stockOf(code).maxMoveBp * 2 + Math.abs(b.changeBp) * 0.3;    // 많이 움직인 날일수록 꼬리도 길게
-  const total = flow ? flow.buyQty + flow.sellQty : 0;
-  const intensity = flow && total > 0 ? Math.min(1, Math.max(0, flow.turnover) / FLOW_FULL_WON) : 0;
-  const imbalance = total > 0 ? (flow!.buyQty - flow!.sellQty) / total : 0;   // −1(전부 매도) ~ +1(전부 매수)
-  const upBp = Math.round(span * (hash01(key, 1) + intensity * (1 + imbalance) / 2));
-  const dnBp = Math.round(span * (hash01(key, 2) + intensity * (1 - imbalance) / 2));
-  const top = Math.max(b.basePrice, b.closePrice), bottom = Math.min(b.basePrice, b.closePrice);
-  let high = Math.min(b.upperLimit, Math.ceil(top * (10000 + upBp) / 100000) * 10);
-  let low = Math.max(b.lowerLimit, Math.floor(bottom * (10000 - dnBp) / 100000) * 10);
-  if (b.limit === 'upper') high = b.closePrice;
-  if (b.limit === 'lower') low = b.closePrice;
-  return { high: Math.max(high, top), low: Math.min(low, bottom) };
+/* ---------- 장중 시세 ----------
+   주문 시간 동안 1초마다 가격이 움직입니다. 움직임은 시장 분위기(marketBp)와 종목 변동(stockBp), 장중 속보 반응을 합친
+   목표까지 가는 무작위 경로(브라운 다리)입니다. 사건의 최종 결과는 경로에 넣지 않고 마감 때 한 번에 반영하므로,
+   장중 시세로 결말을 미리 알 수 없습니다. 같은 시드면 같은 경로가 나옵니다. */
+/** 장중 속보가 뜰 때 헤드라인 방향으로 먼저 튀는 폭(대표 종목 기준, bp). 같은 업종 종목은 linkBeta배 */
+export const REACT_BP = 120;
+/** 장중 흔들림 크기: 종목 변동폭(maxMoveBp)의 이 배수가 한 라운드 표준편차 */
+export const WIGGLE_X = 1.2;
+/** 0~1 균등 난수 함수 */
+export type Rnd = () => number;
+const gauss = (rnd: Rnd) => (rnd() + rnd() + rnd() + rnd() - 2) * Math.sqrt(3);   // 평균 0, 표준편차 1 근사
+/** base에서 출발해 steps초 뒤 endBp(만분율)에 닿는 경로. jump가 있으면 그 초에 bp만큼 튑니다(속보 반응, endBp에 포함).
+    가격은 10원 단위, base의 상·하한가 안. 길이 steps+1, 첫 값은 base. */
+export function intradayPath(rnd: Rnd, base: number, endBp: number, steps: number, wiggleBp: number, jump?: { at: number; bp: number }): number[] {
+  const n = Math.max(1, Math.floor(steps));
+  const w: number[] = [0];
+  const sd = wiggleBp / Math.sqrt(n);
+  for (let k = 1; k <= n; k++) w.push(w[k - 1] + gauss(rnd) * sd);
+  const jb = jump && jump.at >= 1 && jump.at <= n ? jump.bp : 0;
+  const hi = upperLimit(base), lo = lowerLimit(base);
+  const out: number[] = [];
+  for (let k = 0; k <= n; k++) {
+    const bridge = w[k] - (k / n) * w[n];
+    const x = Math.round(bridge + (k / n) * (endBp - jb) + (jb && k >= jump!.at ? jb : 0));
+    const p = k === 0 ? base : Math.round(base * (10000 + x) / 100000) * 10;
+    out.push(Math.min(hi, Math.max(lo, p)));
+  }
+  return out;
 }

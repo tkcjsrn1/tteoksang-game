@@ -60,12 +60,13 @@ clock = end + 1;
 await until(() => room.s.phase === 'recap');
 const round = room.s.round;
 let bad = 0;
-const prices = room.s.history;
 clients.forEach((c, i) => {
   const p = room.player(c.token)!, f = p.fills.filter(x => x.round === round);
-  const code = codes[i % 6], qty = 10 + i, price = prices[code][0].basePrice, gross = price * qty;
+  /* 시장가는 받은 순간의 장중 시세로 체결됩니다(이 크기는 슬리피지 없음). 그 시세는 이번 라운드 경로의 한 값이어야 합니다. */
+  const code = codes[i % 6], qty = 10 + i, price = f[0]?.price ?? 0, gross = price * qty;
+  const onPath = room.s.live!.paths[code].includes(price);
   const expectedCash = 10_000_000 - gross - feeOf(gross);
-  if (f.length !== 1 || f[0].qty !== qty || p.cash !== expectedCash || p.holdings[code]?.qty !== qty) { bad++; console.log('불일치', p.label, f, p.cash, expectedCash); }
+  if (f.length !== 1 || f[0].qty !== qty || f[0].refPrice !== price || !onPath || p.cash !== expectedCash || p.holdings[code]?.qty !== qty) { bad++; console.log('불일치', p.label, f, p.cash, expectedCash); }
 });
 console.log(`체결 검증 불일치 ${bad}건, 정산 라운드 ${JSON.stringify(room.s.settled)}`);
 const again = room.settle(round, clock);

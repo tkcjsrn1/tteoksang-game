@@ -24,14 +24,14 @@ export function coachStep(view: RoomView, openStock: StockCode | null): CoachSte
   if (view.mode !== 'solo' || view.status !== 'playing' || view.round !== 1 || view.you.role !== 'player') return null;
   const target = coachTarget(view);
   const name = view.stocks.find(s => s.code === target)?.name ?? '뉴스에 나온 종목';
-  const hasOrder = (view.portfolio?.orders.length ?? 0) > 0;
+  const hasOrder = (view.portfolio?.orders.length ?? 0) > 0 || !!view.portfolio?.fillLog.some(f => f.round === view.round);
   const step = (no: number, title: string, text: string): CoachStep => ({ no, total: COACH_TOTAL, title, text, target });
   if (view.phase === 'news') return step(1, '시장 기대와 단서를 읽어요',
     '“시장 기대”가 기준점입니다. 실제 결과가 이보다 좋으면 오르고, 나쁘면 내립니다. “단서”는 결과가 어느 쪽일지 알려 주는 힌트예요. 밑줄 친 낱말을 누르면 뜻이 나옵니다.');
-  if (view.phase === 'trade' && hasOrder) return step(4, '예약 완료! 마감을 기다려요',
-    '주문은 마감 때 지금 가격(기준가)으로 한꺼번에 체결됩니다. 마감 전까지는 바꾸거나 취소할 수 있어요.');
-  if (view.phase === 'trade' && openStock) return step(3, '수량을 넣고 매수 예약',
-    '처음이니 10주만 사 볼까요? 수량 칸에 10을 넣고 “매수 예약”을 누르세요. 단서가 나쁜 쪽을 가리킨다면 사지 않는 것도 판단입니다.');
+  if (view.phase === 'trade' && hasOrder) return step(4, '주문 완료! 시세를 지켜봐요',
+    '가격은 1초마다 움직이고, 마감 때 뉴스의 실제 결과가 공개되면 크게 움직입니다. 그 전까지 더 사거나 팔 수 있어요. 원하는 가격을 정해 걸어 두는 “지정가” 주문도 있어요.');
+  if (view.phase === 'trade' && openStock) return step(3, '수량을 넣고 매수',
+    '처음이니 10주만 사 볼까요? 수량 칸에 10을 넣고 “매수”를 누르면 지금 가격으로 바로 체결됩니다. 단서가 나쁜 쪽을 가리킨다면 사지 않는 것도 판단입니다.');
   if (view.phase === 'trade') return step(2, `${eulReul(name)} 눌러 보세요`,
     '아래 시장 목록에서 빛나는 종목이 이번 뉴스의 주인공입니다. 눌러서 가격과 주문 창을 여세요.');
   if (view.phase === 'settling' || view.phase === 'recap') return step(5, '기대와 결과를 비교해요',

@@ -11,7 +11,8 @@ before(async () => { hub = new Hub({ allowTestHooks: true, now: () => clock }); 
 after(async () => { await hub.close(); });
 
 class Client {
-  ws!: WebSocket; view: RoomView | null = null; token: string | null = null; role: string | null = null; acks = new Map<string, { ok: boolean; reason?: string }>(); ackCount = 0; errors: string[] = [];
+  ws!: WebSocket; view: RoomView | null = null; token: string | null = null; role: string | null = null; acks = new Map<string, { ok: boolean; reason?: string; fill?: unknown }>(); ackCount = 0; errors: string[] = [];
+  ticks: Extract<ServerMsg, { t: 'tick' }>[] = [];
   async connect() {
     this.ws = new WebSocket(`ws://localhost:${port}/ws`);
     await new Promise((r, j) => { this.ws.once('open', r); this.ws.once('error', j); });
@@ -19,7 +20,8 @@ class Client {
       const m = JSON.parse(d.toString()) as ServerMsg;
       if (m.t === 'view') this.view = m.view;
       if (m.t === 'welcome') { this.token = m.token; this.role = m.role; }
-      if (m.t === 'ack') { this.acks.set(m.requestId, { ok: m.ok, reason: m.reason }); this.ackCount++; }
+      if (m.t === 'ack') { this.acks.set(m.requestId, { ok: m.ok, reason: m.reason, fill: m.fill }); this.ackCount++; }
+      if (m.t === 'tick') this.ticks.push(m);
       if (m.t === 'error') this.errors.push(m.reason);
     });
     return this;
@@ -72,7 +74,7 @@ test('두 기기가 같은 방에서 뉴스 → 주문 → 체결 → 그래프 
     assert.equal(a.view!.phase, 'trade');
     assert.equal((await a.order(`a${r}`, 'G01', 'buy', 50)).ok, true);
     assert.equal((await b.order(`b${r}`, 'G03', 'buy', 50)).ok, true);
-    await until(() => a.view!.portfolio!.orders.length === 1);
+    await until(() => a.view!.portfolio!.holdings.some(h => h.code === 'G01'));
     await advance(room, [a, b]);
     assert.equal(a.view!.phase, 'recap');
     assert.deepEqual(a.view!.stocks, b.view!.stocks, '같은 종료가');
@@ -127,7 +129,7 @@ test('재접속, 중복 요청, 관전, 방장 이탈', async () => {
   assert.equal(r.ok, true);
   a2.send({ t: 'order', requestId: 'same', code: 'G02', side: 'buy', qty: 999 });
   await until(() => a2.ackCount >= 2);
-  assert.equal(room.player(a2.token)!.orders.G02!.qty, 10);
+  assert.equal(room.player(a2.token)!.holdings.G02!.qty, 10, '시장가는 바로 체결, 같은 요청은 한 번만');
   a2.close();
   await until(() => !room.player(a2.token)!.connected);
   await advance(room, [b, spec]);
@@ -173,4 +175,42 @@ test('없는 방과 정적 경로 방어', async () => {
   assert.equal(r.status, 404);
   const h = await (await fetch(`http://localhost:${port}/api/health`)).json() as { ok: boolean };
   assert.equal(h.ok, true);
+});
+
+test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시세가 닿으면 체결된다', async () => {
+  const { code } = await create({ mode: 'friend', seed: 21 });
+  const a = await (await new Client().connect()).hello(code);
+  const b = await (await new Client().connect()).hello(code);
+  await until(() => a.view!.humanCount === 2);
+  a.send({ t: 'start' });
+  const room = hub.rooms.get(code)!;
+  await until(() => a.view!.phase === 'news');
+  await advance(room, [a, b]);
+  assert.equal(a.view!.phase, 'trade');
+  const live = room.s.live!;
+  const path = live.paths.G01;
+  const open = path[0];
+  /* 시세가 처음으로 시가보다 낮아지는 칸을 찾아 그 가격에 매수 예약 */
+  const k = path.findIndex((p, i) => i > 0 && p < open);
+  assert.ok(k > 0, '이 시드는 장중에 시가 아래로 내려감');
+  const limit = path[k];
+  a.send({ t: 'order', requestId: 'lim', code: 'G01', side: 'buy', qty: 10, kind: 'limit', limit });
+  await until(() => a.acks.has('lim'));
+  assert.equal(a.acks.get('lim')!.ok, true);
+  assert.equal(a.acks.get('lim')!.fill, null, '아직 체결 전');
+  await until(() => a.view!.portfolio!.orders.length === 1);
+  assert.equal(a.view!.portfolio!.orders[0].price, limit);
+  /* 시계를 k초 뒤로 넘기면 시세 메시지가 오고 예약이 지정가에 체결됩니다 */
+  clock = live.startedAt + k * 1000 + 10;
+  await until(() => b.ticks.some(t => t.k >= k));
+  const t = b.ticks.find(x => x.k === k)!;
+  assert.equal(t.prices.G01, path[k]);
+  await until(() => a.view!.portfolio!.holdings.some(h => h.code === 'G01'));
+  const f = room.player(a.token)!.fills.find(x => x.code === 'G01')!;
+  assert.equal(f.price, limit);
+  assert.equal(f.kind, 'limit');
+  assert.equal(a.view!.portfolio!.orders.length, 0);
+  /* 시세 메시지에는 다른 사람 주문·결말이 없습니다 */
+  assert.deepEqual(Object.keys(t).sort(), ['k', 'prices', 'round', 't']);
+  [a, b].forEach(c => c.close());
 });

@@ -97,7 +97,8 @@ export class Hub {
       let r: ReturnType<GameRoom['tick']>;
       try { r = room.tick(now); }
       catch (e) { this.errors++; this.logRoomError(room.s.code, e, now); continue; }
-      if (r === 'changed') { this.dirty.add(room.s.code); this.broadcast(room); }
+      if (r === 'tick') { this.broadcastTick(room); this.sendTouched(room); }
+      else if (r === 'changed') { room.touched.clear(); this.dirty.add(room.s.code); this.broadcast(room); }
       else if (r === 'finished') { this.dirty.add(room.s.code); this.broadcast(room); }
       else if (r === 'settled') void this.afterSettle(room);
       else if (now - room.s.updatedAt > ROOM_TTL_MS) this.rooms.delete(room.s.code);
@@ -128,6 +129,23 @@ export class Hub {
 
   /* ---------- WebSocket ---------- */
   private send(c: Conn, m: ServerMsg) { if (c.ws.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify(m)); }
+  /** 장중 시세 한 칸만 보냅니다(가벼운 메시지). */
+  private broadcastTick(room: GameRoom) {
+    const l = room.s.live;
+    if (!l) return;
+    const prices: Partial<Record<StockCode, number>> = {};
+    room.stocks.forEach(st => { prices[st.code] = room.markPrice(st.code); });
+    const msg = JSON.stringify({ t: 'tick', round: room.s.round, k: l.k, prices } satisfies ServerMsg);
+    for (const c of this.conns) if (c.room === room && c.ws.readyState === WebSocket.OPEN) c.ws.send(msg);
+  }
+  /** 예약 주문이 체결된 참가자에게만 화면 전체를 다시 보냅니다. */
+  private sendTouched(room: GameRoom) {
+    if (!room.touched.size) return;
+    const ids = new Set(room.touched); room.touched.clear();
+    this.dirty.add(room.s.code);
+    const now = this.now();
+    for (const c of this.conns) if (c.room === room && c.token && ids.has(room.player(c.token)?.id ?? '')) this.sendView(c, now);
+  }
   broadcast(room: GameRoom) {
     const now = this.now();
     for (const c of this.conns) if (c.room === room) this.sendView(c, now);
@@ -189,11 +207,13 @@ export class Hub {
         if (!room.canStart(c.token, c.operator ? room.s.operatorToken : null)) return this.send(c, { t: 'error', reason: '지금은 시작할 수 없습니다' });
         room.start(now); this.dirty.add(room.s.code); this.broadcast(room); return;
       case 'order': {
-        const res = room.placeOrder(c.token ?? '', String(m.requestId), m.code as StockCode, m.side, Number(m.qty), now);
-        this.send(c, { t: 'ack', requestId: m.requestId, ok: res.ok, reason: res.reason });
+        const kind = m.kind === 'limit' ? 'limit' : 'market';
+        const res = room.placeOrder(c.token ?? '', String(m.requestId), m.code as StockCode, m.side, Number(m.qty), now, kind, m.limit === undefined ? undefined : Number(m.limit));
+        room.touched.delete(room.player(c.token)?.id ?? '');
+        this.send(c, { t: 'ack', requestId: m.requestId, ok: res.ok, reason: res.reason, fill: res.fill ?? null });
         if (res.ok && !res.duplicate) {
           const p = room.player(c.token)!;
-          void this.store.recordOrder(room.s.code, p.id, m.requestId, { code: m.code, side: m.side, qty: m.qty, round: room.s.round }).catch(e => console.error(e));
+          void this.store.recordOrder(room.s.code, p.id, m.requestId, { code: m.code, side: m.side, qty: m.qty, kind, limit: m.limit ?? null, fill: res.fill ?? null, round: room.s.round }).catch(e => console.error(e));
           this.dirty.add(room.s.code);
           this.sendView(c, now);
         }
