@@ -760,7 +760,7 @@ function TradeJournal({ view, fees, fallback }: { view: RoomView; fees: number; 
               <b>{e.round}R · {e.name}</b>
               <small className="hint">{label(e.kind, e.trigger)} · {e.qty.toLocaleString('ko-KR')}주 · {won(e.price)}</small>
             </div>
-            {e.headline && <p className="journal-news">뉴스: {e.headline}</p>}
+            {e.headline && <p className="journal-news">라운드 관련 뉴스 · {e.headline}</p>}
             {e.close !== null && e.afterBp !== null && <p className="journal-after">
               그 라운드 종가 {won(e.close)} → <b className={e.verdict === 'good' ? 'up' : e.verdict === 'bad' ? 'down' : 'flat'}>{e.verdict === 'good' ? '유리' : e.verdict === 'bad' ? '불리' : '비슷'} {pctBp(e.afterBp)}</b>
             </p>}
