@@ -1,7 +1,7 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, sumFlows, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import { cleanLabel, LABEL_MAX, checkOrder, computeClose, sumFlows, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { Investor } from '../../shared/rules';
 import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
@@ -100,6 +100,19 @@ export class GameRoom {
     this.fixHost();
     this.touch(now);
     return { token: p.token, role: 'player', label: p.label };
+  }
+  /** 참가자가 이름을 바꿉니다. 대기실에서만, 방 안에서 겹치지 않게. */
+  rename(tokenValue: string, raw: string, now: number): { ok: boolean; reason?: string; label?: string } {
+    const p = this.player(tokenValue);
+    if (!p || p.kind !== 'human') return { ok: false, reason: '참가자만 이름을 바꿀 수 있습니다' };
+    if (this.s.status !== 'lobby') return { ok: false, reason: '게임이 시작된 뒤에는 바꿀 수 없습니다' };
+    const label = cleanLabel(raw);
+    if (!label) return { ok: false, reason: `이름은 1~${LABEL_MAX}자로 적어 주세요` };
+    if (label === p.label) return { ok: true, label };
+    if (this.s.players.some(x => x !== p && x.label === label)) return { ok: false, reason: '이미 쓰고 있는 이름입니다' };
+    p.label = label;
+    this.touch(now);
+    return { ok: true, label };
   }
   private uniqueLabel() {
     for (;;) {

@@ -154,6 +154,7 @@ export type ClientMsg =
   | { t: 'cancel'; requestId: string; code: StockCode }
   | { t: 'stop'; requestId: string; code: StockCode; stop: number | null; take: number | null }
   | { t: 'card'; choice: 'A' | 'B' }
+  | { t: 'rename'; label: string }
   | { t: 'rematch' }
   | { t: 'leave' }
   | { t: 'ping' };

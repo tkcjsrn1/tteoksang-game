@@ -188,10 +188,10 @@ test('모드별 라운드 구성과 변동 범위', () => {
     assert.ok(p.rounds.every(r => Math.abs(r.marketBp) <= 50 && (Object.entries(r.stockBp) as [`G${number}`, number][]).every(([c, x]) => Math.abs(x) <= stockOf(c).maxMoveBp)));
   }
 });
-test('종목 풀 30개, 업종 6개 × 5종목, 판마다 10종목', () => {
-  assert.equal(STOCKS.length, 30);
-  assert.equal(new Set(STOCKS.map(s => s.code)).size, 30);
-  assert.equal(new Set(STOCKS.map(s => s.name)).size, 30);
+test('종목 풀 50개, 업종 10개 × 5종목, 판마다 기본 10종목', () => {
+  assert.equal(STOCKS.length, 50);
+  assert.equal(new Set(STOCKS.map(s => s.code)).size, 50);
+  assert.equal(new Set(STOCKS.map(s => s.name)).size, 50);
   for (const [g, def] of Object.entries(GROUPS)) {
     const members = STOCKS.filter(s => s.group === g);
     assert.equal(members.length, 5, g);
@@ -230,9 +230,10 @@ test('10라운드 방은 선택한 20종목을 사용하고 모든 라운드에 
 });
 test('분산형 NPC는 업종마다 변동이 가장 작은 종목을 하나씩 고른다', () => {
   const codes = buildPlan(7, 'friend').stockCodes!;
+  const groups = new Set(codes.map(c => stockOf(c).group));
   const picked = pickDiversified(codes);
-  assert.equal(picked.length, 6);
-  assert.equal(new Set(picked.map(c => stockOf(c).group)).size, 6);
+  assert.equal(picked.length, groups.size, '업종마다 하나씩');
+  assert.equal(new Set(picked.map(c => stockOf(c).group)).size, groups.size);
   for (const c of picked) assert.ok(codes.filter(x => stockOf(x).group === stockOf(c).group).every(x => stockOf(x).maxMoveBp >= stockOf(c).maxMoveBp));
 });
 test('재대전은 직전에 하지 않은 사건을 우선 고른다', () => {

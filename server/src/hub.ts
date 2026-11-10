@@ -246,6 +246,13 @@ export class Hub {
         this.broadcast(room);
         return;
       }
+      case 'rename': {
+        const res = room.rename(c.token ?? '', String(m.label ?? ''), now);
+        if (!res.ok) { this.send(c, { t: 'error', reason: res.reason ?? '이름을 바꾸지 못했습니다' }); return; }
+        this.dirty.add(room.s.code);
+        this.broadcast(room);
+        return;
+      }
       case 'leave':
         if (c.token) { room.leave(c.token, now); }
         c.room = null; c.token = null;
