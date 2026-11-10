@@ -266,7 +266,9 @@ export class Hub {
 
   /* ---------- HTTP ---------- */
   private http(req: http.IncomingMessage, res: http.ServerResponse) {
-    const url = new URL(req.url ?? '/', 'http://x');
+    let url: URL;
+    try { url = new URL(req.url ?? '/', 'http://x'); }
+    catch { return this.json(res, 400, { error: '잘못된 주소입니다' }); }
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
