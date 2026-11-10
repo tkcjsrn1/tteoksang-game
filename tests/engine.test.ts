@@ -181,19 +181,21 @@ test('모드별 라운드 구성과 변동 범위', () => {
     assert.ok(p.rounds.every(r => Math.abs(r.marketBp) <= 50 && (Object.entries(r.stockBp) as [`G${number}`, number][]).every(([c, x]) => Math.abs(x) <= stockOf(c).maxMoveBp)));
   }
 });
-test('종목 풀 24개, 업종 6개 × 4종목, 판마다 10종목', () => {
-  assert.equal(STOCKS.length, 24);
-  assert.equal(new Set(STOCKS.map(s => s.code)).size, 24);
-  assert.equal(new Set(STOCKS.map(s => s.name)).size, 24);
+test('종목 풀 30개, 업종 6개 × 5종목, 판마다 10종목', () => {
+  assert.equal(STOCKS.length, 30);
+  assert.equal(new Set(STOCKS.map(s => s.code)).size, 30);
+  assert.equal(new Set(STOCKS.map(s => s.name)).size, 30);
   for (const [g, def] of Object.entries(GROUPS)) {
     const members = STOCKS.filter(s => s.group === g);
-    assert.equal(members.length, 4, g);
+    assert.equal(members.length, 5, g);
     assert.equal(stockOf(def.leader).group, g);
     assert.ok(members.every(s => s.code === def.leader ? s.linkBeta === 1 : s.linkBeta > 0 && s.linkBeta < 1));
   }
+  const seen = new Set<string>();
   for (let seed = 1; seed < 300; seed++) {
     const p = buildPlan(seed, 'friend');
     const codes = p.stockCodes!;
+    for (const code of codes) seen.add(code);
     assert.equal(codes.length, STOCKS_PER_GAME);
     assert.equal(new Set(codes).size, STOCKS_PER_GAME);
     /* 뉴스 대상(대장주)은 항상 나옵니다 */
@@ -210,6 +212,7 @@ test('종목 풀 24개, 업종 6개 × 4종목, 판마다 10종목', () => {
     /* 이번 판 종목에만 개별 변동을 정합니다 */
     assert.ok(p.rounds.every(r => Object.keys(r.stockBp).every(c => codes.includes(c as `G${number}`))));
   }
+  assert.deepEqual([...seen].sort(), STOCKS.map(s => s.code).sort());
   assert.notDeepEqual(buildPlan(1, 'friend').stockCodes, buildPlan(2, 'friend').stockCodes);
 });
 test('분산형 NPC는 업종마다 변동이 가장 작은 종목을 하나씩 고른다', () => {
