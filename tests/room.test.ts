@@ -233,6 +233,7 @@ test('장중 시세: 결말을 담지 않고, 속보는 주문 시간 중간에 
     assert.equal(live.breakAt === null, !hasBreaking);
     const v0 = room.view(a, 'player', live.startedAt);
     assert.equal(v0.news[0].cards.some(c => c.card.breaking), false, `${seed}: 속보는 아직`);
+    assert.equal(v0.breakingAt, undefined, '공개 전 속보 시간은 숨김');
     assert.ok(v0.stocks.every(s => s.ticks!.length === 1 && s.price === s.openPrice));
     /* 경로 끝 = 시가 × (1 + 시장 + 종목 + 속보 반응). 사건 결과는 마감 때 */
     for (const st of v0.stocks) {
@@ -243,6 +244,7 @@ test('장중 시세: 결말을 담지 않고, 속보는 주문 시간 중간에 
     room.tick(mid);
     const v1 = room.view(a, 'player', mid);
     assert.equal(v1.news[0].cards.some(c => c.card.breaking), hasBreaking, `${seed}: 중간에 속보`);
+    assert.equal(v1.breakingAt, live.breakAt ?? undefined);
     assert.ok(v1.stocks.every(s => s.ticks!.length === Math.floor(live.steps / 2) + 1));
     assert.ok(v1.stocks.every(s => s.price === live.paths[s.code][Math.floor(live.steps / 2)]));
     /* 결말 문구는 마감 전까지 어디에도 없습니다 */
@@ -358,7 +360,12 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
 test('상대 주문과 개인 리포트는 비공개다', () => {
   const { room, a, b } = setup();
   const end = toTrade(room);
-  room.placeOrder(a, 'secret', 'G01', 'buy', 77, end);
+  const tradeAt = room.s.live!.startedAt + 2000;
+  room.tick(tradeAt);
+  assert.equal(room.placeOrder(a, 'secret', 'G01', 'buy', 77, tradeAt).ok, true);
+  const ownFill = room.view(a, 'player', tradeAt).portfolio!.fillLog.find(f => f.qty === 77);
+  assert.equal(ownFill?.tick, 2);
+  assert.equal(ownFill?.price, room.player(a)!.fills.find(f => f.qty === 77)?.price);
   const vb = room.view(b, 'player', end);
   assert.equal(JSON.stringify(vb).includes('"qty":77'), false);
   assert.equal(room.view(null, 'display', end).report, null);

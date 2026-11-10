@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { BOOK_SHOW, dividendYieldBp, feeOf, formatEok, fundOf, GROUPS, indexValue, INDEX_BASE, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, upperLimit, type QuoteBook } from '../../shared/rules';
+import { BOOK_SHOW, dividendYieldBp, feeOf, formatEok, fundOf, GROUPS, indexValue, INDEX_BASE, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, type QuoteBook } from '../../shared/rules';
 import { intradayBp } from './live';
 import { buildJournal, journalKey, parseNotes } from './journal';
 import type { ClientMsg, NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
@@ -73,6 +73,18 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   const [tab, setTab] = useState<Tab>('market');
   const [detail, setDetail] = useState<StockCode | null>(null);
   const [help, setHelp] = useState(false);
+  const [favorites, setFavorites] = useState<StockCode[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(store.get('favorites') ?? '[]');
+      return Array.isArray(saved) ? saved.filter((code): code is StockCode => STOCKS.some(s => s.code === code)) : [];
+    } catch { return []; }
+  });
+  const toggleFavorite = (code: StockCode) => {
+    const next = favorites.includes(code) ? favorites.filter(c => c !== code) : [...favorites, code];
+    setFavorites(next);
+    store.set('favorites', JSON.stringify(next));
+  };
+  const favoriteStocks = view.stocks.filter(s => favorites.includes(s.code));
   const toast = useToast();
   const left = useSecondsLeft(view.phaseEndsAt, offset);
   const isPlayer = view.you.role === 'player';
@@ -137,6 +149,10 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
           {!coach && news}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send} />}
           {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send} />}
+          {favoriteStocks.length > 0 && <section className="panel flush" aria-label="관심종목">
+            <div className="list-head"><span>★ 관심종목</span></div>
+            <div className="board">{favoriteStocks.map(s => <StockRow key={s.code} s={s} view={view} onOpen={() => setDetail(s.code)} />)}</div>
+          </section>}
           <div className="panel flush">
             <div className="list-head"><span><TermLink id="sector">업종</TermLink>별 종목 {view.stocks.length}개</span>{view.phase === 'trade' ? <span className="live-dot">실시간 시세 · 오늘 등락</span> : <span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span>}</div>
             <SectorBoard stocks={view.stocks} live={view.phase === 'trade'} defaultOpen={defaultOpenGroups(view)} pinned={coach?.no === 2 && coach.target ? [coach.target] : []}
@@ -151,6 +167,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
       </nav>
       <div className="foot"><Disclaimer /></div>
       {stock && <StockSheet stock={stock} view={view} left={left} coach={coach} onClose={() => setDetail(null)}
+        favorite={favorites.includes(stock.code)} onFavorite={() => toggleFavorite(stock.code)}
         onWatch={() => { setWatching(true); setDetail(null); }}
         place={placeOrder} cancel={cancelOrder} setStop={setStop} toast={toast.show} />}
       {help && <HelpSheet phase={view.phase} onClose={() => setHelp(false)} onReplayTutorial={view.mode === 'solo' ? () => { store.del('tutorial'); setTutorialOff(false); setWatching(false); setHelp(false); } : null} />}
@@ -352,9 +369,15 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
     </div>
   );
 }
-function StockSheet({ stock, view, left, coach, onClose, onWatch, place, cancel, setStop, toast }: { stock: StockView; view: RoomView; left: number; coach: CoachStep | null; onClose: () => void; onWatch: () => void; place: PlayProps['placeOrder']; cancel: PlayProps['cancelOrder']; setStop: PlayProps['setStop']; toast: (m: string) => void }) {
+function StockSheet({ stock, view, left, coach, onClose, onWatch, favorite, onFavorite, place, cancel, setStop, toast }: { stock: StockView; view: RoomView; left: number; coach: CoachStep | null; onClose: () => void; onWatch: () => void; favorite: boolean; onFavorite: () => void; place: PlayProps['placeOrder']; cancel: PlayProps['cancelOrder']; setStop: PlayProps['setStop']; toast: (m: string) => void }) {
   const [point, setPoint] = useState<number | null>(stock.history.length ? stock.history[stock.history.length - 1].round : null);
-  const related = view.news[view.news.length - 1]?.cards.filter(c => c.card.targets.includes(stock.code)) ?? [];
+  const news = view.news.find(r => r.round === view.round)?.cards ?? [];
+  const related = news.filter(c => c.card.targets.includes(stock.code));
+  const breakingHeadline = news.find(c => c.card.breaking)?.card.headline;
+  const breaking = view.breakingAt !== undefined && breakingHeadline ? { tick: view.breakingAt, headline: breakingHeadline } : null;
+  const fills = (view.portfolio?.fillLog ?? []).flatMap(f =>
+    f.round === view.round && f.code === stock.code && f.tick !== undefined
+      ? [{ tick: f.tick, side: f.side, qty: f.qty, price: f.price }] : []);
   const held = view.portfolio?.holdings.find(h => h.code === stock.code);
   const pointData = stock.history.find(h => h.round === point);
   const intro = coach?.target === stock.code && (view.phase === 'news' || view.phase === 'trade');
@@ -366,7 +389,7 @@ function StockSheet({ stock, view, left, coach, onClose, onWatch, place, cancel,
       {view.phase === 'trade' && stock.ticks
         ? <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 <small className={dir(intradayBp(stock))}>{arrow(intradayBp(stock))} {pctBp(intradayBp(stock))} <span className="hint">오늘</span></small></p>
         : <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 {stock.lastChangeBp !== null && <small className={dir(stock.lastChangeBp)}>{arrow(stock.lastChangeBp)} {pctBp(stock.lastChangeBp)}</small>}</p>}
-      {stock.ticks && stock.ticks.length > 1 && <LiveChart stock={stock} steps={view.phase === 'trade' ? view.phaseSeconds : stock.ticks.length - 1} closing={view.phase === 'recap' ? stock.history[stock.history.length - 1] ?? null : null} />}
+      {stock.ticks && stock.ticks.length > 1 && <LiveChart stock={stock} steps={view.phase === 'trade' ? view.phaseSeconds : stock.ticks.length - 1} closing={view.phase === 'recap' ? stock.history[stock.history.length - 1] ?? null : null} breaking={breaking} fills={fills} />}
       <PriceChart stock={stock} totalRounds={view.totalRounds} selected={point} onSelect={setPoint} live={view.phase === 'trade' || view.phase === 'settling'} />
       {pointData ? <BreakdownPanel b={pointData} /> : <p className="hint">주문 시간 동안 시세가 1초마다 움직이고, 장 마감 때 뉴스 결과가 공개되면 크게 움직여요. 첫 결과가 나오면 봉을 눌러 이유를 볼 수 있어요.</p>}
       {related.length > 0 && view.phase !== 'recap' && <p className="hint">관련 뉴스: {related.map(r => r.card.headline).join(', ')}</p>}
@@ -375,6 +398,9 @@ function StockSheet({ stock, view, left, coach, onClose, onWatch, place, cancel,
   </>;
   return (
     <Sheet title={stock.name} onClose={onClose}>
+      <button type="button" className="ghost small favorite-toggle" aria-pressed={favorite} onClick={onFavorite}>
+        <span aria-hidden="true">{favorite ? '★' : '☆'}</span> 관심종목
+      </button>
       {coach?.no === 3 && <>
         <Coach step={coach} />
         <button className="ghost" onClick={onWatch}>이번에는 지켜보기</button>
