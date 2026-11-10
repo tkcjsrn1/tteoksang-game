@@ -205,6 +205,13 @@ await step('지정가 매도 예약과 취소', async () => {
   await page.keyboard.press('Escape');
 });
 
+await step('발표 일정: 다음 라운드 예정 종목만 보인다', async () => {
+  const box = page.locator('.schedule');
+  await box.waitFor();
+  ok(/2라운드 예정/.test(await box.innerText()), '다음 라운드 안내가 없음');
+  ok(await box.locator('.list li').count() >= 1, '예정 종목이 없음');
+});
+
 await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   await page.locator('.replay').first().waitFor({ timeout: 40_000 });
   const bars = await page.locator('.bar-row .bar i').evaluateAll(els => els.map(e => {
