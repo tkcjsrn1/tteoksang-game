@@ -34,6 +34,16 @@ test('뉴스 → 종목 열기 → 주문 → 대기 → 결과 순서로 안내
   assert.equal(coachStep(room.view(tok, 'player', room.s.phaseEndsAt!), null), null, '2라운드부터는 안내하지 않음');
 });
 
+test('첫 주문을 지켜보기로 선택해도 결과 단계까지 안내한다', () => {
+  const { room, tok } = solo();
+  step(room);
+  const trading = room.view(tok, 'player', room.s.live!.startedAt);
+  assert.equal(coachStep(trading, null, true)?.no, 4);
+  assert.equal(trading.portfolio?.fillLog.length, 0);
+  step(room);
+  assert.equal(coachStep(room.view(tok, 'player', room.s.phaseEndsAt!), null, true)?.no, 5);
+});
+
 test('친구 대전과 관전자에게는 안내하지 않는다', () => {
   const room = GameRoom.create({ code: '222222', mode: 'friend', now: T0, seed: 5 });
   const a = room.join(null, T0).token; room.join(null, T0);
