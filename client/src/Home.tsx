@@ -8,6 +8,7 @@ import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
 import { Chevron, Disclaimer, Logo } from './ui';
 import { needsOnboarding, Onboarding } from './Onboarding';
+import { SettingsButton } from './Settings';
 
 /** 날짜마다 바뀌는 오늘의 용어. 같은 날에는 누구에게나 같은 용어가 나옵니다. */
 function todayTerm() {
@@ -23,13 +24,6 @@ export function Home() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [settings, setSettings] = useState<RoomSettings>({ stocks: 30 });
-  const [dark, setDark] = useState(() => store.get('theme') === 'dark');
-  const toggleTheme = () => {
-    const theme = dark ? 'light' : 'dark';
-    document.documentElement.dataset.theme = theme;
-    store.set('theme', theme);
-    setDark(!dark);
-  };
   const { open, seen } = useGlossary();
   const games = parseRecords(store.get(RECORDS_KEY)).length;
   const run = async (f: () => Promise<void>) => {
@@ -54,7 +48,7 @@ export function Home() {
       <section className="sec" style={{ paddingTop: 28 }}>
         <div className="home-head">
           <Logo />
-          <button className="ghost small" type="button" aria-pressed={dark} onClick={toggleTheme}>다크 모드</button>
+          <SettingsButton />
         </div>
         <h1 className="hero">같은 뉴스, 다른 판단.<br />누가 왜 이겼는지 바로 나와요</h1>
         <p className="lede">가상 기업과 가상 자금 1,000만 원으로 하는 주식 게임</p>

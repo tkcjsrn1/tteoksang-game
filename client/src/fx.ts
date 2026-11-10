@@ -21,14 +21,26 @@ export function revealTone(delta: number): Tone {
 
 /* ---------- 효과음 ---------- */
 const SOUND_KEY = 'tteoksang:sound';
+const MUSIC_KEY = 'tteoksang:music';
+const VOLUME_KEY = 'tteoksang:volume';
+function readAudioSetting(key: string) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function saveAudioSetting(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* 저장 불가 환경 */ }
+}
 let ctx: AudioContext | null = null;
-let enabled = (() => { try { return localStorage.getItem(SOUND_KEY) !== 'off'; } catch { return true; } })();
+let master: GainNode | null = null;
+let enabled = readAudioSetting(SOUND_KEY) !== 'off';
+let musicEnabled = readAudioSetting(MUSIC_KEY) === 'on';
+const savedVolume = Number(readAudioSetting(VOLUME_KEY) ?? '100');
+let volume = Number.isInteger(savedVolume) && savedVolume >= 0 && savedVolume <= 100 ? savedVolume : 100;
 const listeners = new Set<(on: boolean) => void>();
 
 export function soundOn() { return enabled; }
 export function setSound(on: boolean) {
   enabled = on;
-  try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); } catch { /* 저장 불가 환경 */ }
+  saveAudioSetting(SOUND_KEY, on ? 'on' : 'off');
   listeners.forEach(f => f(on));
   if (on) play('book');
 }
@@ -37,33 +49,93 @@ export function useSoundSetting(): [boolean, (on: boolean) => void] {
   useEffect(() => { listeners.add(setOn); return () => { listeners.delete(setOn); }; }, []);
   return [on, setSound];
 }
+export const musicOn = () => musicEnabled;
+export function setMusic(on: boolean) {
+  musicEnabled = on;
+  saveAudioSetting(MUSIC_KEY, on ? 'on' : 'off');
+  syncMusic();
+}
+export const masterVolume = () => volume;
+export function setMasterVolume(value: number) {
+  volume = value;
+  saveAudioSetting(VOLUME_KEY, String(value));
+  if (master && ctx) master.gain.setTargetAtTime(value / 100, ctx.currentTime, 0.02);
+}
 function audio(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AC) return null;
-  if (!ctx) { try { ctx = new AC(); } catch { return null; } }
-  if (ctx.state === 'suspended') void ctx.resume();
+  if (!ctx) {
+    try {
+      const next = new AC();
+      master = next.createGain();
+      master.gain.value = volume / 100;
+      master.connect(next.destination);
+      ctx = next;
+    } catch { return null; }
+  }
+  if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
   return ctx;
 }
 /* 첫 터치·클릭 때 오디오를 열어 둡니다(브라우저 자동 재생 정책). */
 if (typeof window !== 'undefined') {
-  const unlock = () => { audio(); window.removeEventListener('pointerdown', unlock); };
-  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('click', () => { audio(); syncMusic(); }, { once: true });
+  document.addEventListener('visibilitychange', syncMusic);
 }
-function note(ac: AudioContext, freq: number, start: number, dur: number, type: OscillatorType, gain: number) {
+function note(ac: AudioContext, freq: number, start: number, dur: number, type: OscillatorType, gain: number, output: AudioNode) {
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(0, start);
   g.gain.linearRampToValueAtTime(gain, start + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  o.connect(g).connect(ac.destination);
+  o.connect(g).connect(output);
   o.start(start); o.stop(start + dur + 0.02);
 }
+/* 느린 배경음을 짧은 화음 네 개로 반복합니다. 탭을 숨기거나 끄면 바로 멈춥니다. */
+const MUSIC_CHORDS = [
+  [130.81, 196, 261.63, 329.63],
+  [110, 164.81, 261.63, 329.63],
+  [87.31, 130.81, 220, 261.63],
+  [98, 146.83, 246.94, 293.66]
+];
+let musicBus: GainNode | null = null;
+let musicTimer: ReturnType<typeof setInterval> | null = null;
+function syncMusic() {
+  if (typeof document === 'undefined') return;
+  if (!musicEnabled || document.hidden) {
+    if (musicTimer !== null) clearInterval(musicTimer);
+    musicTimer = null;
+    musicBus?.disconnect();
+    musicBus = null;
+    return;
+  }
+  const ac = audio();
+  if (!ac) return;
+  const start = () => {
+    if (!master || !musicEnabled || document.hidden || musicTimer !== null || ac.state !== 'running') return;
+    const bus = ac.createGain();
+    bus.connect(master);
+    musicBus = bus;
+    let bar = 0;
+    const queue = () => {
+      if (ac.state !== 'running') return;
+      const startAt = ac.currentTime + 0.02;
+      MUSIC_CHORDS[bar++ % MUSIC_CHORDS.length].forEach((freq, i) => {
+        note(ac, freq, startAt + i * 0.34, 1.35, 'sine', i === 0 ? 0.035 : 0.026, bus);
+      });
+    };
+    queue();
+    musicTimer = setInterval(queue, 2200);
+  };
+  if (ac.state === 'running') start();
+  else void ac.resume().then(start).catch(() => {});
+}
+
 /** 짧은 효과음을 냅니다. 소리를 껐거나 오디오를 못 쓰는 환경이면 아무것도 하지 않습니다. */
 export function play(tone: Tone) {
-  if (!enabled) return;
+  if (!enabled || volume === 0) return;
   const ac = audio();
-  if (!ac || ac.state !== 'running') return;
+  if (!ac || !master || ac.state !== 'running') return;
   const t = ac.currentTime;
   const seq: Record<Tone, [number, number, number, OscillatorType, number][]> = {
     tick:  [[880, 0, 0.05, 'sine', 0.05]],
@@ -74,7 +146,7 @@ export function play(tone: Tone) {
     stamp: [[110, 0, 0.18, 'square', 0.12], [70, 0.02, 0.2, 'sine', 0.2]],
     win:   [[523, 0, 0.14, 'triangle', 0.12], [659, 0.12, 0.14, 'triangle', 0.12], [784, 0.24, 0.14, 'triangle', 0.12], [1047, 0.36, 0.4, 'triangle', 0.14]]
   };
-  for (const [f, at, d, type, g] of seq[tone]) note(ac, f, t + at, d, type, g);
+  for (const [f, at, d, type, g] of seq[tone]) note(ac, f, t + at, d, type, g, master);
 }
 
 /* ---------- 숫자 카운트업 ---------- */

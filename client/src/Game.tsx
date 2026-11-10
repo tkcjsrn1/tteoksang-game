@@ -7,7 +7,8 @@ import type { ClientMsg, NewsCard, NewsResult, Order, OrderKind, RoomView, Side,
 import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
 import { coachStep, type CoachStep } from './coach';
-import { play, revealTone, useCountUp, useSoundSetting } from './fx';
+import { play, revealTone, useCountUp } from './fx';
+import { SettingsButton } from './Settings';
 import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
@@ -93,7 +94,6 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
     const hit = view.stocks.some(s => s.history[s.history.length - 1]?.round === view.round && s.history[s.history.length - 1]?.limit);
     if (hit) { const t = setTimeout(() => play('stamp'), 700); return () => clearTimeout(t); }
   }, [revealKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [soundOn, setSoundOn] = useSoundSetting();
   /* 손절·익절이 발동하면 알려 줍니다 */
   const triggered = view.portfolio?.fillLog.filter(f => f.trigger) ?? [];
   const lastTrig = triggered[triggered.length - 1];
@@ -119,9 +119,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
           {CLOCK_LABEL[view.phase ?? 'news']} {formatCountdown(seconds)}
         </span>}
-        <button className="help-btn" aria-label={soundOn ? '효과음 끄기' : '효과음 켜기'} aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z" />{soundOn ? <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /> : <path d="M16 9l5 6M21 9l-5 6" />}</svg>
-        </button>
+        <SettingsButton />
         <button className="help-btn" aria-label="도움말" onClick={() => setHelp(true)}>?</button>
         <div className="timer"><i style={{ width: `${view.phaseSeconds ? Math.min(100, left / view.phaseSeconds * 100) : 0}%` }} /></div>
       </header>
