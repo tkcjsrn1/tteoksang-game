@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import QRCode from 'qrcode';
-import { BOOK_SHOW, LABEL_MAX, dividendYieldBp, feeOf, taxOf, formatEok, fundOf, GROUPS, indexValue, INDEX_BASE, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, type QuoteBook } from '../../shared/rules';
+import { BOOK_SHOW, LABEL_MAX, dividendYieldBp, feeOf, taxOf, formatEok, fundOf, GROUPS, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, type QuoteBook } from '../../shared/rules';
 import { intradayBp } from './live';
 import { buildJournal, journalKey, parseNotes } from './journal';
 import type { ClientMsg, NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
@@ -141,10 +141,10 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
     }
     prevBreaking.current = breakingCount;
   }, [breakingCount]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* 속보 창은 8초 뒤 저절로 닫힙니다. 주문 시간을 너무 잡아먹지 않게 */
+  /* 속보 창은 5초 뒤 저절로 닫힙니다. 주문 시간을 너무 잡아먹지 않게 */
   useEffect(() => {
     if (!breakingPop) return;
-    const t = setTimeout(() => setBreakingPop(null), 8000);
+    const t = setTimeout(() => setBreakingPop(null), 5000);
     return () => clearTimeout(t);
   }, [breakingPop]);
   useEffect(() => { if (view.phase !== 'trade') setBreakingPop(null); }, [view.phase]);
@@ -202,7 +202,6 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
         {tab === 'market' && view.phase !== 'recap' && <>
           <Standing view={view} />
           <MyHoldings view={view} onOpen={setDetail} />
-          <IndexStrip view={view} />
           <ViNotice view={view} />
           <DividendNotice view={view} />
           <SchedulePanel view={view} />
@@ -659,12 +658,12 @@ function OrderBook({ book, price, open, onPick }: { book: QuoteBook; price: numb
 }
 /** 떡상 지수: 이번 판 10종목의 시가총액 가중 지수(시작 1,000). 라운드 종료 값과 지금 값을 작은 그래프로 */
 /** 배당 일정 안내: 기준일 전·당일·배당락 라운드에 보여 줍니다. */
-/** 장중 속보가 뜨면 화면 가운데에 띄웁니다. 8초 뒤 저절로 닫힙니다. */
+/** 장중 속보가 뜨면 화면 위에서 큼직하게 내려옵니다. 주문을 막지 않도록 아래쪽은 그대로 쓸 수 있고, 5초 뒤 저절로 닫힙니다. */
 function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView; card: NewsCard; onClose: () => void; onOpen: (c: StockCode) => void }) {
   const targets = card.targets.map(c => view.stocks.find(s => s.code === c)).filter((s): s is StockView => !!s);
   return (
-    <div className="breaking-wrap" role="alertdialog" aria-label="속보" onClick={onClose}>
-      <div className="breaking" onClick={e => e.stopPropagation()}>
+    <div className="breaking-wrap" role="status" aria-label="속보">
+      <div className="breaking">
         <p className="news-meta"><span className="chip alert">속보</span><span className="chip soft">{card.arcTitle}</span></p>
         <p className="headline"><Rich text={card.headline} /></p>
         <dl className="facts"><dt>시장 기대</dt><dd><Rich text={card.expectation} /></dd><dt>단서</dt><dd><Rich text={card.clue} /></dd></dl>
@@ -676,7 +675,7 @@ function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView; card: 
           </button></li>;
         })}</ul>}
         <p className="hint">속보가 뜨는 순간 가격이 먼저 반응했어요. 결과는 장 마감 때 공개됩니다.</p>
-        <button className="cta" onClick={onClose}>확인 (8초 뒤 자동으로 닫혀요)</button>
+        <button className="ghost" onClick={onClose}>닫기 (5초 뒤 자동)</button>
       </div>
     </div>
   );
@@ -719,30 +718,6 @@ function DividendNotice({ view }: { view: RoomView }) {
     </section>
   );
 }
-function IndexStrip({ view }: { view: RoomView }) {
-  const now = indexValue(view.stocks);
-  const rounds = Math.max(0, ...view.stocks.map(s => s.history.length));
-  const closes = [INDEX_BASE, ...Array.from({ length: rounds }, (_, i) => indexValue(view.stocks.map(s => ({ ...s, price: s.history[i]?.closePrice ?? s.price }))))];
-  const prev = closes[closes.length - 1];
-  const live = view.phase === 'trade' && view.stocks.some(s => s.ticks);
-  const pts = live ? [...closes, now] : closes;
-  const chgBp = Math.round((now - prev) * 10000 / prev), totalBp = Math.round((now - INDEX_BASE) * 10000 / INDEX_BASE);
-  const W = 96, H = 30;
-  const lo = Math.min(...pts), hi = Math.max(...pts), span = hi - lo || 1;
-  const d = pts.map((v, i) => `${i ? 'L' : 'M'}${(pts.length > 1 ? i / (pts.length - 1) * W : W / 2).toFixed(1)},${(H - 3 - (v - lo) / span * (H - 6)).toFixed(1)}`).join('');
-  return (
-    <section className="panel index-strip" aria-label="떡상 지수">
-      <div>
-        <p className="hint"><TermLink id="stock-index">떡상 지수</TermLink>{live && <span className="live-dot"> 실시간</span>}</p>
-        <p className="idx num"><b>{now.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
-          <small className={dir(chgBp)}>{arrow(chgBp)} {pctBp(chgBp)} {live ? '오늘' : '직전'}</small></p>
-        <p className="hint">판 시작 대비 <span className={dir(totalBp)}>{pctBp(totalBp)}</span></p>
-      </div>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true"><path d={d} fill="none" stroke={now >= INDEX_BASE ? 'var(--up)' : 'var(--down)'} strokeWidth="1.8" strokeLinejoin="round" /></svg>
-    </section>
-  );
-}
-/** 기업 정보: 시가총액, 발행 주식 수, 순이익, PER, 배당(모두 가상) */
 function CompanyInfo({ stock }: { stock: StockView }) {
   const f = fundOf(stock.code), per = perOf(stock.code, stock.price), dy = dividendYieldBp(stock.code, stock.price);
   return (

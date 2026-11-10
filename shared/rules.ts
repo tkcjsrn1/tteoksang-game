@@ -162,40 +162,10 @@ export function viDirection(open: number, price: number): 1 | -1 | 0 {
   return bp >= VI_BP ? 1 : bp <= -VI_BP ? -1 : 0;
 }
 
-/* ---------- 투자자별 매매(수급) ----------
-   실제 체결에서 바로 뽑습니다. 지어낸 숫자가 아닙니다.
-   - 개인: 사람 참가자들이 산 금액 − 판 금액
-   - 기관: NPC들이 산 금액 − 판 금액
-   - 외국인: 그 둘을 받아 준 호가창(가상 유동성). 누가 사면 누가 팔기 때문에 셋을 더하면 0입니다.
-   실제 시장의 외국인·기관과는 다르다는 점을 용어 사전 '이 게임에서는' 칸에 적었습니다. */
-export const INVESTORS = ['foreign', 'institution', 'retail'] as const;
-export type Investor = typeof INVESTORS[number];
-export const INVESTOR_LABEL: Record<Investor, string> = { foreign: '외국인', institution: '기관', retail: '개인' };
-/** 순매수 금액을 "+1,240만", "−30만"처럼. 0에 가까우면 "0" */
-export function formatFlow(won: number): string {
-  if (Math.abs(won) < 10_000) return '0';
-  const man = Math.round(won / 10_000);
-  return `${man > 0 ? '+' : '−'}${Math.abs(man).toLocaleString('ko-KR')}만`;
-}
-/** 체결 하나하나를 투자자별 순매수(산 금액 − 판 금액)로 모읍니다. 셋을 더하면 0이 됩니다. */
-export function sumFlows(fills: { investor: Investor; side: Side; gross: number }[]): Record<Investor, number> {
-  const out: Record<Investor, number> = { foreign: 0, institution: 0, retail: 0 };
-  for (const f of fills) out[f.investor] += f.side === 'buy' ? f.gross : -f.gross;
-  /* 참가자와 NPC가 산 만큼을 호가창이 팔았습니다(그 반대도 마찬가지). */
-  out.foreign = -(out.institution + out.retail) || 0;   /* -0이 나오지 않게 */
-  return out;
-}
-
 export const dividendRound = (rounds: number) => Math.ceil(rounds * 0.6);
 /** 배당락 뒤 시가: 배당금만큼 낮춰 10원 단위로 반올림, 최저 100원 */
 export const exDividendPrice = (price: number, dps: number) => Math.max(100, Math.round((price - dps) / 10) * 10);
 /** 이번 판 종목으로 만든 시가총액 가중 지수. 판 시작 = 1000 */
-export const INDEX_BASE = 1000;
-export function indexValue(stocks: { code: StockCode; price: number; startPrice: number }[]): number {
-  const now = stocks.reduce((a, s) => a + marketCapWon(s.code, s.price), 0);
-  const base = stocks.reduce((a, s) => a + marketCapWon(s.code, s.startPrice), 0);
-  return base ? INDEX_BASE * now / base : INDEX_BASE;
-}
 /** 억 원 단위 금액을 "4,960억 원", "1조 2,340억 원"처럼 */
 export function formatEok(won: number): string {
   const eok = Math.round(won / 100_000_000);

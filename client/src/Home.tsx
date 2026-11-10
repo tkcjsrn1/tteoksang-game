@@ -20,6 +20,7 @@ function todayTerm() {
 export function Home() {
   const [joining, setJoining] = useState(false);
   const [howTo, setHowTo] = useState(needsOnboarding);
+  const [tutorial, setTutorial] = useState(false);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,6 +37,8 @@ export function Home() {
   const minutes = Math.max(1, Math.round(rounds * (MODES.solo.news + trade + MODES.solo.recap) / 60));
   const pick = (o: RoomSettings) => { const next = { ...settings, ...o }; setSettings(next); store.set('settings', JSON.stringify(next)); };
   const join = () => run(async () => { await roomInfo(code); navigate(`/room/${code}`); });
+  /* 튜토리얼: 게임 방법 카드를 처음부터 보여 주고, 혼자 연습 첫 라운드에 단계 안내를 다시 켭니다. */
+  const startTutorial = () => { store.del('tutorial'); setTutorial(true); setHowTo(true); };
   const t = todayTerm();
   const links = [
     { to: '/glossary', mark: '가', cls: 'blue', title: '용어 사전', sub: `${TERMS.length}개 · 퀴즈로 복습`, badge: `${seen.size}/${TERMS.length}` },
@@ -74,6 +77,7 @@ export function Home() {
             <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다. 처음이라면 10종목·5라운드를 권합니다.</p>
           </details>
           <button className="cta" disabled={busy} onClick={() => make('solo')}>혼자 연습 시작</button>
+          <button className="ghost" disabled={busy} onClick={startTutorial}>처음이라면 · 튜토리얼로 시작</button>
           <div className="btn-row">
             <button className="ghost" disabled={busy} onClick={() => make('friend')}>친구 방 만들기</button>
             <button className="ghost" disabled={busy} aria-expanded={joining} onClick={() => setJoining(!joining)}>코드로 참가</button>
@@ -110,7 +114,7 @@ export function Home() {
 
       <button className="link" style={{ alignSelf: 'center' }} onClick={() => setHowTo(true)}>게임 방법 다시 보기</button>
       <Disclaimer />
-      {howTo && <Onboarding onDone={() => setHowTo(false)} />}
+      {howTo && <Onboarding onDone={() => { setHowTo(false); if (tutorial) { setTutorial(false); make('solo'); } }} />}
     </main>
   );
 }

@@ -29,9 +29,15 @@ const ignorable = (t: string) => /fonts\.(googleapis|gstatic)\.com|ERR_NAME_NOT_
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
 page.on('console', m => { if (m.type() === 'error' && !ignorable(m.text())) errors.push(`console: ${m.text()}`); });
 
+/* 장중 속보 팝업은 화면을 덮습니다. 단계를 시작하기 전에 떠 있으면 닫습니다. */
+async function closeBreaking() {
+  const pop = page.locator('.breaking');
+  if (await pop.count()) { await pop.getByRole('button', { name: /닫기/ }).click().catch(() => {}); await pop.waitFor({ state: 'detached', timeout: 3_000 }).catch(() => {}); }
+}
 async function step(name: string, f: () => Promise<void>) {
   const before = errors.length;
   try {
+    await closeBreaking();
     await f();
     await noHorizontalScroll(page, name);
     if (errors.length > before) throw new Error(errors.slice(before).join(' | '));
@@ -55,6 +61,7 @@ await step('홈과 첫 방문 안내', async () => {
   await page.getByRole('dialog', { name: '게임 방법' }).waitFor();
   await page.getByRole('button', { name: '건너뛰기' }).click();
   await page.getByRole('button', { name: '혼자 연습 시작' }).waitFor();
+  ok(await page.getByRole('button', { name: /튜토리얼로 시작/ }).count() === 1, '튜토리얼 시작 버튼 없음');
   ok(await page.getByText('투자 조언이 아닙니다').count(), '면책 문구 없음');
   await page.setViewportSize({ width: 1024, height: 844 });
   const desktopHome = await page.locator('main.home').boundingBox();
@@ -94,7 +101,6 @@ await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
   await settings.waitFor();
   await page.keyboard.press('Escape');
   await settings.waitFor({ state: 'hidden' });
-  ok(/1,000\.00/.test(await page.locator('.index-strip').innerText()), '떡상 지수가 1,000.00으로 시작하지 않음');
   const news = page.locator('main .news').first();
   const newsBox = await news.boundingBox();
   const balanceBox = await page.locator('main .wallet-label').first().boundingBox();
@@ -151,7 +157,7 @@ await step('장중 속보: 팝업이 뜨고 닫힌다', async () => {
   if (await pop.count()) {
     ok(/속보/.test(await pop.innerText()), '속보 표시 없음');
     ok(await pop.locator('.breaking-stocks li').count() >= 1, '속보 대상 종목이 없음');
-    await pop.getByRole('button', { name: /확인/ }).click();
+    await pop.getByRole('button', { name: /닫기/ }).click();
     await pop.waitFor({ state: 'detached', timeout: 5_000 });
   }
   if (!(await page.locator('.sheet').count())) await page.locator('.sectors button.row').first().click();
