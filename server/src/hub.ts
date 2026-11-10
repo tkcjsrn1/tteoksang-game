@@ -32,6 +32,7 @@ export class Hub {
   private timer: NodeJS.Timeout | null = null;
   private busy = new Set<string>();
   private dirty = new Set<string>();
+  private saving = new Map<string, Promise<void>>();
   private lastFlush = 0;
   private readonly startedAt = Date.now();
   private errors = 0;
@@ -59,6 +60,7 @@ export class Hub {
     const closed = new Promise(r => this.server.close(r));
     this.server.closeAllConnections();   // 열려 있는 HTTP keep-alive 연결 때문에 종료가 멈추지 않게
     await closed;
+    await Promise.all(this.saving.values());
     await this.flush();
     await this.store.close();
   }
@@ -93,6 +95,8 @@ export class Hub {
     const now = this.now();
     for (const room of this.rooms.values()) {
       if (this.busy.has(room.s.code)) continue;
+      // 재시작 때 불러온 정산 중인 방은 계산을 되풀이하지 않고 저장부터 이어갑니다.
+      if (room.s.phase === 'settling') { void this.afterSettle(room); continue; }
       /* 한 방의 오류가 타이머 전체(=모든 방)를 멈추지 않게 방마다 따로 잡습니다. 같은 방 오류는 1분에 한 번만 기록합니다. */
       let r: ReturnType<GameRoom['tick']>;
       try { r = room.tick(now); }
@@ -110,20 +114,27 @@ export class Hub {
     const code = room.s.code;
     this.busy.add(code);
     this.broadcast(room);
+    // 느린 이전 스냅샷이 정산 결과를 덮어쓰지 않도록 먼저 끝냅니다.
+    await this.saving.get(code);
     for (let attempt = 0; ; attempt++) {
       try { await this.store.saveSettlement(code, room.s.round, room.s); break; }
       catch (e) { console.error('정산 저장 실패, 다시 시도합니다', e); await new Promise(r => setTimeout(r, Math.min(5000, 300 * 2 ** attempt))); }
     }
     room.beginRecap(this.now());
+    this.dirty.add(code);
     this.busy.delete(code);
     this.broadcast(room);
   }
   private async flush() {
-    const codes = [...this.dirty]; this.dirty.clear();
-    for (const c of codes) {
-      const room = this.rooms.get(c);
+    for (const code of [...this.dirty]) {
+      if (this.busy.has(code) || this.saving.has(code) || !this.dirty.delete(code)) continue;
+      const room = this.rooms.get(code);
       if (!room) continue;
-      try { await this.store.saveRoom(room.s); } catch (e) { console.error('저장 실패', e); this.dirty.add(c); }
+      const save = this.store.saveRoom(room.s)
+        .catch(e => { console.error('저장 실패', e); this.dirty.add(code); })
+        .finally(() => this.saving.delete(code));
+      this.saving.set(code, save);
+      await save;
     }
   }
 
