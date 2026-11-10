@@ -28,7 +28,7 @@ export function Records() {
           <dt>평균 수익률</dt><dd className={`num ${dir(sum.avgReturn)}`}>{pct(sum.avgReturn)}</dd>
           <dt>최고 · 최저</dt><dd className="num"><span className={dir(sum.bestReturn)}>{pct(sum.bestReturn)}</span> · <span className={dir(sum.worstReturn)}>{pct(sum.worstReturn)}</span></dd>
           <dt>전체 1위 · 사람 중 1위</dt><dd className="num">{sum.firsts}판 · {sum.humanFirsts}판</dd>
-          <dt>지금까지 낸 수수료</dt><dd className="num">{won(sum.totalFees)}</dd>
+          <dt>지금까지 낸 수수료·세금</dt><dd className="num">{won(sum.totalFees)}</dd>
           <dt>열어 본 용어</dt><dd className="num">{seen.size}/{TERMS.length}개</dd>
         </dl>
         {pts.length > 1 && <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="판별 수익률 흐름">
@@ -39,7 +39,7 @@ export function Records() {
         <p className="hint">수익률이 들쭉날쭉하다면 한 종목에 몰았는지, 헤드라인만 보고 샀는지 최종 화면의 주요 거래를 다시 보세요.</p>
         <h2 className="h">최근 판</h2>
         <ul className="list">{list.map(r => (
-          <li key={`${r.code}-${r.at}`}><span>{new Date(r.at).toLocaleDateString('ko-KR')} · {MODES[r.mode]?.label ?? r.mode}<small>{r.players}명 중 {r.rank}위 · 수수료 {won(r.fees)}</small></span>
+          <li key={`${r.code}-${r.at}`}><span>{new Date(r.at).toLocaleDateString('ko-KR')} · {MODES[r.mode]?.label ?? r.mode}<small>{r.players}명 중 {r.rank}위 · 수수료·세금 {won(r.fees)}</small></span>
             <span className={`num ${dir(r.returnPct)}`}>{pct(r.returnPct)}</span></li>
         ))}</ul>
         <button className="link" onClick={clear}>기록 지우기</button>

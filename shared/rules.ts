@@ -6,7 +6,10 @@ export const START_CASH = 10_000_000;
 export const MAX_RETURN_BP = 2000;
 export const MARKET_MAX_BP = 50;
 export const STOCK_MAX_BP = 150;
-export const FEE_BP = 20;
+/* 거래 비용: 수수료는 살 때와 팔 때 모두, 증권거래세는 팔 때만 냅니다.
+   실제 세율(2026년 양도분부터 코스피·코스닥 모두 농어촌특별세 포함 0.20%)을 그대로 쓰고, 수수료는 게임용 값입니다. */
+export const FEE_BP = 10;
+export const TAX_BP = 20;
 
 /* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 한 라운드를 2분 넘게 둡니다(2026-11 결정). */
 export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; label: string }> = {
@@ -138,6 +141,10 @@ export const stockOf = (code: StockCode) => STOCKS.find(s => s.code === code)!;
 
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 export const feeOf = (gross: number) => Math.ceil(gross * FEE_BP / 10000);
+/** 증권거래세(팔 때만). 원 미만은 버립니다 */
+export const taxOf = (gross: number) => Math.floor(gross * TAX_BP / 10000);
+/** 이 거래에서 빠져나가는 비용 합계: 수수료 + (매도면) 거래세 */
+export const chargeOf = (side: Side, gross: number) => feeOf(gross) + (side === 'sell' ? taxOf(gross) : 0);
 export const upperLimit = (P: number) => Math.floor(P * 12000 / 100000) * 10;
 export const lowerLimit = (P: number) => Math.max(100, Math.ceil(P * 8000 / 100000) * 10);
 
@@ -241,7 +248,7 @@ export function checkOrder(ctx: OrderContext, code: StockCode, side: Side, qty: 
     if (!f) return { ok: false, reason: side === 'sell' ? '사려는 주문이 없어 지금은 시장가로 팔 수 없습니다(하한가)' : '팔려는 주문이 없어 지금은 시장가로 살 수 없습니다' };
     price = f.price; slipBp = f.slipBp;
   }
-  const gross = price * qty, fee = feeOf(gross);
+  const gross = price * qty, fee = chargeOf(side, gross);
   if (side === 'buy') {
     const reserve = gross + fee;
     if (reservedExcept(ctx, replace ? code : null) + reserve > ctx.cash) return { ok: false, reason: '주문 가능 현금이 부족합니다' };
