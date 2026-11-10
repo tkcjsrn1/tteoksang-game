@@ -37,7 +37,7 @@ flowchart LR
   D -->|다음 라운드| A
 ```
 
-라운드 5번(학술제 10번)이 끝나면 최종 순위, 주요 거래, 이번 판에 나온 용어를 정리해 보여 줍니다.
+라운드 5번이 끝나면 최종 순위, 주요 거래, 이번 판에 나온 용어를 정리해 보여 줍니다.
 
 ## 무엇을 배우나
 
@@ -127,21 +127,19 @@ npm start
 |---|---|---|
 | 혼자 연습 | 1명 + NPC 3명 | 5라운드, 뉴스 20초·주문 90초·결과 20초(라운드당 2분 10초, 한 판 약 11분). 즉시 시작 |
 | 친구 대전 | 2~8명 + NPC 3명 | 혼자 연습과 같음. 6자리 코드와 초대 링크로 입장 |
-| 학술제 대전 | 최대 60명 + NPC 3명 | 10라운드, 뉴스 20초·주문 90초·결과 25초(한 판 약 23분). 운영자가 QR과 대형 화면을 엽니다 |
 
 첫 화면에서 `주식 용어 사전`(용어 105개, 검색·분류, 퀴즈), `차트 연습실`, `내 기록`도 열 수 있습니다. 게임 중 밑줄 친 낱말을 누르면 그 자리에서 뜻이 나옵니다. 혼자 연습 첫 라운드에는 5단계 따라 하기 안내가 나옵니다.
 
-학술제는 첫 화면의 `학술제 운영자` 버튼으로 시작합니다. 운영자 권한은 방을 만든 기기에만 저장됩니다.
 
 ## 구조
 
 ```
 shared/    서버와 클라이언트가 함께 쓰는 타입, 가격·주문 규칙, 봉 계산, 용어 사전
 server/    방 상태 기계, 시나리오, NPC, 리포트, WebSocket 서버, 저장소
-client/    React 모바일 화면, 대형 화면, 차트 연습실, 용어 사전·퀴즈
+client/    React 모바일 화면, 차트 연습실, 용어 사전·퀴즈
 tests/     단위·방·WebSocket·연습실·용어·서버 방어 테스트, PostgreSQL 통합 테스트
 docs/      프로젝트 설명서, 배포 안내, 화면 캡처
-scripts/   60명 부하 검증, 밸런스 계산, 배포 점검
+scripts/   부하 검증(방 8개 × 8명), 밸런스 계산, 배포 점검
 android/   Capacitor Android 프로젝트
 ```
 
@@ -177,7 +175,7 @@ android/   Capacitor Android 프로젝트
 
 ```bash
 npm test            # 단위, 방 로직, WebSocket 두 기기 대전, 연습실, 용어 사전, 서버 방어
-npm run load        # 60명 동시 주문 부하 검증
+npm run load        # 방 8개 × 8명 동시 주문 부하 검증
 npm run balance     # 뉴스 추종 기대값과 NPC 성적 (기준은 tests/balance.test.ts)
 npm run test:pg     # PostgreSQL 통합. TEST_DATABASE_URL이 없으면 임시 DB를 띄웁니다
 npm run smoke -- <주소>   # 배포한 서버 점검(화면·API·WebSocket·두 사람 입장·게임 시작)
@@ -187,7 +185,7 @@ Windows 관리자 계정에서는 임시 DB가 뜨지 않으므로 `TEST_DATABAS
 
 ## 배포
 
-무료로 올리는 방법(Render + Neon, `render.yaml` 포함)은 [`docs/DEPLOY-FREE.md`](docs/DEPLOY-FREE.md)에 있습니다. `Dockerfile`로 서버 이미지를 만들 수 있습니다. HTTPS, PostgreSQL, 학술제 리허설, 스토어 출시 점검표는 [`docs/DEPLOY.md`](docs/DEPLOY.md)에 있습니다. PR마다 GitHub Actions(`.github/workflows/ci.yml`)가 타입 검사·테스트·빌드·부하·PostgreSQL 통합 테스트를 돌립니다.
+무료로 올리는 방법(Render + Neon, `render.yaml` 포함)은 [`docs/DEPLOY-FREE.md`](docs/DEPLOY-FREE.md)에 있습니다. `Dockerfile`로 서버 이미지를 만들 수 있습니다. HTTPS, PostgreSQL, 실기기 리허설, 스토어 출시 점검표는 [`docs/DEPLOY.md`](docs/DEPLOY.md)에 있습니다. PR마다 GitHub Actions(`.github/workflows/ci.yml`)가 타입 검사·테스트·빌드·부하·PostgreSQL 통합 테스트를 돌립니다.
 
 ## Android 패키징
 

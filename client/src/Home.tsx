@@ -4,7 +4,7 @@ import { createRoom, roomInfo, store } from './net';
 import { TERMS } from '../../shared/glossary';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
-import { Chevron, Disclaimer, Logo } from './ui';
+import { Chevron, Disclaimer, Logo, ThemeToggle } from './ui';
 import { needsOnboarding, Onboarding } from './Onboarding';
 
 /** 날짜마다 바뀌는 오늘의 용어. 같은 날에는 누구에게나 같은 용어가 나옵니다. */
@@ -27,11 +27,6 @@ export function Home() {
     try { await f(); } catch (e) { setError(e instanceof Error && e.message !== 'Failed to fetch' ? e.message : '서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요'); } finally { setBusy(false); }
   };
   const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode); navigate(`/room/${r.code}`); });
-  const academic = () => run(async () => {
-    const r = await createRoom('academic');
-    store.set(`operator:${r.code}`, r.operatorToken ?? '');
-    navigate(`/display/${r.code}`);
-  });
   const join = () => run(async () => { await roomInfo(code); navigate(`/room/${code}`); });
   const t = todayTerm();
   const links = [
@@ -42,7 +37,7 @@ export function Home() {
   return (
     <main className="home">
       <section className="sec" style={{ paddingTop: 28 }}>
-        <Logo />
+        <div className="logo-row"><Logo /><ThemeToggle /></div>
         <h1 className="hero">같은 뉴스, 다른 판단.<br />누가 왜 이겼는지 바로 나와요</h1>
         <p className="lede">가상 기업과 가상 자금 1,000만 원으로 하는 주식 게임</p>
         <div className="home-actions">
@@ -82,7 +77,6 @@ export function Home() {
       </section>
 
       <button className="link" style={{ alignSelf: 'center' }} onClick={() => setHowTo(true)}>게임 방법 다시 보기</button>
-      <button className="link" style={{ alignSelf: 'center', marginTop: -10 }} disabled={busy} onClick={academic}>학술제 운영자: 대형 화면과 QR 열기</button>
       <Disclaimer />
       {howTo && <Onboarding onDone={() => setHowTo(false)} />}
     </main>

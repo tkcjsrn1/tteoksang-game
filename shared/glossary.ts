@@ -462,7 +462,7 @@ export const TERMS: Term[] = [
   { id: 'disposition-effect', term: '처분 효과', en: 'Disposition effect', category: 'risk',
     short: '오른 주식은 빨리 팔고 내린 주식은 오래 들고 있는 경향',
     body: '이익은 빨리 확정하고 싶고 손실은 인정하기 싫어서 생깁니다. 결과적으로 좋은 종목은 일찍 팔고 나쁜 종목만 남기기 쉽습니다.',
-    game: '학술제 모드 리포트에서 이익 실현 비율과 손실 실현 비율을 비교해 보여 줍니다.',
+    game: '판이 끝난 뒤 행동 리포트에서 이익 실현 비율과 손실 실현 비율을 비교해 보여 줍니다.',
     match: ['처분 효과'], related: ['loss-aversion', 'realized-pnl', 'unrealized-pnl'] },
   { id: 'overreaction', term: '과잉 반응', en: 'Overreaction', category: 'risk',
     short: '뉴스 제목만 보고 실제보다 크게 반응하는 것',

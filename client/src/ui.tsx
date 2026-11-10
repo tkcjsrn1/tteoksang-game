@@ -4,6 +4,7 @@ import type { PriceBreakdown, StockView } from '../../shared/types';
 import { Rich, TermLink } from './glossary/GlossaryContext';
 import { replayAt, replayPath, replayTicks, useReplay } from './fx';
 import { bucketCandles, movingAverage } from './live';
+import { useTheme } from './theme';
 
 export const won = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 export const signedWon = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n)).toLocaleString('ko-KR')}원`;
@@ -20,6 +21,18 @@ export function Logo() {
     <p className="logo"><span className="logo-mark" aria-hidden="true">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>
     </span>떡상개론</p>
+  );
+}
+/** 밝은·어두운 화면 전환 버튼 */
+export function ThemeToggle() {
+  const [theme, setTheme] = useTheme();
+  const dark = theme === 'dark';
+  return (
+    <button className="theme-btn" aria-label={dark ? '밝은 화면으로 바꾸기' : '어두운 화면으로 바꾸기'} aria-pressed={dark} onClick={() => setTheme(dark ? 'light' : 'dark')}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {dark ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></> : <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />}
+      </svg>
+    </button>
   );
 }
 export function Chevron() {

@@ -13,7 +13,7 @@ import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
 import { defaultOpenGroups, groupStocks } from './sectors';
 import type { StockGroup } from '../../shared/rules';
-import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, LiveChart, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
+import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, LiveChart, pct, pctBp, PriceChart, signedWon, StockAvatar, ThemeToggle, useToast, won } from './ui';
 
 type Tab = 'market' | 'assets' | 'news';
 
@@ -51,7 +51,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: never) => void
       <ul className="people">{humans.map(p => <li key={p.playerId} className={p.connected ? '' : 'off'}>{p.label}{p.playerId === view.you.id ? ' (나)' : ''}{!p.connected ? ' · 접속 끊김' : ''}</li>)}</ul>
       {view.you.isHost
         ? <button className="cta" disabled={!canStart} onClick={() => (send as unknown as (m: object) => void)({ t: 'start' })}>{canStart ? '게임 시작' : `${view.minToStart}명이 모이면 시작할 수 있어요`}</button>
-        : <p className="hint">{view.mode === 'academic' ? '운영자가 시작하면 자동으로 넘어갑니다.' : '방장이 시작하면 자동으로 넘어갑니다.'}</p>}
+        : <p className="hint">방장이 시작하면 자동으로 넘어갑니다.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <ul className="rules">
         <li>뉴스를 보고, 주문을 예약하면, 마감 때 직전 종료가로 전량 체결됩니다.</li>
@@ -134,7 +134,6 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
           <DividendNotice view={view} />
           {(view.phase === 'news' || view.phase === 'trade') && <CurrentNews view={view} />}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send2} />}
-          {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send2} />}
           <div className="panel flush">
             <div className="list-head"><span><TermLink id="sector">업종</TermLink>별 종목</span>{view.phase === 'trade' ? <span className="live-dot">실시간 시세 · 오늘 등락</span> : <span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span>}</div>
             <SectorBoard stocks={view.stocks} live={view.phase === 'trade'} defaultOpen={defaultOpenGroups(view)} pinned={coach?.no === 2 && coach.target ? [coach.target] : []}
@@ -177,6 +176,7 @@ function HelpSheet({ phase, onClose, onReplayTutorial }: { phase: RoomView['phas
   return (
     <Sheet title="짧은 도움말" onClose={onClose}>
       <p className="hint">타이머는 멈추지 않고 계속 진행됩니다.</p>
+      <div className="logo-row"><span>화면 밝기(밝게·어둡게)</span><ThemeToggle /></div>
       <ul className="rules">
         {phase === 'news' && <li>지금은 뉴스 시간입니다. 곧 장이 열리고 시세가 움직이기 시작합니다.</li>}
         {phase === 'trade' && <li>장중입니다. 시세가 1초마다 움직이고, 중간에 속보가 뜰 수 있습니다. 종목을 눌러 사고팔 수 있습니다.</li>}
@@ -243,22 +243,6 @@ function Card({ view, send }: { view: RoomView; send: (m: object) => void }) {
       <h3>{c.title}</h3><p><Rich text={c.body} /></p>
       <div className="seg">{c.options.map(o => <button key={o.key} aria-pressed={c.answered === o.key} onClick={() => send({ t: 'card', choice: o.key })}>{o.key}. {o.label}</button>)}</div>
       <p className="hint">{c.answered ? '판단을 저장했습니다. 마감 전까지 바꿀 수 있습니다. 주문은 주문 패널에서 따로 확정합니다.' : '응답은 판단 기록으로만 저장됩니다. 주문은 주문 패널에서 따로 확정합니다.'}</p>
-    </div>
-  );
-}
-function Prediction({ view, send }: { view: RoomView; send: (m: object) => void }) {
-  const p = view.prediction!;
-  const [conf, setConf] = useState(p.confidence ?? 70);
-  const pick = (choice: 'A' | 'B', confidence = conf) => send({ t: 'predict', choice, confidence });
-  return (
-    <div className="card-box">
-      <h3>결과 예측</h3><p>{p.question}</p>
-      <div className="seg">
-        <button aria-pressed={p.choice === 'A'} onClick={() => pick('A')}>기대 이상</button>
-        <button aria-pressed={p.choice === 'B'} onClick={() => pick('B')}>기대 이하</button>
-      </div>
-      <p className="hint">얼마나 확신하나요?</p>
-      <div className="seg">{[50, 70, 90].map(v => <button key={v} aria-pressed={conf === v} onClick={() => { setConf(v); if (p.choice) pick(p.choice, v); }}>{v}%</button>)}</div>
     </div>
   );
 }
@@ -626,7 +610,6 @@ function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => voi
     </div>}
     {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
     {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
-    {view.prediction?.correct !== null && view.prediction?.correct !== undefined && <div className="panel"><p className="hint strong">결과 예측: {view.prediction.correct ? '맞혔어요' : '빗나갔어요'} (확신도 {view.prediction.confidence}%)</p></div>}
     <div className="panel flush">
       <div className="list-head"><span>종목별 결과 · 눌러서 이유 보기</span></div>
       <div className="board">{movers.map(s => <button key={s.code} className="row" onClick={() => onOpen(s.code)}>
@@ -710,7 +693,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
       </section>
       {rep && <TradeJournal view={view} fees={rep.fees} fallback={rep.majorTrades} />}
       {rep && rep.judgments.length > 0 && <section className="sec"><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></section>}
-      {rep?.metrics && <section className="sec"><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></section>}
+      {rep && rep.metrics.length > 0 && <section className="sec"><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></section>}
       <GameTerms view={view} />
       <section className="sec tight">
         <div className="list-head"><span>종목 그래프 다시 보기</span><span>처음 대비</span></div>
@@ -721,7 +704,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
       <div className="final-actions">
         <button className="ghost" onClick={() => navigate('/records')}>내 기록</button>
         {view.nextRoomCode
-          ? <button className="cta" onClick={() => navigate(`/${view.you.role === 'operator' ? 'display' : 'room'}/${view.nextRoomCode}`)}>다음 판 대기실로</button>
+          ? <button className="cta" onClick={() => navigate(`/room/${view.nextRoomCode}`)}>다음 판 대기실로</button>
           : <button className="cta" onClick={() => send2({ t: 'rematch' })}>{view.mode === 'solo' ? '한 판 더' : '같은 멤버로 한 판 더'}</button>}
         <button className="link full" onClick={() => navigate('/')}>처음으로</button>
       </div>

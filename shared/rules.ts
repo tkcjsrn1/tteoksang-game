@@ -9,10 +9,9 @@ export const STOCK_MAX_BP = 150;
 export const FEE_BP = 20;
 
 /* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 한 라운드를 2분 넘게 둡니다(2026-11 결정). */
-export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; predictions: boolean; report: boolean; label: string }> = {
-  friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 2, predictions: false, report: false, label: '친구 대전' },
-  solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 2, predictions: false, report: false, label: '혼자 연습' },
-  academic: { rounds: 10, news: 20, trade: 90, recap: 25, maxPlayers: 60, minToStart: 1, arcs: 4, cards: 5, predictions: true,  report: true,  label: '학술제 대전' }
+export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; label: string }> = {
+  friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 2, label: '친구 대전' },
+  solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 2, label: '혼자 연습' }
 };
 
 /* 종목 24개 = 업종 6개 × 4종목. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
