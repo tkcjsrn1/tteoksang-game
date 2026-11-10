@@ -469,3 +469,19 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .order .booked p { margin: 0; font-size: 13px; }
 .live-chart { margin-bottom: 6px; }
 @media (prefers-reduced-motion: reduce) { .live-dot::before, .tick-flash { animation: none; } }
+/* 호가창 */
+.qbook { margin: 0; }
+.qbook table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.qbook th { font-size: 11px; color: var(--muted); font-weight: 500; padding: 2px 4px; }
+.qbook td { padding: 0; height: 30px; position: relative; text-align: center; }
+.qbook td:first-child, .qbook td:last-child { width: 30%; color: var(--muted); }
+.qbook td i { position: absolute; top: 4px; bottom: 4px; opacity: .14; border-radius: 3px; }
+.qbook tr.ask td:first-child i { right: 0; background: var(--down); }
+.qbook tr.bid td:last-child i { left: 0; background: var(--up); }
+.qbook tr.ask td:nth-child(2) { background: var(--down-soft); }
+.qbook tr.bid td:nth-child(2) { background: var(--up-soft); }
+.qbook .lvl { width: 100%; height: 30px; border: 0; background: transparent; display: flex; gap: 6px; align-items: baseline; justify-content: center; cursor: pointer; }
+.qbook tr.ask .lvl b { color: var(--down); }
+.qbook tr.bid .lvl b { color: var(--up); }
+.qbook .lvl small { font-size: 11px; color: var(--muted); }
+.qbook tr.now td:nth-child(2) { outline: 2px solid var(--ink-2, #191F28); outline-offset: -2px; }

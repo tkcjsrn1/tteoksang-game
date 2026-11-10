@@ -332,7 +332,7 @@ function OrdersLesson() {
         <tbody>{r.fills.map(f => <tr key={f.price}><td className="num">{n(f.price)}원</td><td className="num">{n(f.qty)}주</td><td className="num">{n(f.price * f.qty)}원</td></tr>)}
           <tr><td><b>평균 {n(r.avg)}원</b></td><td className="num">{n(r.filled)}주</td><td className="num">{n(r.total)}원</td></tr></tbody></table>
       <p className="hint">가장 싼 호가 {n(best)}원으로 샀다면 {n(best * r.filled)}원. 차이 {n(r.total - best * r.filled)}원이 <TermLink id="slippage">슬리피지</TermLink>입니다. 여기에 <TermLink id="fee">수수료</TermLink>가 따로 붙습니다.</p>
-      <p className="hint">이 게임에는 호가창이 없습니다. 대신 주문 금액이 200만 원을 넘으면 정해진 표대로 슬리피지가 붙습니다.</p>
+      <p className="hint">게임의 종목 창에도 같은 호가창이 있어요. 시장가 주문은 이렇게 호가를 차례로 채우며 체결됩니다.</p>
     </>} />;
 }
 

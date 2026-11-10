@@ -1,7 +1,7 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, feeOf, fillPrice, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, MODES, REACT_BP, START_CASH, stockOf, upperLimit, WIGGLE_X, type StockDef } from '../../shared/rules';
+import { checkOrder, computeClose, feeOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, EventImpact, FillInfo, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PredictionView, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
@@ -216,6 +216,14 @@ export class GameRoom {
     if (l && !l.done && l.round === this.s.round && l.paths[code]) return l.paths[code][Math.min(l.k, l.steps)];
     return this.s.prices[code];
   }
+  /** 지금 호가창(모두에게 같은 값). 주문 시간 밖에서는 기준가 기준 */
+  book(code: StockCode): QuoteBook {
+    const l = this.s.live;
+    const k = l && !l.done && l.round === this.s.round ? Math.min(l.k, l.steps) : 0;
+    return quoteBook(code, this.markPrice(code), this.s.prices[code], this.s.round, k);
+  }
+  /** 최우선 매수 호가(시장가로 팔 때 받는 첫 가격). 없으면 null */
+  bestBid(code: StockCode): number | null { const p = this.markPrice(code) - TICK_WON; return p >= lowerLimit(this.s.prices[code]) && p >= TICK_WON ? p : null; }
   private livePrices(): Record<StockCode, number> {
     return Object.fromEntries(this.stocks.map(st => [st.code, this.markPrice(st.code)])) as Record<StockCode, number>;
   }
@@ -279,9 +287,10 @@ export class GameRoom {
       const chk = checkOrder(p, code, side, qty, ref, { limit });
       if (!chk.ok) return { ok: false, reason: chk.reason };
       delete p.orders[code];
-      /* 지금 시세가 이미 지정가보다 유리하면 바로 체결합니다(지정가보다 불리하게는 체결하지 않음). */
-      if (side === 'buy' ? ref <= limit! : ref >= limit!) {
-        const mk = fillPrice(ref, side, qty).price;
+      /* 지금 호가가 이미 지정가보다 유리하면 바로 체결합니다(지정가보다 불리하게는 체결하지 않음). */
+      const bid = this.bestBid(code);
+      if (side === 'buy' ? ref <= limit! : bid !== null && bid >= limit!) {
+        const mk = marketFill(this.book(code), side, qty)?.price ?? limit!;
         const price = side === 'buy' ? Math.min(mk, limit!) : Math.max(mk, limit!);
         return { ok: true, fill: this.executeFill(p, code, side, qty, price, ref, requestId, 'limit', now) };
       }
@@ -289,7 +298,7 @@ export class GameRoom {
       this.touch(now);
       return { ok: true, fill: null };
     }
-    const chk = checkOrder(p, code, side, qty, ref, { replace: false });
+    const chk = checkOrder(p, code, side, qty, ref, { replace: false, book: this.book(code) });
     if (!chk.ok) return { ok: false, reason: chk.reason };
     return { ok: true, fill: this.executeFill(p, code, side, qty, chk.price, ref, requestId, 'market', now) };
   }
@@ -320,7 +329,9 @@ export class GameRoom {
     for (const p of this.s.players) for (const o of Object.values(p.orders)) {
       if (!o || o.kind !== 'limit') continue;
       const price = this.markPrice(o.code);
-      if (o.side === 'buy' ? price > o.price : price < o.price) continue;
+      /* 매수 예약은 매도 호가(=시세)가, 매도 예약은 매수 호가(=시세 − 10원)가 지정가에 닿으면 체결 */
+      const bid = this.bestBid(o.code);
+      if (o.side === 'buy' ? price > o.price : bid === null || bid < o.price) continue;
       delete p.orders[o.code];
       if (o.side === 'sell' && (p.holdings[o.code]?.qty ?? 0) < o.qty) continue;   // 그사이 팔아 버린 수량은 체결하지 않음
       if (o.side === 'buy' && p.cash < o.reserve) continue;

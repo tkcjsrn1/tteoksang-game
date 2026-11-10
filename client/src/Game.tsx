@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { feeOf, fillPrice, GROUPS, lowerLimit, maxBuyQty, MODES, SLIP_FREE_WON, stockOf, upperLimit } from '../../shared/rules';
+import { BOOK_SHOW, feeOf, GROUPS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, upperLimit, type QuoteBook } from '../../shared/rules';
 import { intradayBp } from './live';
 import type { NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
 import { termById, termsIn } from '../../shared/glossary';
@@ -168,7 +168,7 @@ function HelpSheet({ phase, onClose, onReplayTutorial }: { phase: RoomView['phas
         {phase === 'news' && <li>지금은 뉴스 시간입니다. 곧 장이 열리고 시세가 움직이기 시작합니다.</li>}
         {phase === 'trade' && <li>장중입니다. 시세가 1초마다 움직이고, 중간에 속보가 뜰 수 있습니다. 종목을 눌러 사고팔 수 있습니다.</li>}
         {phase === 'recap' && <li>그래프의 봉을 누르면 가격이 움직인 이유가 나옵니다.</li>}
-        <li><TermLink id="market-order">시장가</TermLink>는 누르는 순간의 시세로 바로 <TermLink id="execution">체결</TermLink>됩니다. 주문 금액이 200만 원을 넘으면 <TermLink id="slippage">슬리피지</TermLink>가 붙어 조금 불리한 값(최대 0.40%)에 체결됩니다.</li>
+        <li><TermLink id="market-order">시장가</TermLink>는 누르는 순간의 시세로 바로 <TermLink id="execution">체결</TermLink>됩니다. <TermLink id="order-book">호가창</TermLink>의 가장 좋은 가격부터 차례로 채우므로, 수량이 많으면 평균 체결가가 불리해집니다(<TermLink id="slippage">슬리피지</TermLink>).</li>
         <li><TermLink id="limit-order">지정가</TermLink>는 원하는 가격을 걸어 두는 예약입니다. 시세가 닿으면 그 가격에 체결되고, 라운드가 끝날 때까지 안 닿으면 자동 취소됩니다.</li>
         <li>뉴스의 실제 결과는 장 마감 때 공개되고, 그때 주가가 크게 움직입니다.</li>
         <li>같은 <TermLink id="sector">업종</TermLink> 종목은 <TermLink id="leader-stock">대장주</TermLink> 뉴스에 함께 움직입니다.</li>
@@ -364,18 +364,22 @@ function OrderPanel({ stock, view, left, place, cancel, toast }: { stock: StockV
   const heldQty = pf.holdings.find(h => h.code === stock.code)?.qty ?? 0;
   const ctx = useMemo(() => ({ cash: pf.cash, holdings: {}, orders: Object.fromEntries(pf.orders.map(o => [o.code, o])) as Partial<Record<StockCode, Order>> }), [pf.cash, pf.orders]);
   const lo = lowerLimit(stock.openPrice), hi = upperLimit(stock.openPrice);
+  const book = useMemo(() => quoteBook(stock.code, stock.price, stock.openPrice, view.round, Math.max(0, (stock.ticks?.length ?? 1) - 1)), [stock.code, stock.price, stock.openPrice, view.round, stock.ticks?.length]);
   const lim = Math.floor(Number(limitText) || 0);
   const limitOk = lim >= lo && lim <= hi && lim % 10 === 0;
   const isLimit = kind === 'limit';
   const lockedSell = !isLimit && existing?.side === 'sell' ? existing.qty : 0;
   const max = side === 'buy'
-    ? (isLimit ? (limitOk ? maxBuyQty(ctx, stock.code, stock.price, { limit: lim }) : 0) : maxBuyQty(ctx, stock.code, stock.price, { replace: false }))
+    ? (isLimit ? (limitOk ? maxBuyQty(ctx, stock.code, stock.price, { limit: lim }) : 0) : maxBuyQty(ctx, stock.code, stock.price, { replace: false, book }))
     : Math.max(0, heldQty - lockedSell);
   const n = Math.floor(Number(qty) || 0);
-  const fp = isLimit ? { price: lim, slipBp: 0 } : fillPrice(stock.price, side, n);
+  const mf = isLimit ? null : marketFill(book, side, n);
+  const fp = isLimit ? { price: lim, slipBp: 0, best: lim } : mf ?? { price: 0, slipBp: 0, best: 0 };
   const gross = n * fp.price, fee = feeOf(gross);
-  const slipWon = isLimit ? 0 : Math.abs(fp.price - stock.price) * n;
-  const marketable = isLimit && limitOk && (side === 'buy' ? stock.price <= lim : stock.price >= lim);
+  const slipWon = isLimit ? 0 : Math.abs(fp.price - fp.best) * n;
+  const bestBid = book.bids[0]?.price ?? null;
+  const marketable = isLimit && limitOk && (side === 'buy' ? stock.price <= lim : bestBid !== null && bestBid >= lim);
+  const pickLevel = (price: number) => { setKind('limit'); setLimitText(String(price)); };
   const chooseKind = (k: OrderKind) => { setKind(k); if (k === 'limit' && !limitText) setLimitText(String(stock.price)); };
   const nudge = (d: number) => setLimitText(String(Math.min(hi, Math.max(lo, (limitOk ? lim : stock.price) + d))));
   const submit = async () => {
@@ -402,6 +406,7 @@ function OrderPanel({ stock, view, left, place, cancel, toast }: { stock: StockV
         <p><b>{existing.side === 'buy' ? '매수' : '매도'} {existing.qty.toLocaleString('ko-KR')}주 · 지정가 {won(existing.price)}</b> 예약 중 · 시세가 닿으면 체결, 안 닿으면 마감 때 자동 취소</p>
         <button className="ghost small" disabled={!open || busy} onClick={doCancel}>예약 취소</button>
       </div>}
+      {view.phase === 'trade' && <OrderBook book={book} price={stock.price} open={stock.openPrice} onPick={pickLevel} />}
       <div className="seg side"><button data-s="buy" aria-pressed={side === 'buy'} onClick={() => { setSide('buy'); setQty(''); }}>매수</button><button data-s="sell" aria-pressed={side === 'sell'} onClick={() => { setSide('sell'); setQty(''); }}>매도</button></div>
       <div className="seg kind" role="group" aria-label="주문 방식">
         <button aria-pressed={kind === 'market'} onClick={() => chooseKind('market')}>시장가 · 바로 체결</button>
@@ -425,6 +430,7 @@ function OrderPanel({ stock, view, left, place, cancel, toast }: { stock: StockV
       <div className="pcts">{([[0.1, '10%'], [0.25, '25%'], [0.5, '50%'], [1, '최대']] as const).map(([r, label]) => <button key={label} onClick={() => setQty(String(Math.floor(max * r)))}>{label}</button>)}</div>
       <dl className="kv">
         <dt>지금 시세</dt><dd>{won(stock.price)}</dd>
+        {!isLimit && <><dt>{side === 'buy' ? '최우선 매도 호가' : '최우선 매수 호가'}</dt><dd>{mf ? won(mf.best) : '없음'}</dd></>}
         {isLimit
           ? <><dt>지정가</dt><dd>{limitOk ? won(lim) : '—'}</dd></>
           : <><dt>예상 체결가</dt><dd>{won(fp.price)}</dd>
@@ -436,9 +442,32 @@ function OrderPanel({ stock, view, left, place, cancel, toast }: { stock: StockV
       {n > max && <p className="error">가능한 수량을 넘었어요</p>}
       <p className="hint">{isLimit
         ? (marketable ? '지금 시세가 지정가보다 유리해서 바로 체결돼요.' : '시세가 지정가에 닿으면 그 가격에 체결돼요. 장 마감까지 안 닿으면 자동 취소돼요.' + (existing ? ' 이 종목의 기존 예약은 새 예약으로 바뀌어요.' : ''))
-        : `누르는 순간의 시세로 바로 체결돼요. 주문 금액이 ${won(SLIP_FREE_WON)}을 넘으면 조금 불리한 값에 체결돼요.`}</p>
-      <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max || (isLimit && !limitOk)} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 장 시작` : busy ? '요청 중' : `${n > 0 ? `${n.toLocaleString('ko-KR')}주 ` : ''}${sideLabel}${isLimit && !marketable ? ' 예약' : ''}`}</button>
+        : side === 'buy' ? '가장 싼 매도 호가부터 차례로 사요. 수량이 많으면 더 비싼 호가까지 사게 돼요(슬리피지).' : `가장 비싼 매수 호가부터 차례로 팔아요. 시세보다 한 칸(10원) 낮은 값부터 시작해요(스프레드).`}</p>
+      {!isLimit && !mf && <p className="error">{side === 'sell' ? '사려는 주문이 없어 지금은 시장가로 팔 수 없어요(하한가).' : '팔려는 주문이 없어 지금은 시장가로 살 수 없어요.'}</p>}
+      <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max || (isLimit && !limitOk) || (!isLimit && !mf)} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 장 시작` : busy ? '요청 중' : `${n > 0 ? `${n.toLocaleString('ko-KR')}주 ` : ''}${sideLabel}${isLimit && !marketable ? ' 예약' : ''}`}</button>
     </div>
+  );
+}
+/** 호가창: 위(파랑)는 팔려는 주문, 아래(빨강)는 사려는 주문. 가격을 누르면 그 가격으로 지정가를 채웁니다. */
+function OrderBook({ book, price, open, onPick }: { book: QuoteBook; price: number; open: number; onPick: (p: number) => void }) {
+  const asks = book.asks.slice(0, BOOK_SHOW).reverse(), bids = book.bids.slice(0, BOOK_SHOW);
+  const maxQ = Math.max(1, ...asks.map(a => a.qty), ...bids.map(b => b.qty));
+  const pctOf = (p: number) => { const bp = Math.round((p - open) * 10000 / open); return `${bp > 0 ? '+' : bp < 0 ? '−' : ''}${(Math.abs(bp) / 100).toFixed(2)}%`; };
+  const row = (l: { price: number; qty: number }, kind: 'ask' | 'bid') => (
+    <tr key={`${kind}${l.price}`} className={`${kind}${l.price === price ? ' now' : ''}`}>
+      <td>{kind === 'ask' && <><i style={{ width: `${Math.round(l.qty / maxQ * 100)}%` }} />{l.qty.toLocaleString('ko-KR')}</>}</td>
+      <td><button type="button" className="lvl" onClick={() => onPick(l.price)} aria-label={`${l.price.toLocaleString('ko-KR')}원으로 지정가 채우기`}><b className="num">{l.price.toLocaleString('ko-KR')}</b><small>{pctOf(l.price)}</small></button></td>
+      <td>{kind === 'bid' && <><i style={{ width: `${Math.round(l.qty / maxQ * 100)}%` }} />{l.qty.toLocaleString('ko-KR')}</>}</td>
+    </tr>
+  );
+  return (
+    <figure className="qbook">
+      <table aria-label="호가창">
+        <thead><tr><th>팔려는 수량</th><th>가격</th><th>사려는 수량</th></tr></thead>
+        <tbody>{asks.map(a => row(a, 'ask'))}{bids.map(b => row(b, 'bid'))}</tbody>
+      </table>
+      <figcaption className="chart-note"><TermLink id="order-book">호가창</TermLink> · 가격을 누르면 그 값으로 <TermLink id="limit-order">지정가</TermLink>를 채워요. 상대방은 가상 시장이고, 수량은 1초마다 바뀌어요.</figcaption>
+    </figure>
   );
 }
 function Assets({ view, cancel, toast }: { view: RoomView; cancel: PlayProps['cancelOrder']; toast: (m: string) => void }) {

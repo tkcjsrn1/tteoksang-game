@@ -80,6 +80,16 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   ok(before !== after, '2.5초 동안 시세 그래프가 그대로');
 });
 
+await step('호가창: 매도 5단계·매수 5단계, 가격을 누르면 지정가로', async () => {
+  const qb = page.locator('.qbook');
+  await qb.waitFor();
+  ok(await qb.locator('tr.ask').count() === 5 && await qb.locator('tr.bid').count() === 5, '호가 단계 수가 다름');
+  await qb.locator('tr.bid .lvl').first().click();
+  const v = await page.locator('#order-limit').inputValue();
+  ok(/^\d+$/.test(v), '호가를 눌러도 지정가가 채워지지 않음');
+  await page.getByRole('button', { name: '시장가 · 바로 체결' }).click();
+});
+
 await step('시장가 매수: 바로 체결', async () => {
   const go = page.locator('button.go');
   await page.getByRole('button', { name: '25%' }).click();
@@ -91,7 +101,7 @@ await step('시장가 매수: 바로 체결', async () => {
 
 await step('지정가 매도 예약과 취소', async () => {
   await page.getByRole('button', { name: '매도', exact: true }).click();
-  await page.getByRole('button', { name: /지정가/ }).click();
+  await page.getByRole('button', { name: '지정가 · 예약' }).click();
   const limit = page.locator('#order-limit');
   await limit.waitFor();
   /* 지금 시세보다 높은 가격에 걸어야 바로 체결되지 않고 예약됩니다 */

@@ -96,31 +96,59 @@ export type OrderCheck =
   | { ok: true; price: number; slipBp: number; gross: number; fee: number; reserve: number }
   | { ok: false; reason: string };
 /** limit: 지정가(이 가격에 체결, 슬리피지 없음). replace: 같은 종목에 걸어 둔 예약을 대신하는 주문이면 true(그 예약금·수량은 돌려받았다고 봄). */
-export interface OrderOpts { limit?: number; replace?: boolean }
+export interface OrderOpts { limit?: number; replace?: boolean; book?: QuoteBook }
 
-/* ---------- 슬리피지(게임 규칙) ----------
-   큰 주문일수록 내 주문만 조금 불리한 가격에 체결됩니다. 다른 사람의 가격·종료가에는 영향을 주지 않습니다
-   (1~2명이 하는 판에서 가격을 움직여 이득을 보는 길을 막기 위해서입니다).
-   기준가 × 수량이 200만 원을 넘으면 100만 원마다 5bp, 최대 40bp. 매수는 올림, 매도는 내림(원 단위). */
-export const SLIP_FREE_WON = 2_000_000;
-export const SLIP_STEP_WON = 1_000_000;
-export const SLIP_BP_PER_STEP = 5;
-export const SLIP_MAX_BP = 40;
-export function slippageBp(refGross: number): number {
-  if (!(refGross > SLIP_FREE_WON)) return 0;
-  return Math.min(SLIP_MAX_BP, Math.ceil((refGross - SLIP_FREE_WON) / SLIP_STEP_WON) * SLIP_BP_PER_STEP);
+/* ---------- 호가창(가상 시장) ----------
+   주문의 상대방은 가상 시장입니다. 지금 시세 위로 팔려는 주문(매도 호가), 아래로 사려는 주문(매수 호가)이
+   10원 간격으로 쌓여 있다고 보고, 시장가 주문은 가장 좋은 호가부터 차례로 사거나 팝니다.
+   - 최우선 매도 호가 = 지금 시세, 최우선 매수 호가 = 지금 시세 − 10원(호가 한 칸 차이, 스프레드)
+   - 단계마다 걸린 금액은 평균 150만 원(대표 종목은 1.5배)이고, 멀어질수록 조금씩 늘어납니다.
+   - 수량은 종목·라운드·초·단계로 정해지는 결정적 값이라 모두에게 같은 호가창이 보입니다(시드와 무관, 결말 없음).
+   - 가격 제한폭 밖에는 호가가 없습니다. 하한가에서는 사려는 주문이 없어 시장가로 팔 수 없습니다.
+   - 참가자 주문은 호가창과 시세를 바꾸지 않습니다(1~2명 판에서 가격을 움직여 이득을 보는 길을 막음).
+   실제 한국 시장의 호가 단위는 가격대마다 다르지만, 이 게임은 모든 가격에서 10원으로 단순화했습니다. */
+export const TICK_WON = 10;
+export const BOOK_DEPTH = 10;
+export const BOOK_SHOW = 5;
+export const LEVEL_WON = 1_500_000;
+export interface BookLevel { price: number; qty: number }
+/** asks: 최우선 매도 호가부터 위로, bids: 최우선 매수 호가부터 아래로 */
+export interface QuoteBook { asks: BookLevel[]; bids: BookLevel[] }
+function hash01(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 10000) / 10000;
 }
-/** 기준가 ref로 qty주를 주문했을 때 체결 예정가. 슬리피지 0이면 기준가 그대로입니다. */
-export function fillPrice(ref: number, side: Side, qty: number): { price: number; slipBp: number } {
-  const slipBp = slippageBp(ref * qty);
-  if (!slipBp) return { price: ref, slipBp };
-  const price = side === 'buy' ? Math.ceil(ref * (10000 + slipBp) / 10000) : Math.floor(ref * (10000 - slipBp) / 10000);
-  return { price, slipBp };
+/** price: 지금 시세, open: 이번 라운드 기준가(가격 제한폭 계산용), k: 주문 시간 시작부터 지난 초 */
+export function quoteBook(code: StockCode, price: number, open: number, round: number, k: number): QuoteBook {
+  const hi = upperLimit(open), lo = lowerLimit(open);
+  const depth = LEVEL_WON * (stockOf(code)?.linkBeta === 1 ? 1.5 : 1);
+  const level = (p: number, side: string, i: number) => ({ price: p, qty: Math.max(1, Math.round(depth * (0.6 + 0.8 * hash01(`${code}:${round}:${k}:${side}:${i}`)) * (1 + 0.25 * i) / p)) });
+  const asks: BookLevel[] = [], bids: BookLevel[] = [];
+  for (let i = 0; i < BOOK_DEPTH; i++) {
+    const pa = price + i * TICK_WON, pb = price - (i + 1) * TICK_WON;
+    if (pa <= hi) asks.push(level(pa, 'a', i));
+    if (pb >= lo && pb >= TICK_WON) bids.push(level(pb, 'b', i));
+  }
+  return { asks, bids };
+}
+/** 시장가 체결: 가장 좋은 호가부터 차례로 채웁니다. 호가창보다 많으면 마지막 단계 가격으로 채웁니다.
+    price는 평균 체결가(매수 올림, 매도 내림), slipBp는 최우선 호가와의 차이. 반대편 호가가 없으면 null(상한가 매수·하한가 매도). */
+export function marketFill(book: QuoteBook, side: Side, qty: number): { price: number; slipBp: number; best: number; levels: number } | null {
+  const lv = side === 'buy' ? book.asks : book.bids;
+  if (!lv.length) return null;
+  const best = lv[0].price;
+  if (qty < 1) return { price: best, slipBp: 0, best, levels: 0 };
+  let left = qty, total = 0, used = 0;
+  for (const l of lv) { if (left <= 0) break; const q = Math.min(left, l.qty); total += q * l.price; left -= q; used++; }
+  if (left > 0) total += left * lv[lv.length - 1].price;
+  const price = side === 'buy' ? Math.ceil(total / qty) : Math.floor(total / qty);
+  return { price, slipBp: Math.round(Math.abs(price - best) * 10000 / best), best, levels: used };
 }
 const reservedExcept = (ctx: OrderContext, code: StockCode | null) => Object.values(ctx.orders).reduce((a, o) => a + (o && o.code !== code ? o.reserve : 0), 0);
 
 /** 주문 검증. ref는 지금 가격(장중 시세)입니다.
-    - 시장가: 지금 가격에 슬리피지를 붙여 바로 체결합니다. 걸어 둔 예약의 예약금·수량은 쓸 수 없습니다.
+    - 시장가: 호가창(opts.book, 없으면 ref로 만듦)을 따라 바로 체결합니다. 걸어 둔 예약의 예약금·수량은 쓸 수 없습니다.
     - 지정가(opts.limit): 그 가격에 체결될 때를 기준으로 예약금을 잡습니다. 같은 종목 예약은 새 예약으로 바뀝니다. */
 export function checkOrder(ctx: OrderContext, code: StockCode, side: Side, qty: number, ref: number, opts: OrderOpts = {}): OrderCheck {
   if (!Number.isSafeInteger(qty) || qty < 1) return { ok: false, reason: '수량은 1주 이상 정수여야 합니다' };
@@ -130,7 +158,13 @@ export function checkOrder(ctx: OrderContext, code: StockCode, side: Side, qty: 
   if (side === 'sell' && qty > (ctx.holdings[code]?.qty ?? 0) - lockedSell) return { ok: false, reason: lockedSell ? '매도 예약에 묶인 수량을 빼면 보유 수량이 모자랍니다' : '보유 수량을 넘었습니다' };
   const unit = opts.limit ?? ref;
   if (side === 'buy' && unit * qty > ctx.cash) return { ok: false, reason: '주문 가능 현금이 부족합니다' };   // 큰 수 곱셈 전에 먼저 거릅니다
-  const { price, slipBp } = opts.limit !== undefined ? { price: opts.limit, slipBp: 0 } : fillPrice(ref, side, qty);
+  let price: number, slipBp = 0;
+  if (opts.limit !== undefined) price = opts.limit;
+  else {
+    const f = marketFill(opts.book ?? quoteBook(code, ref, ref, 0, 0), side, qty);
+    if (!f) return { ok: false, reason: side === 'sell' ? '사려는 주문이 없어 지금은 시장가로 팔 수 없습니다(하한가)' : '팔려는 주문이 없어 지금은 시장가로 살 수 없습니다' };
+    price = f.price; slipBp = f.slipBp;
+  }
   const gross = price * qty, fee = feeOf(gross);
   if (side === 'buy') {
     const reserve = gross + fee;
@@ -144,10 +178,12 @@ export function maxBuyQty(ctx: OrderContext, code: StockCode, ref: number, opts:
   const replace = opts.replace ?? opts.limit !== undefined;
   const av = ctx.cash - reservedExcept(ctx, replace ? code : null);
   const unit = opts.limit ?? ref;
-  let q = Math.max(0, Math.floor(av / unit));
-  const cost = (n: number) => { const g = (opts.limit ?? fillPrice(ref, 'buy', n).price) * n; return g + feeOf(g); };
-  while (q > 0 && cost(q) > av) q--;
-  return q;
+  if (av <= 0 || unit <= 0) return 0;
+  const book = opts.book ?? quoteBook(code, ref, ref, 0, 0);
+  const cost = (n: number) => { const p = opts.limit ?? marketFill(book, 'buy', n)?.price; if (p === undefined) return Infinity; const g = p * n; return g + feeOf(g); };
+  let lo = 0, hi = Math.floor(av / unit);
+  while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (cost(mid) <= av) lo = mid; else hi = mid - 1; }
+  return lo;
 }
 
 /* ---------- 장중 시세 ----------

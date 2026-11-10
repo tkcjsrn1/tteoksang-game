@@ -282,7 +282,7 @@ test('한 판 전체: 평가액 변화 = 종목 기여 합계 − 수수료, 같
     if (room.s.phase === 'recap') {
       for (const tok of [a, b]) {
         const p = room.player(tok)!, r = p.results[p.results.length - 1];
-        assert.equal(r.delta, r.contributions.reduce((x, c) => x + c.won, 0) - r.fees - (r.slippage ?? 0), `라운드 ${r.round}`);
+        assert.equal(r.delta, r.contributions.reduce((x, c) => x + c.won, 0) - r.fees, `라운드 ${r.round}`);
         assert.equal(r.valueAfter, room.value(p));
       }
       const va = room.view(a, 'player', 0), vb = room.view(b, 'player', 0);

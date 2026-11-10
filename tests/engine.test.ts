@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aggregate, buildCandle, movingAverage } from '../shared/candles';
-import { checkOrder, computeClose, feeOf, fillPrice, GROUPS, LEADERS, lowerLimit, maxBuyQty, MODES, slippageBp, stockOf, STOCKS, upperLimit } from '../shared/rules';
+import { checkOrder, computeClose, feeOf, GROUPS, LEADERS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit } from '../shared/rules';
 import { ARCS, CARDS } from '../server/src/content';
 import { buildPlan, STOCKS_PER_GAME } from '../server/src/plan';
 import { pickDiversified } from '../server/src/npc';
@@ -50,9 +50,7 @@ test('예약금: 시장가는 걸어 둔 예약금을 쓸 수 없고, 지정가�
   assert.equal(checkOrder(ctx, 'G01', 'buy', 999, 10000, { limit: 10000 }).ok, false);
   assert.equal(checkOrder(ctx, 'G02', 'buy', 505, 10000, { limit: 9900 }).ok, false, '다른 종목 예약금은 그대로');
   assert.equal(checkOrder(ctx, 'G02', 'buy', 500, 10000, { limit: 9900 }).ok, true);
-  /* 시장가 최대 수량은 슬리피지·수수료 포함 */
-  assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 12400), 801);
-  assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 10000), 994);
+  /* 지정가 최대 수량은 지정가 × 수량 + 수수료 */
   assert.equal(maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 10000, { limit: 10000 }), 998);
   /* 매도 예약에 묶인 수량은 시장가로 팔 수 없습니다 */
   const s = { code: 'G03' as const, side: 'sell' as const, qty: 70, kind: 'limit' as const, price: 9000, gross: 630_000, fee: 1260, reserve: 0, requestId: 'b', placedAt: 0 };
@@ -85,28 +83,64 @@ test('장중 시세 경로: 시가에서 출발해 목표에 닿고, 10원 단�
   assert.equal(flat[45], 10120);
   assert.equal(flat[90], 10120);
 });
-test('슬리피지: 200만 원까지 0, 그 뒤 100만 원마다 5bp, 최대 40bp. 매수는 비싸게, 매도는 싸게', () => {
-  assert.equal(slippageBp(0), 0);
-  assert.equal(slippageBp(2_000_000), 0);
-  assert.equal(slippageBp(2_000_001), 5);
-  assert.equal(slippageBp(3_000_000), 5);
-  assert.equal(slippageBp(3_000_001), 10);
-  assert.equal(slippageBp(9_999_999_999), 40);
-  assert.equal(slippageBp(NaN), 0);
-  assert.deepEqual(fillPrice(10000, 'buy', 100), { price: 10000, slipBp: 0 });
-  assert.deepEqual(fillPrice(10000, 'buy', 990), { price: 10040, slipBp: 40 });
-  assert.deepEqual(fillPrice(10000, 'sell', 990), { price: 9960, slipBp: 40 });
-  assert.deepEqual(fillPrice(4850, 'buy', 500), { price: 4853, slipBp: 5 });    // 올림
-  assert.deepEqual(fillPrice(4850, 'sell', 500), { price: 4847, slipBp: 5 });   // 내림
-  /* 최대 수량은 슬리피지·수수료를 넣어도 현금을 넘지 않고, 한 주 더 사면 넘습니다 */
-  for (const ref of [4300, 7200, 12400, 23400]) {
+test('호가창: 시세 위로 매도 호가, 한 칸 아래부터 매수 호가, 10원 간격, 가격 제한폭 안, 모두에게 같은 값', () => {
+  for (const st of STOCKS) for (const k of [0, 17, 89]) {
+    const b = quoteBook(st.code, st.start, st.start, 2, k);
+    assert.equal(b.asks[0].price, st.start);
+    assert.equal(b.bids[0].price, st.start - 10);
+    b.asks.forEach((l, i) => { assert.equal(l.price, st.start + i * 10); assert.ok(l.qty >= 1 && Number.isInteger(l.qty)); });
+    b.bids.forEach((l, i) => { assert.equal(l.price, st.start - (i + 1) * 10); assert.ok(l.qty >= 1); });
+    assert.deepEqual(quoteBook(st.code, st.start, st.start, 2, k), b, '같은 입력이면 같은 호가창');
+  }
+  /* 상한가 근처에서는 위 호가가 상한가에서 끊기고, 하한가에서는 사려는 주문이 없습니다 */
+  const open = 10000;
+  const top = quoteBook('G01', upperLimit(open), open, 1, 5);
+  assert.deepEqual(top.asks.map(l => l.price), [upperLimit(open)]);
+  const bottom = quoteBook('G01', lowerLimit(open), open, 1, 5);
+  assert.equal(bottom.bids.length, 0);
+  assert.equal(marketFill(bottom, 'sell', 1), null);
+  assert.equal(checkOrder({ cash: 0, holdings: { G01: { qty: 5, avgCost: 9000, sinceRound: 1 } }, orders: {} }, 'G01', 'sell', 1, lowerLimit(open), { book: bottom }).ok, false);
+});
+test('시장가 체결: 작은 주문은 최우선 호가, 큰 주문은 여러 호가를 지나 평균가가 불리해짐(슬리피지)', () => {
+  const b = quoteBook('G07', 7200, 7200, 1, 3);
+  assert.deepEqual(marketFill(b, 'buy', 1), { price: 7200, slipBp: 0, best: 7200, levels: 1 });
+  assert.equal(marketFill(b, 'sell', 1)!.price, 7190, '매도는 한 칸 낮은 매수 호가부터(스프레드)');
+  /* 첫 단계 수량을 넘으면 다음 호가까지 */
+  const q0 = b.asks[0].qty, q1 = b.asks[1].qty;
+  const two = marketFill(b, 'buy', q0 + q1)!;
+  assert.equal(two.price, Math.ceil((q0 * 7200 + q1 * 7210) / (q0 + q1)));
+  assert.equal(two.levels, 2);
+  /* 수량이 늘면 평균가는 같거나 나빠짐 */
+  let prev = 0;
+  for (let q = 1; q < 3000; q += 37) { const f = marketFill(b, 'buy', q)!; assert.ok(f.price >= prev); prev = f.price; }
+  let prevS = Infinity;
+  for (let q = 1; q < 3000; q += 37) { const f = marketFill(b, 'sell', q)!; assert.ok(f.price <= prevS); prevS = f.price; }
+  /* 호가창보다 많으면 마지막 단계 가격으로 채움 */
+  const all = b.asks.reduce((x, l) => x + l.qty, 0);
+  assert.ok(marketFill(b, 'buy', all * 3)!.price <= b.asks[b.asks.length - 1].price);
+  /* 대표 종목은 호가가 두꺼워 같은 금액이면 슬리피지가 같거나 작음(평균) */
+  let lead = 0, peer = 0;
+  for (let k = 0; k < 90; k++) {
+    lead += marketFill(quoteBook('G01', 10000, 10000, 1, k), 'buy', 800)!.slipBp;
+    peer += marketFill(quoteBook('G07', 10000, 10000, 1, k), 'buy', 800)!.slipBp;
+  }
+  assert.ok(lead < peer, `대표 ${lead} < 관련 ${peer}`);
+  /* 1,000만 원 전부를 한 번에 사도 슬리피지는 0.5% 안쪽 */
+  for (let k = 0; k < 90; k++) {
+    const bk = quoteBook('G07', 7200, 7200, 1, k);
+    const q = maxBuyQty({ cash: 10_000_000, holdings: {}, orders: {} }, 'G07', 7200, { book: bk });
+    assert.ok(marketFill(bk, 'buy', q)!.slipBp <= 50, `${k}`);
+  }
+});
+test('최대 매수 수량: 호가창·수수료를 넣어도 현금을 넘지 않고, 한 주 더 사면 넘는다', () => {
+  for (const ref of [4300, 7200, 12400, 23400]) for (const k of [0, 40]) {
     const ctx = { cash: 10_000_000, holdings: {}, orders: {} };
-    const q = maxBuyQty(ctx, 'G01', ref);
-    const ok = checkOrder(ctx, 'G01', 'buy', q, ref), over = checkOrder(ctx, 'G01', 'buy', q + 1, ref);
+    const book = quoteBook('G01', ref, ref, 1, k);
+    const q = maxBuyQty(ctx, 'G01', ref, { book });
+    const ok = checkOrder(ctx, 'G01', 'buy', q, ref, { book }), over = checkOrder(ctx, 'G01', 'buy', q + 1, ref, { book });
     assert.ok(ok.ok && ok.reserve <= 10_000_000, `${ref}`);
     assert.equal(over.ok, false, `${ref}`);
   }
-  /* 아주 큰 수량도 곱셈 넘침 없이 거절합니다 */
   assert.equal(checkOrder({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 'buy', Number.MAX_SAFE_INTEGER, 10000).ok, false);
   assert.equal(checkOrder({ cash: 10_000_000, holdings: {}, orders: {} }, 'G01', 'buy', 2 ** 60, 10000).ok, false);
 });
