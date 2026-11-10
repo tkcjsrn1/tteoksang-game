@@ -1,7 +1,7 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, dividendRound, exDividendPrice, feeOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import { cleanOptions, gameConfig, type RoomOptions, checkOrder, computeClose, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
@@ -9,7 +9,7 @@ import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan'
 import { buildReport } from './report';
 
 /** refPrice: 체결 순간의 장중 시세. kind: 시장가(바로 체결)·지정가(예약). k: 주문 시간 시작부터 지난 초 */
-export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; refPrice?: number; fee: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string; kind?: OrderKind; k?: number; trigger?: 'stop' | 'take' }
+export interface Fill { round: number; code: StockCode; side: Side; qty: number; price: number; refPrice?: number; /** 수수료 + 거래세 */ fee: number; /** 그중 거래세(매도만) */ tax?: number; gross: number; realized: 'gain' | 'loss' | null; requestId: string; kind?: OrderKind; k?: number; trigger?: 'stop' | 'take' }
 /** 이번 라운드 장중 시세. paths[code][k]가 k초의 가격입니다. done이면 종료가가 정해진 뒤입니다. */
 export interface LiveState { round: number; startedAt: number; steps: number; k: number; breakAt: number | null; paths: Record<StockCode, number[]>; done: boolean }
 export interface Observation {
@@ -37,6 +37,8 @@ export interface RoomState {
   players: Player[]; spectators: string[];
   prices: Record<StockCode, number>; history: Record<StockCode, PriceBreakdown[]>;
   settled: number[]; nextRoomCode: string | null;
+  /** 방을 만들 때 고른 라운드 수·장 시간. 예전 저장 데이터에는 없습니다 */
+  options?: RoomOptions;
   /** 배당락을 적용한 라운드(중복 방지). 예전 저장 데이터에는 없습니다 */
   exDividendRound?: number | null;
   /** 장중 시세. 예전 저장 데이터에는 없습니다 */
@@ -63,23 +65,24 @@ export class GameRoom {
   touched = new Set<string>();
   constructor(state: RoomState) { this.s = state; }
 
-  static create(opts: { code: string; mode: GameMode; now: number; seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[] }): GameRoom {
+  static create(opts: { code: string; mode: GameMode; now: number; seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; options?: RoomOptions }): GameRoom {
     const seed = opts.seed ?? randomInt(2 ** 31);
     const excluded = opts.excludedArcs ?? [];
-    const plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs);
+    const options = cleanOptions(opts.options);
+    const plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, options);
     const npcs = NPC_TYPES.map(t => newPlayer('npc', `NPC ${NPC_RULES[t].label}`, opts.now, t, npcId(t)));
     return new GameRoom({
       code: opts.code, mode: opts.mode, seed, status: 'lobby', hostId: null,
       createdAt: opts.now, updatedAt: opts.now, plan, excludedArcs: excluded, round: 0, phase: null, phaseEndsAt: null, phaseSeconds: 0, newsStartedAt: 0, secondRevealed: false,
       players: npcs, spectators: [], prices: initialPrices(gameCodes(plan)), history: Object.fromEntries(gameCodes(plan).map(c => [c, []])) as unknown as Record<StockCode, PriceBreakdown[]>,
-      settled: [], nextRoomCode: null, live: null
+      settled: [], nextRoomCode: null, live: null, options
     });
   }
 
   /** 이번 판 종목 정의(업종 순서). */
   get stocks(): StockDef[] { return gameCodes(this.s.plan).map(stockOf); }
   get humans() { return this.s.players.filter(p => p.kind === 'human'); }
-  get config() { return MODES[this.s.mode]; }
+  get config() { return gameConfig(this.s.mode, this.s.options); }
   player(tokenValue: string | null | undefined) { return tokenValue ? this.s.players.find(p => p.token === tokenValue) ?? null : null; }
 
   /** 재접속 토큰이 맞으면 복구, 시작 전이면 참가, 시작 후 처음 온 사람은 관전자입니다. */
@@ -336,7 +339,7 @@ export class GameRoom {
   }
   /** 체결: 현금·보유 수량을 바로 바꾸고 체결 기록을 남깁니다. */
   private executeFill(p: Player, code: StockCode, side: Side, qty: number, price: number, ref: number, requestId: string, kind: OrderKind, now: number, trigger?: 'stop' | 'take'): FillInfo {
-    const gross = price * qty, fee = feeOf(gross);
+    const gross = price * qty, fee = chargeOf(side, gross), tax = side === 'sell' ? taxOf(gross) : 0;
     let realized: Fill['realized'] = null;
     if (side === 'buy') {
       p.cash -= gross + fee;
@@ -351,10 +354,10 @@ export class GameRoom {
       if (h.qty === 0) { delete p.holdings[code]; if (p.stops) delete p.stops[code]; }
     }
     p.fees += fee;
-    p.fills.push({ round: this.s.round, code, side, qty, price, refPrice: ref, fee, gross, realized, requestId, kind, k: this.s.live?.k ?? 0, ...(trigger ? { trigger } : {}) });
+    p.fills.push({ round: this.s.round, code, side, qty, price, refPrice: ref, fee, ...(tax ? { tax } : {}), gross, realized, requestId, kind, k: this.s.live?.k ?? 0, ...(trigger ? { trigger } : {}) });
     this.touched.add(p.id);
     this.touch(now);
-    return { code, side, qty, price, fee, kind, ...(trigger ? { trigger } : {}) };
+    return { code, side, qty, price, fee, ...(tax ? { tax } : {}), kind, ...(trigger ? { trigger } : {}) };
   }
   /** 손절·익절 설정. stop은 지금 시세보다 낮게, take는 높게, 10원 단위. 둘 다 null이면 지웁니다. 장중이 아니어도 설정할 수 있습니다. */
   setStop(tokenValue: string, requestId: string, code: StockCode, stop: number | null, take: number | null, now: number): OrderResult {
@@ -597,7 +600,7 @@ export class GameRoom {
     const value = p ? p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * priceOf(st.code), 0) : 0;
     return {
       code: this.s.code, mode: this.s.mode, status: this.s.status, phase: this.s.phase, round: this.s.round, totalRounds: cfg.rounds,
-      phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now,
+      phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, seconds: { news: cfg.news, trade: cfg.trade, recap: cfg.recap },
       you: { id: p?.id ?? null, label: p?.label ?? null, role, isHost: !!p && p.id === this.s.hostId },
       humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */
@@ -607,7 +610,7 @@ export class GameRoom {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),
         orders: Object.values(p.orders) as Order[],
-        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
+        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, ...(f.tax ? { tax: f.tax } : {}), kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
         dividendLog: p.dividends ?? []
       } : null,
       lastResult: p && !inSettling ? p.results[p.results.length - 1] ?? null : null,

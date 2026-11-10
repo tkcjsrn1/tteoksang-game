@@ -6,13 +6,40 @@ export const START_CASH = 10_000_000;
 export const MAX_RETURN_BP = 2000;
 export const MARKET_MAX_BP = 50;
 export const STOCK_MAX_BP = 150;
-export const FEE_BP = 20;
+/* 거래 비용: 수수료는 살 때와 팔 때 모두, 증권거래세는 팔 때만 냅니다.
+   실제 세율(2026년 양도분부터 코스피·코스닥 모두 농어촌특별세 포함 0.20%)을 그대로 쓰고, 수수료는 게임용 값입니다. */
+export const FEE_BP = 10;
+export const TAX_BP = 20;
 
 /* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 한 라운드를 2분 넘게 둡니다(2026-11 결정). */
 export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; label: string }> = {
   friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 2, label: '친구 대전' },
   solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 2, label: '혼자 연습' }
 };
+
+/* 방을 만들 때 고르는 옵션(라운드 수, 장 시간). 고르지 않으면 MODES 값을 씁니다. */
+export interface RoomOptions { rounds?: number; trade?: number }
+export const ROUND_CHOICES = [3, 5, 8, 10] as const;
+export const TRADE_CHOICES = [60, 90, 120] as const;
+const BASE_TRADE = 90;
+/** 라운드 수에 맞춘 사건 수·돌발 카드 수. 사건 하나가 뉴스 2~3건이라, 라운드마다 뉴스가 1~2건 나오게 맞춥니다. */
+const BY_ROUNDS: Record<number, { arcs: number; cards: number }> = { 3: { arcs: 2, cards: 1 }, 5: { arcs: 2, cards: 2 }, 8: { arcs: 4, cards: 3 }, 10: { arcs: 4, cards: 5 } };
+/** 잘못된 값은 버리고 고를 수 있는 값만 남깁니다. */
+export function cleanOptions(o: unknown): RoomOptions {
+  const x = (o && typeof o === 'object' ? o : {}) as Record<string, unknown>, out: RoomOptions = {};
+  if ((ROUND_CHOICES as readonly number[]).includes(x.rounds as number)) out.rounds = x.rounds as number;
+  if ((TRADE_CHOICES as readonly number[]).includes(x.trade as number)) out.trade = x.trade as number;
+  return out;
+}
+/** 이 방의 실제 설정. 장 시간은 MODES.trade가 기준(90초)에서 줄어든 비율(빠른 확인용 TIME_DIVISOR)을 그대로 따릅니다. */
+export function gameConfig(mode: GameMode, options: RoomOptions = {}) {
+  const base = MODES[mode];
+  return {
+    ...base,
+    ...(options.rounds ? { rounds: options.rounds, ...BY_ROUNDS[options.rounds] } : {}),
+    ...(options.trade ? { trade: Math.max(1, Math.ceil(options.trade * base.trade / BASE_TRADE)) } : {})
+  };
+}
 
 /* 종목 24개 = 업종 6개 × 4종목. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
    같은 업종 종목은 대표 종목 뉴스에 linkBeta 비율만큼 함께 움직입니다(업종 동조화).
@@ -110,6 +137,10 @@ export const stockOf = (code: StockCode) => STOCKS.find(s => s.code === code)!;
 
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 export const feeOf = (gross: number) => Math.ceil(gross * FEE_BP / 10000);
+/** 증권거래세(팔 때만). 원 미만은 버립니다 */
+export const taxOf = (gross: number) => Math.floor(gross * TAX_BP / 10000);
+/** 이 거래에서 빠져나가는 비용 합계: 수수료 + (매도면) 거래세 */
+export const chargeOf = (side: Side, gross: number) => feeOf(gross) + (side === 'sell' ? taxOf(gross) : 0);
 export const upperLimit = (P: number) => Math.floor(P * 12000 / 100000) * 10;
 export const lowerLimit = (P: number) => Math.max(100, Math.ceil(P * 8000 / 100000) * 10);
 
@@ -213,7 +244,7 @@ export function checkOrder(ctx: OrderContext, code: StockCode, side: Side, qty: 
     if (!f) return { ok: false, reason: side === 'sell' ? '사려는 주문이 없어 지금은 시장가로 팔 수 없습니다(하한가)' : '팔려는 주문이 없어 지금은 시장가로 살 수 없습니다' };
     price = f.price; slipBp = f.slipBp;
   }
-  const gross = price * qty, fee = feeOf(gross);
+  const gross = price * qty, fee = chargeOf(side, gross);
   if (side === 'buy') {
     const reserve = gross + fee;
     if (reservedExcept(ctx, replace ? code : null) + reserve > ctx.cash) return { ok: false, reason: '주문 가능 현금이 부족합니다' };

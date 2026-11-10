@@ -5,7 +5,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
-import { MODES } from '../../shared/rules';
+import { cleanOptions, MODES, type RoomOptions } from '../../shared/rules';
 import type { ClientMsg, GameMode, Role, ServerMsg, StockCode } from '../../shared/types';
 import type { ForcedOutcomes } from './plan';
 import { GameRoom } from './room';
@@ -82,7 +82,7 @@ export class Hub {
   newCode() {
     for (;;) { const c = String(randomInt(100000, 1000000)); if (!this.rooms.has(c)) return c; }
   }
-  createRoom(mode: GameMode, opts: { seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[] } = {}) {
+  createRoom(mode: GameMode, opts: { seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; options?: RoomOptions } = {}) {
     const room = GameRoom.create({ code: this.newCode(), mode, now: this.now(), ...opts });
     this.rooms.set(room.s.code, room);
     this.dirty.add(room.s.code);
@@ -228,7 +228,7 @@ export class Hub {
       case 'rematch': {
         if (room.s.status !== 'finished' || !room.player(c.token)) return;
         if (!room.s.nextRoomCode) {
-          const next = this.createRoom(room.s.mode, { excludedArcs: room.s.plan.arcIds });
+          const next = this.createRoom(room.s.mode, { excludedArcs: room.s.plan.arcIds, options: room.s.options });
           room.s.nextRoomCode = next.s.code;
           this.dirty.add(room.s.code);
         }
@@ -257,8 +257,8 @@ export class Hub {
       let body = '';
       req.on('data', d => { body += d; if (body.length > 4096) req.destroy(); });
       req.on('end', () => {
-        let mode: GameMode = 'friend', extra: { seed?: number; forced?: ForcedOutcomes; forcedArcs?: string[] } = {};
-        try { const p = JSON.parse(body || '{}'); if (MODES[p.mode as GameMode]) mode = p.mode; if (this.opts.allowTestHooks) extra = { seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs }; } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
+        let mode: GameMode = 'friend', extra: { seed?: number; forced?: ForcedOutcomes; forcedArcs?: string[]; options?: RoomOptions } = {};
+        try { const p = JSON.parse(body || '{}'); if (MODES[p.mode as GameMode]) mode = p.mode; extra = { options: cleanOptions(p) }; if (this.opts.allowTestHooks) extra = { ...extra, seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs }; } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
         if (!this.allowCreate(req)) return this.json(res, 429, { error: '방을 너무 많이 만들었습니다. 잠시 후 다시 시도해 주세요' });
         const room = this.createRoom(mode, extra);
         this.json(res, 201, { code: room.s.code, mode });

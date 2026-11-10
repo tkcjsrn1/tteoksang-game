@@ -540,3 +540,9 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .probe { margin: 0; font-size: 13px; min-height: 20px; }
 .probe-area { touch-action: pan-y; cursor: crosshair; }
 @media (prefers-reduced-motion: reduce) { .confetti { display: none; } .rank-moves li { animation: none; } }
+/* 첫 화면 게임 설정 */
+.game-opts { background: var(--panel-3); border-radius: 12px; padding: 10px 12px; }
+.game-opts summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.game-opts[open] summary { margin-bottom: 8px; }
+.game-opts .hint { margin: 8px 0 4px; }
+.game-opts .seg button { padding: 8px 4px; font-size: 14px; }

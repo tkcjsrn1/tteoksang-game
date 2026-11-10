@@ -51,7 +51,7 @@ export interface Order {
   gross: number; fee: number; reserve: number; requestId: string; placedAt: number;
 }
 /** 체결 한 건 */
-export interface FillInfo { code: StockCode; side: Side; qty: number; price: number; fee: number; kind: OrderKind; trigger?: 'stop' | 'take' }
+export interface FillInfo { code: StockCode; side: Side; qty: number; price: number; /** 수수료 + 거래세 */ fee: number; tax?: number; kind: OrderKind; trigger?: 'stop' | 'take' }
 /** 손절·익절 자동 주문. 시세가 stop 이하로 내려가거나 take 이상으로 오르면 가진 수량 전부를 시장가로 팝니다. */
 export interface StopOrder { stop: number | null; take: number | null; setAt: number }
 export interface Holding { qty: number; avgCost: number; sinceRound: number }
@@ -110,7 +110,7 @@ export interface Portfolio {
   cash: number; reserved: number; available: number; value: number; returnPct: number; fees: number;
   holdings: { code: StockCode; name: string; qty: number; avgCost: number; price: number; pnl: number; stop?: number | null; take?: number | null }[];
   orders: Order[];
-  fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; kind?: OrderKind; trigger?: 'stop' | 'take' }[];
+  fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; tax?: number; kind?: OrderKind; trigger?: 'stop' | 'take' }[];
   /** 받은 배당금 */
   dividendLog?: DividendPaid[];
 }
@@ -121,6 +121,8 @@ export interface RoomView {
   code: string; mode: GameMode; status: RoomStatus; phase: Phase | null;
   round: number; totalRounds: number;
   phaseEndsAt: number | null; phaseSeconds: number; serverNow: number;
+  /** 이 방의 단계별 시간(초). 대기실 안내용 */
+  seconds: { news: number; trade: number; recap: number };
   you: { id: string | null; label: string | null; role: Role; isHost: boolean };
   humanCount: number; maxPlayers: number; minToStart: number; startCash: number;
   leaderboard: LeaderRow[];

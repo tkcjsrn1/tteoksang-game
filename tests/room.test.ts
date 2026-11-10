@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
 import { ARCS } from '../server/src/content';
-import { GROUPS, lowerLimit, stockOf, STOCKS } from '../shared/rules';
+import { GROUPS, lowerLimit, stockOf, STOCKS, feeOf } from '../shared/rules';
 import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
@@ -94,7 +94,7 @@ test('지정가 예약: 변경에 실패하면 원래 예약을 유지하고, �
   const low = room.markPrice('G01') - 500;   // 지금 시세보다 낮아 바로 체결되지 않음
   assert.deepEqual(room.placeOrder(a, 'o1', 'G01', 'buy', 10, end, 'limit', low), { ok: true, fill: null });
   assert.equal(p.orders.G01!.qty, 10);
-  assert.equal(p.orders.G01!.reserve, low * 10 + Math.ceil(low * 10 * 20 / 10000));
+  assert.equal(p.orders.G01!.reserve, low * 10 + feeOf(low * 10));
   assert.equal(room.placeOrder(a, 'o2', 'G01', 'buy', 100000, end, 'limit', low).ok, false);
   assert.equal(p.orders.G01!.qty, 10);
   assert.equal(room.placeOrder(a, 'o3', 'G01', 'buy', 20, end, 'limit', low).ok, true);

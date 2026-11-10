@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { navigate } from './App';
 import { createRoom, roomInfo, store } from './net';
+import { cleanOptions, MODES, ROUND_CHOICES, TRADE_CHOICES, type RoomOptions } from '../../shared/rules';
 import { TERMS } from '../../shared/glossary';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
@@ -26,7 +27,12 @@ export function Home() {
     setBusy(true); setError(null);
     try { await f(); } catch (e) { setError(e instanceof Error && e.message !== 'Failed to fetch' ? e.message : '서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요'); } finally { setBusy(false); }
   };
-  const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode); navigate(`/room/${r.code}`); });
+  /* 라운드 수·장 시간: 고른 값을 이 기기에 기억합니다 */
+  const [opts, setOpts] = useState<RoomOptions>(() => { try { return cleanOptions(JSON.parse(store.get('options') ?? '{}')); } catch { return {}; } });
+  const rounds = opts.rounds ?? MODES.friend.rounds, trade = opts.trade ?? 90;
+  const pick = (o: RoomOptions) => { const next = { ...opts, ...o }; setOpts(next); store.set('options', JSON.stringify(next)); };
+  const minutes = Math.round(rounds * (MODES.friend.news + trade + MODES.friend.recap) / 60);
+  const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, opts); navigate(`/room/${r.code}`); });
   const join = () => run(async () => { await roomInfo(code); navigate(`/room/${code}`); });
   const t = todayTerm();
   const links = [
@@ -46,6 +52,14 @@ export function Home() {
             <button className="ghost" disabled={busy} onClick={() => make('friend')}>친구 방 만들기</button>
             <button className="ghost" disabled={busy} aria-expanded={joining} onClick={() => setJoining(!joining)}>코드로 참가</button>
           </div>
+          <details className="game-opts">
+            <summary>게임 설정 · {rounds}라운드 · 장 {trade}초 <small className="hint">(한 판 약 {minutes}분)</small></summary>
+            <p className="hint">라운드 수</p>
+            <div className="seg" role="group" aria-label="라운드 수">{ROUND_CHOICES.map(n => <button key={n} type="button" aria-pressed={rounds === n} onClick={() => pick({ rounds: n })}>{n}라운드</button>)}</div>
+            <p className="hint">장 시간(한 라운드에 사고팔 수 있는 시간)</p>
+            <div className="seg" role="group" aria-label="장 시간">{TRADE_CHOICES.map(n => <button key={n} type="button" aria-pressed={trade === n} onClick={() => pick({ trade: n })}>{n}초</button>)}</div>
+            <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다.</p>
+          </details>
           {joining && <form className="sub-actions" onSubmit={e => { e.preventDefault(); if (code.length === 6) join(); }}>
             <label htmlFor="code" className="hint">친구에게 받은 6자리 방 코드</label>
             <input id="code" inputMode="numeric" autoComplete="off" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} placeholder="123456" />
