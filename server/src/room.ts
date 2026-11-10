@@ -629,7 +629,7 @@ export class GameRoom {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),
         orders: Object.values(p.orders) as Order[],
-        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, ...(f.trigger ? { trigger: f.trigger } : {}) })),
+        fillLog: p.fills.map(f => ({ round: f.round, code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee, kind: f.kind ?? 'market', ...(f.trigger ? { trigger: f.trigger } : {}) })),
         dividendLog: p.dividends ?? []
       } : null,
       lastResult: p && !inSettling ? p.results[p.results.length - 1] ?? null : null,

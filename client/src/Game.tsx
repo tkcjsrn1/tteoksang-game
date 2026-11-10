@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { BOOK_SHOW, dividendYieldBp, feeOf, formatEok, fundOf, GROUPS, indexValue, INDEX_BASE, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, upperLimit, type QuoteBook } from '../../shared/rules';
 import { intradayBp } from './live';
+import { buildJournal, journalKey, parseNotes } from './journal';
 import type { NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
 import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
@@ -707,10 +708,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
           <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
         </li>)}</ol>
       </section>
-      {rep && <section className="sec">
-        <h2 className="h">주요 거래 <small className="hint">· 낸 수수료 {won(rep.fees)}</small></h2>
-        {rep.majorTrades.length ? <ul className="list">{rep.majorTrades.map((t, i) => <li key={i}><span>{t.round}라운드 {t.name}<small>{t.side === 'buy' ? '매수' : '매도'} {t.qty.toLocaleString('ko-KR')}주 · {won(t.price)}</small></span></li>)}</ul> : <p className="hint">이번 판에는 거래가 없었습니다.</p>}
-      </section>}
+      {rep && <TradeJournal view={view} fees={rep.fees} fallback={rep.majorTrades} />}
       {rep && rep.judgments.length > 0 && <section className="sec"><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></section>}
       {rep?.metrics && <section className="sec"><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></section>}
       <GameTerms view={view} />
@@ -729,6 +727,52 @@ function Finished({ view, send }: { view: RoomView; send: (m: never) => void }) 
       </div>
       <Disclaimer />
     </main>
+  );
+}
+
+/** 매매일지: 내 체결마다 그 라운드 뉴스, 종가 기준 결과, 내 메모를 나란히 보여 줍니다. 메모는 이 기기에만 저장합니다. */
+function TradeJournal({ view, fees, fallback }: { view: RoomView; fees: number; fallback: { round: number; name: string; side: Side; qty: number; price: number }[] }) {
+  const entries = useMemo(() => buildJournal(view), [view]);
+  const [notes, setNotes] = useState(() => parseNotes(store.get(journalKey(view.code))));
+  const [editing, setEditing] = useState<string | null>(null);
+  const save = (key: string, text: string) => {
+    const next = { ...notes, [key]: text.slice(0, 200) };
+    if (!text.trim()) delete next[key];
+    setNotes(next); store.set(journalKey(view.code), JSON.stringify(next));
+  };
+  const good = entries.filter(e => e.verdict === 'good').length, bad = entries.filter(e => e.verdict === 'bad').length;
+  const label = (k: string, t: 'stop' | 'take' | null) => t === 'stop' ? '손절' : t === 'take' ? '익절' : k === 'limit' ? '지정가' : '시장가';
+  if (!view.portfolio) return (
+    <section className="sec">
+      <h2 className="h">주요 거래 <small className="hint">· 낸 수수료 {won(fees)}</small></h2>
+      {fallback.length ? <ul className="list">{fallback.map((t, i) => <li key={i}><span>{t.round}라운드 {t.name}<small>{t.side === 'buy' ? '매수' : '매도'} {t.qty.toLocaleString('ko-KR')}주 · {won(t.price)}</small></span></li>)}</ul> : <p className="hint">이번 판에는 거래가 없었습니다.</p>}
+    </section>
+  );
+  return (
+    <section className="sec journal">
+      <h2 className="h"><TermLink id="trading-journal">매매일지</TermLink> <small className="hint">· 거래 {entries.length}건 · 수수료 {won(fees)}</small></h2>
+      {entries.length === 0 ? <p className="hint">이번 판에는 거래가 없었습니다.</p> : <>
+        <p className="hint">체결가를 그 라운드 종가와 비교했어요. 유리 {good}건 · 불리 {bad}건. 다음 판을 위해 이유를 한 줄 남겨 보세요.</p>
+        <ol className="journal-list">{entries.map(e => (
+          <li key={e.key} className="journal-item">
+            <div className="journal-top">
+              <span className={`side-tag ${e.side}`}>{e.side === 'buy' ? '매수' : '매도'}</span>
+              <b>{e.round}R · {e.name}</b>
+              <small className="hint">{label(e.kind, e.trigger)} · {e.qty.toLocaleString('ko-KR')}주 · {won(e.price)}</small>
+            </div>
+            {e.headline && <p className="journal-news">뉴스: {e.headline}</p>}
+            {e.close !== null && e.afterBp !== null && <p className="journal-after">
+              그 라운드 종가 {won(e.close)} → <b className={e.verdict === 'good' ? 'up' : e.verdict === 'bad' ? 'down' : 'flat'}>{e.verdict === 'good' ? '유리' : e.verdict === 'bad' ? '불리' : '비슷'} {pctBp(e.afterBp)}</b>
+            </p>}
+            {editing === e.key
+              ? <textarea className="journal-note" aria-label={`${e.round}라운드 ${e.name} 메모`} maxLength={200} rows={2} autoFocus defaultValue={notes[e.key] ?? ''}
+                  placeholder="왜 샀는지·팔았는지, 다음엔 어떻게 할지" onBlur={ev => { save(e.key, ev.target.value); setEditing(null); }} />
+              : <button className="link journal-memo" onClick={() => setEditing(e.key)}>{notes[e.key] ? `메모: ${notes[e.key]}` : '+ 메모 남기기'}</button>}
+          </li>
+        ))}</ol>
+        <p className="hint">종가 비교는 그 라운드 하나만 본 결과입니다. 길게 보면 달라질 수 있어요.</p>
+      </>}
+    </section>
   );
 }
 

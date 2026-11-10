@@ -112,7 +112,7 @@ export interface Portfolio {
   cash: number; reserved: number; available: number; value: number; returnPct: number; fees: number;
   holdings: { code: StockCode; name: string; qty: number; avgCost: number; price: number; pnl: number; stop?: number | null; take?: number | null }[];
   orders: Order[];
-  fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; trigger?: 'stop' | 'take' }[];
+  fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; kind?: OrderKind; trigger?: 'stop' | 'take' }[];
   /** 받은 배당금 */
   dividendLog?: DividendPaid[];
 }

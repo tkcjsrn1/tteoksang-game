@@ -1,5 +1,5 @@
 /* 화면 자동 테스트: 실제 브라우저(Chromium)로 390px 휴대폰 화면을 열고 버튼을 눌러 봅니다.
-   - 홈 → 혼자 연습 → 주문 → 라운드 결과(등락 막대, 봉 재생) → 용어 설명 → 차트 연습실 1~6
+   - 홈 → 혼자 연습 → 장중 시세(선·10초봉) → 주문 → 라운드 결과(등락 막대, 봉 재생) → 용어 설명 → 차트 연습실 1~6 → 짧은 판 끝까지(매매일지)
    - 화면마다 가로 스크롤이 생기지 않는지, 브라우저 오류가 없는지 확인합니다.
    사용법: npm run build && npm run e2e   (dist/를 서버가 그대로 내보냅니다)
    실패하면 화면 캡처를 e2e-output/에 남깁니다. */
@@ -80,6 +80,10 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.waitForTimeout(2_500);
   const after = await page.locator('.live-chart path').getAttribute('d');
   ok(before !== after, '2.5초 동안 시세 그래프가 그대로');
+  /* 10초봉으로 바꾸면 봉(rect)이 그려지고, 다시 선으로 돌립니다 */
+  await page.locator('.live-chart').getByRole('button', { name: '10초봉' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.live-chart svg rect').length >= 1, null, { timeout: 12_000 });
+  await page.locator('.live-chart').getByRole('button', { name: '선(1초)' }).click();
 });
 
 await step('호가창: 매도 5단계·매수 5단계, 가격을 누르면 지정가로', async () => {
@@ -179,6 +183,32 @@ for (const [id, label] of [['candle', '봉 하나 읽기'], ['compare', '봉 비
     }
   });
 }
+
+await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
+  /* 2라운드짜리 짧은 판을 새로 시작합니다(이후에 만드는 방부터 적용) */
+  Object.assign(MODES.solo, { rounds: 2, news: 1, trade: 6, recap: 2 });
+  await page.goto(base + '/');
+  await page.getByRole('button', { name: '혼자 연습 시작' }).click();
+  await page.locator('.sectors').waitFor();
+  const off = page.getByRole('button', { name: '안내 끄기' });
+  if (await off.count()) await off.click();
+  await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
+  await page.getByRole('button', { name: '모두 펼치기' }).click().catch(() => {});
+  await page.locator('.sectors button.row').first().click();
+  await page.getByRole('button', { name: '시장가 · 바로 체결' }).click().catch(() => {});
+  await page.getByRole('button', { name: '25%' }).click();
+  await page.locator('button.go').click();
+  await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  await page.keyboard.press('Escape');
+  const j = page.locator('.journal');
+  await j.waitFor({ timeout: 40_000 });
+  ok(await j.locator('.journal-item').count() >= 1, '매매일지에 거래가 없음');
+  ok(/종가/.test(await j.locator('.journal-item').first().innerText()), '종가 비교 없음');
+  await j.getByRole('button', { name: '+ 메모 남기기' }).first().click();
+  await j.locator('textarea').fill('뉴스 보고 샀음');
+  await j.locator('textarea').blur();
+  await j.getByText('메모: 뉴스 보고 샀음').waitFor();
+});
 
 await browser.close();
 await hub.close();

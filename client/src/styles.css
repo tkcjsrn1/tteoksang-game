@@ -501,3 +501,20 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .stop-grid input { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; }
 .stops .btn-row { margin-top: 8px; }
 .dividend-note p { margin: 0; font-size: 14px; }
+
+/* 장중 그래프 모양 토글, 이동평균선 범례 */
+.live-chart .seg.mini { width: 160px; margin: 0 0 6px auto; }
+.live-chart .seg.mini button { padding: 5px 6px; font-size: 13px; border-radius: 8px; }
+.legend.ma { width: 12px; height: 2px; border-radius: 1px; background: var(--gold); vertical-align: 3px; }
+/* 매매일지 */
+.journal-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.journal-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--panel); min-width: 0; }
+.journal-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.journal-top b { min-width: 0; overflow-wrap: anywhere; }
+.side-tag { font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+.side-tag.buy { color: var(--up); background: var(--up-soft); }
+.side-tag.sell { color: var(--down); background: var(--down-soft); }
+.journal-news { margin: 6px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.journal-after { margin: 4px 0 0; font-size: 14px; }
+.journal-memo { margin-top: 4px; padding: 4px 0; text-align: left; font-size: 13px; overflow-wrap: anywhere; }
+.journal-note { width: 100%; box-sizing: border-box; margin-top: 6px; font: inherit; font-size: 14px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-3); color: inherit; resize: vertical; }

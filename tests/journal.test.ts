@@ -1,0 +1,60 @@
+/* 장중 10초봉·이동평균 계산과 판이 끝난 뒤 매매일지를 확인합니다. */
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { bucketCandles, movingAverage } from '../client/src/live';
+import { buildJournal, journalKey, parseNotes } from '../client/src/journal';
+import { GameRoom } from '../server/src/room';
+
+test('10초봉: 앞 봉의 종가가 다음 봉의 시가, 고가·저가는 구간 안의 값', () => {
+  const ticks = [100, 110, 90, 120, 130, 80, 100];
+  const c = bucketCandles(ticks, 3);
+  assert.deepEqual(c, [
+    { i: 0, open: 100, high: 120, low: 90, close: 120 },
+    { i: 1, open: 120, high: 130, low: 80, close: 100 }
+  ]);
+  for (let i = 1; i < c.length; i++) assert.equal(c[i].open, c[i - 1].close);
+  assert.deepEqual(bucketCandles([100], 10), []);
+  assert.deepEqual(bucketCandles([100, 105], 10), [{ i: 0, open: 100, high: 105, low: 100, close: 105 }]);
+});
+
+test('이동평균: n개가 모이기 전은 비우고, 이후는 최근 n개 평균(정수)', () => {
+  assert.deepEqual(movingAverage([10, 20, 30, 40], 2), [null, 15, 25, 35]);
+  assert.deepEqual(movingAverage([10, 11], 3), [null, null]);
+  assert.deepEqual(movingAverage([10, 11, 11], 3), [null, null, 11]);
+});
+
+test('매매일지: 내 체결마다 라운드 뉴스와 그 라운드 종가 비교가 붙는다', () => {
+  const T0 = 2_000_000;
+  const room = GameRoom.create({ code: '424242', mode: 'solo', now: T0, seed: 4 });
+  const tok = room.join(null, T0).token;
+  room.start(T0);
+  while (room.s.phase !== 'trade') room.tick(room.s.phaseEndsAt!);
+  const t = room.s.live!.startedAt;
+  assert.equal(room.placeOrder(tok, 'a', 'G01', 'buy', 30, t).ok, true);
+  assert.equal(room.placeOrder(tok, 'b', 'G01', 'sell', 10, t + 1).ok, true);
+  const end = room.s.phaseEndsAt!;
+  room.tick(end);
+  room.beginRecap(end);
+  const v = room.view(tok, 'player', end);
+  const j = buildJournal(v);
+  assert.equal(j.length, 2);
+  assert.deepEqual(j.map(e => e.key), ['1-0', '1-1']);
+  const close = v.stocks.find(s => s.code === 'G01')!.history.find(h => h.round === 1)!.closePrice;
+  for (const e of j) {
+    assert.equal(e.close, close);
+    assert.equal(e.kind, 'market');
+    assert.ok(e.headline, '라운드 뉴스 제목 없음');
+    const want = Math.round(e.side === 'buy' ? (close - e.price) * 10000 / e.price : (e.price - close) * 10000 / close);
+    assert.equal(e.afterBp, want);
+    assert.equal(e.verdict, want > 20 ? 'good' : want < -20 ? 'bad' : 'flat');
+  }
+});
+
+test('매매일지 메모: 깨진 저장값은 비우고, 200자로 자른다', () => {
+  assert.equal(journalKey('123456'), 'journal:123456');
+  assert.deepEqual(parseNotes(null), {});
+  assert.deepEqual(parseNotes('{bad'), {});
+  assert.deepEqual(parseNotes('[1,2]'), {});
+  assert.deepEqual(parseNotes(JSON.stringify({ a: 'x', b: 3 })), { a: 'x' });
+  assert.equal(parseNotes(JSON.stringify({ a: 'ㄱ'.repeat(300) })).a.length, 200);
+});
