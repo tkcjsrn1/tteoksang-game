@@ -15,7 +15,7 @@ export const MODES: Record<GameMode, { rounds: number; news: number; trade: numb
   academic: { rounds: 10, news: 20, trade: 90, recap: 25, maxPlayers: 60, minToStart: 1, arcs: 4, cards: 5, predictions: true,  report: true,  label: '학술제 대전' }
 };
 
-/* 종목 24개 = 업종 6개 × 4종목. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
+/* 종목 30개 = 업종 6개 × 5종목. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
    같은 업종 종목은 대표 종목 뉴스에 linkBeta 비율만큼 함께 움직입니다(업종 동조화).
    한 판에는 대표 종목 6개 + 같은 업종 종목 4개, 모두 10개가 나옵니다(server/src/plan.ts pickStocks).
    모든 기업은 지어낸 가상 기업입니다. */
@@ -53,7 +53,13 @@ export const STOCKS: StockDef[] = [
   { code: 'G21', name: '소나레 기획',     sector: '공연 기획사', group: 'stage', start: 12300, maxMoveBp: 140, linkBeta: 0.55, desc: '공연을 기획하고 출연진을 관리합니다. 흥행 여부에 실적이 크게 갈립니다.' },
   { code: 'G22', name: '아쿠론 필터',     sector: '정수 필터', group: 'water', start: 6800, maxMoveBp: 60, linkBeta: 0.5, desc: '정수 설비용 필터를 교체 판매합니다. 설비가 늘면 꾸준히 팔립니다.' },
   { code: 'G23', name: '테라젠 배관',     sector: '배관 시공', group: 'water', start: 4300, maxMoveBp: 70, linkBeta: 0.4, desc: '물 재이용 설비 배관 공사. 발주가 늘면 공사가 늡니다.' },
-  { code: 'G24', name: '리베아 수처리',   sector: '하수 처리 운영', group: 'water', start: 14100, maxMoveBp: 50, linkBeta: 0.45, desc: '지자체 하수 처리장을 장기 계약으로 운영합니다. 대표적인 방어주입니다.' }
+  { code: 'G24', name: '리베아 수처리',   sector: '하수 처리 운영', group: 'water', start: 14100, maxMoveBp: 50, linkBeta: 0.45, desc: '지자체 하수 처리장을 장기 계약으로 운영합니다. 대표적인 방어주입니다.' },
+  { code: 'G25', name: '헤르반 전력계측', sector: '분산 전력 계량', group: 'power', start: 10800, maxMoveBp: 85, linkBeta: 0.45, desc: '건물과 소형 발전소에 양방향 전력 계량기를 공급합니다. 분산 발전망이 늘면 설치 수요가 커집니다.' },
+  { code: 'G26', name: '벨오스 축열제어', sector: '축열 설비 제어', group: 'storage', start: 13200, maxMoveBp: 115, linkBeta: 0.55, desc: '축열 설비의 충전과 방전을 제어하는 장치를 만듭니다. 대형 축열 시설의 준공 일정에 민감합니다.' },
+  { code: 'G27', name: '이르벤 온도센서', sector: '저온 운송 센서', group: 'cold', start: 5900, maxMoveBp: 75, linkBeta: 0.4, desc: '냉장 화물의 온도 기록기를 공급합니다. 신선식품 운송량이 늘거나 온도 관리 기준이 강화되면 수요가 커집니다.' },
+  { code: 'G28', name: '메로칸 배양장비', sector: '배양 공정 장비', group: 'bio', start: 17800, maxMoveBp: 125, linkBeta: 0.5, desc: '배양 탱크와 공정 제어기를 만듭니다. 배양 소재 업체들이 생산 시설을 늘릴 때 수주가 증가합니다.' },
+  { code: 'G29', name: '로테빈 무대제작', sector: '조립식 공연 무대', group: 'stage', start: 8200, maxMoveBp: 105, linkBeta: 0.45, desc: '공연장과 축제에 조립식 무대를 공급합니다. 야외 행사 일정이 늘면 장비 대여가 늘어납니다.' },
+  { code: 'G30', name: '바노렐 수질계측', sector: '재이용수 수질 검사', group: 'water', start: 9700, maxMoveBp: 55, linkBeta: 0.45, desc: '재이용수의 탁도와 오염도를 측정하는 장비를 공급합니다. 처리 시설의 정기 검사와 신규 발주에 영향을 받습니다.' }
 ];
 /* ---------- 기업 정보(가상) ----------
    shares: 발행 주식 수(주), netIncome: 지난해 순이익(억 원, 적자면 음수), dps: 지난해 주당 배당금(원).
@@ -71,7 +77,10 @@ export const FUNDAMENTALS: Record<StockCode, Fundamentals> = {
   G17: { shares: 17_000_000, netIncome: 92, dps: 0 },    G18: { shares: 15_000_000, netIncome: 50, dps: 0 },
   G19: { shares: 21_000_000, netIncome: 104, dps: 0 },   G20: { shares: 12_000_000, netIncome: 70, dps: 0 },
   G21: { shares: 10_000_000, netIncome: 41, dps: 0 },    G22: { shares: 19_000_000, netIncome: 108, dps: 180 },
-  G23: { shares: 26_000_000, netIncome: 86, dps: 0 },    G24: { shares: 28_000_000, netIncome: 395, dps: 450 }
+  G23: { shares: 26_000_000, netIncome: 86, dps: 0 },    G24: { shares: 28_000_000, netIncome: 395, dps: 450 },
+  G25: { shares: 17_000_000, netIncome: 98, dps: 0 },    G26: { shares: 19_000_000, netIncome: 103, dps: 0 },
+  G27: { shares: 21_000_000, netIncome: 90, dps: 120 },  G28: { shares: 16_000_000, netIncome: 102, dps: 0 },
+  G29: { shares: 14_000_000, netIncome: 66, dps: 0 },    G30: { shares: 23_000_000, netIncome: 174, dps: 240 }
 };
 export const fundOf = (code: StockCode): Fundamentals => FUNDAMENTALS[code] ?? { shares: 10_000_000, netIncome: 0, dps: 0 };
 /** 시가총액(원) = 주가 × 발행 주식 수 */

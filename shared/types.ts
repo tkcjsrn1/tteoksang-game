@@ -1,5 +1,5 @@
 /* 서버와 클라이언트가 함께 쓰는 공개 타입. 미래 결말과 시드는 여기에 없습니다. */
-/** 종목 코드 G01~G24. 목록과 업종은 shared/rules.ts STOCKS */
+/** 종목 코드 G01~G30. 목록과 업종은 shared/rules.ts STOCKS */
 export type StockCode = `G${number}`;
 export type GameMode = 'friend' | 'solo' | 'academic';
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
