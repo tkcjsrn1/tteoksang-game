@@ -174,7 +174,7 @@ test('같은 시드는 같은 시나리오, 다른 시드는 다른 시나리오
   assert.notDeepEqual(buildPlan(42, 'friend'), buildPlan(43, 'friend'));
 });
 test('모드별 라운드 구성과 변동 범위', () => {
-  for (const mode of ['friend', 'solo', 'academic'] as const) for (let seed = 1; seed < 200; seed++) {
+  for (const mode of ['friend', 'solo'] as const) for (let seed = 1; seed < 200; seed++) {
     const p = buildPlan(seed, mode);
     assert.equal(p.rounds.length, MODES[mode].rounds);
     assert.ok(p.rounds.every(r => r.stages.length >= 1 && r.stages.length <= 2), `${mode} ${seed}`);

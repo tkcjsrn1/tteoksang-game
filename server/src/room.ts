@@ -2,7 +2,7 @@
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
 import { checkOrder, computeClose, dividendRound, exDividendPrice, feeOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
-import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PredictionView, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
+import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
 import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
@@ -23,7 +23,7 @@ export interface Player {
   /** 요청 ID별 응답. 같은 요청이 다시 와도 새 주문을 만들지 않습니다. */
   requests: Record<string, { ok: boolean; reason?: string; round?: number }>;
   fills: Fill[]; fees: number; valueHist: number[]; rankHist: number[]; results: RoundResult[];
-  cards: Record<number, 'A' | 'B'>; predictions: Record<number, { stageId: string; choice: 'A' | 'B'; confidence: number; correct: boolean | null }>;
+  cards: Record<number, 'A' | 'B'>;
   observations: Observation[];
   /** 받은 배당금. 예전 저장 데이터에는 없습니다 */
   dividends?: DividendPaid[];
@@ -31,7 +31,7 @@ export interface Player {
   stops?: Partial<Record<StockCode, StopOrder>>;
 }
 export interface RoomState {
-  code: string; mode: GameMode; seed: number; status: RoomStatus; hostId: string | null; operatorToken: string | null;
+  code: string; mode: GameMode; seed: number; status: RoomStatus; hostId: string | null;
   createdAt: number; updatedAt: number; plan: GamePlan; excludedArcs: string[]; round: number; phase: Phase | null;
   phaseEndsAt: number | null; phaseSeconds: number; newsStartedAt: number; secondRevealed: boolean;
   players: Player[]; spectators: string[];
@@ -54,7 +54,7 @@ export const gameCodes = (plan: GamePlan): StockCode[] => plan.stockCodes ?? LEG
 const initialPrices = (codes: StockCode[]) => Object.fromEntries(codes.map(c => [c, stockOf(c).start])) as Record<StockCode, number>;
 
 function newPlayer(kind: 'human' | 'npc', label: string, now: number, npcType: NpcType | null = null, id?: string): Player {
-  return { id: id ?? token().slice(0, 10), token: kind === 'human' ? token() : '', label, kind, npcType, joinedAt: now, connected: kind === 'human', cash: START_CASH, holdings: {}, orders: {}, requests: {}, fills: [], fees: 0, valueHist: [START_CASH], rankHist: [], results: [], cards: {}, predictions: {}, observations: [] };
+  return { id: id ?? token().slice(0, 10), token: kind === 'human' ? token() : '', label, kind, npcType, joinedAt: now, connected: kind === 'human', cash: START_CASH, holdings: {}, orders: {}, requests: {}, fills: [], fees: 0, valueHist: [START_CASH], rankHist: [], results: [], cards: {}, observations: [] };
 }
 
 export class GameRoom {
@@ -69,7 +69,7 @@ export class GameRoom {
     const plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs);
     const npcs = NPC_TYPES.map(t => newPlayer('npc', `NPC ${NPC_RULES[t].label}`, opts.now, t, npcId(t)));
     return new GameRoom({
-      code: opts.code, mode: opts.mode, seed, status: 'lobby', hostId: null, operatorToken: opts.mode === 'academic' ? token() : null,
+      code: opts.code, mode: opts.mode, seed, status: 'lobby', hostId: null,
       createdAt: opts.now, updatedAt: opts.now, plan, excludedArcs: excluded, round: 0, phase: null, phaseEndsAt: null, phaseSeconds: 0, newsStartedAt: 0, secondRevealed: false,
       players: npcs, spectators: [], prices: initialPrices(gameCodes(plan)), history: Object.fromEntries(gameCodes(plan).map(c => [c, []])) as unknown as Record<StockCode, PriceBreakdown[]>,
       settled: [], nextRoomCode: null, live: null
@@ -105,7 +105,6 @@ export class GameRoom {
   }
   /** 대기실에서 방장이 나가면 가장 먼저 들어온 접속 중 참가자에게 넘깁니다. 시작한 판은 방장과 상관없이 진행합니다. */
   private fixHost() {
-    if (this.s.mode === 'academic') return;
     const host = this.humans.find(p => p.id === this.s.hostId);
     if (host?.connected) return;
     if (this.s.status !== 'lobby' && host) return;
@@ -130,10 +129,9 @@ export class GameRoom {
   }
   private touch(now: number) { this.s.updatedAt = now; }
 
-  canStart(tokenValue: string | null | undefined, operator?: string | null) {
+  canStart(tokenValue: string | null | undefined) {
     if (this.s.status !== 'lobby') return false;
     if (this.humans.length < this.config.minToStart) return false;
-    if (this.s.mode === 'academic') return !!operator && operator === this.s.operatorToken;
     return this.player(tokenValue)?.id === this.s.hostId;
   }
   start(now: number) {
@@ -432,15 +430,6 @@ export class GameRoom {
     p.cards[this.s.round] = choice;
     return true;
   }
-  /** 학술제 모드에서 결말 공개 전 예측과 확신도를 받습니다. 과신 지표의 재료입니다. */
-  predict(tokenValue: string, choice: 'A' | 'B', confidence: number, now: number) {
-    const p = this.player(tokenValue);
-    const stage = this.currentRound?.stages[0];
-    if (!p || !stage || !this.config.predictions || !this.tradeOpen(now)) return false;
-    if ((choice !== 'A' && choice !== 'B') || ![50, 70, 90].includes(confidence)) return false;
-    p.predictions[this.s.round] = { stageId: stage.stageId, choice, confidence, correct: null };
-    return true;
-  }
 
   /** 평가액: 현금 + 보유 수량 × 지금 가격(주문 시간에는 장중 시세) */
   value(p: Player) { return p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * this.markPrice(st.code), 0); }
@@ -517,12 +506,7 @@ export class GameRoom {
     if (live) live.done = true;
     this.s.secondRevealed = true;
 
-    /* 3. 예측 채점과 라운드 결과 */
-    const first = plan.stages[0] && stageById.get(plan.stages[0].stageId)!.outcomes.find(o => o.id === plan.stages[0].outcomeId)!;
-    this.s.players.forEach(p => {
-      const pr = p.predictions[round];
-      if (pr && first) pr.correct = (pr.choice === 'A') === first.beat;
-    });
+    /* 3. 라운드 결과 */
     const rankBefore = new Map(this.s.players.map(p => [p.id, p.rankHist[p.rankHist.length - 1] ?? 1]));
     this.s.settled.push(round);
     this.recordRanks();
@@ -604,12 +588,6 @@ export class GameRoom {
     return { id, title: c.title, body: c.body, concept: c.concept, options: c.options.map(o => ({ key: o.key, label: o.label })), answered,
       feedback: this.s.phase === 'recap' && answered ? c.options.find(o => o.key === answered)!.feedback : null };
   }
-  private predictionView(p: Player | null): PredictionView | null {
-    if (!p || !this.config.predictions || !this.currentRound?.stages[0] || !(this.s.phase === 'trade' || this.s.phase === 'recap')) return null;
-    const pr = p.predictions[this.s.round];
-    const stage = stageById.get(this.currentRound.stages[0].stageId)!;
-    return { stageId: stage.id, question: `“${stage.headline}”의 결과가 시장 기대보다 좋을까요?`, choice: pr?.choice ?? null, confidence: pr?.confidence ?? null, correct: this.s.phase === 'recap' ? pr?.correct ?? null : null };
-  }
   view(tokenValue: string | null, role: Role, now: number): RoomView {
     const p = role === 'player' ? this.player(tokenValue) : null, cfg = this.config;
     const inSettling = this.s.phase === 'settling';
@@ -624,7 +602,7 @@ export class GameRoom {
       humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */
       leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
-      stocks, news: this.newsView(), card: this.cardView(p), prediction: this.predictionView(p),
+      stocks, news: this.newsView(), card: this.cardView(p),
       portfolio: p ? {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),

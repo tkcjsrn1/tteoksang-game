@@ -56,6 +56,19 @@ await step('홈과 첫 방문 안내', async () => {
   ok(await page.getByText('투자 조언이 아닙니다').count(), '면책 문구 없음');
 });
 
+await step('어두운 화면 전환: 바탕색이 바뀌고 새로 열어도 유지', async () => {
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const light = await bg();
+  await page.getByRole('button', { name: '어두운 화면으로 바꾸기' }).click();
+  ok(await page.evaluate(() => document.documentElement.dataset.theme) === 'dark', 'data-theme이 dark가 아님');
+  ok(await bg() !== light, '바탕색이 그대로');
+  await page.reload();
+  await page.getByRole('button', { name: '밝은 화면으로 바꾸기' }).waitFor();
+  ok(await bg() !== light, '새로 열면 밝은 화면으로 돌아감');
+  await page.getByRole('button', { name: '밝은 화면으로 바꾸기' }).click();
+  ok(await bg() === light, '밝은 화면으로 돌아오지 않음');
+});
+
 await step('혼자 연습: 업종별 종목 10개', async () => {
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.locator('.sectors').waitFor();
