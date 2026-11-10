@@ -55,13 +55,26 @@ await step('홈과 첫 방문 안내', async () => {
   await page.getByRole('button', { name: '건너뛰기' }).click();
   await page.getByRole('button', { name: '혼자 연습 시작' }).waitFor();
   ok(await page.getByText('투자 조언이 아닙니다').count(), '면책 문구 없음');
-  const theme = page.getByRole('button', { name: '다크 모드' });
-  await theme.click();
+  const settings = page.getByRole('dialog', { name: '설정' });
+  const music = settings.getByRole('checkbox', { name: '배경음' });
+  const effects = settings.getByRole('checkbox', { name: '효과음' });
+  const theme = settings.getByRole('checkbox', { name: '다크 모드' });
+  const volume = settings.getByRole('slider', { name: '전체 음량' });
+  await page.getByRole('button', { name: '설정' }).click();
+  await music.check();
+  await effects.uncheck();
+  await volume.fill('35');
+  await theme.check();
   await page.reload();
-  await theme.waitFor();
-  ok(await theme.getAttribute('aria-pressed') === 'true', '다크 모드가 유지되지 않음');
+  await page.getByRole('button', { name: '설정' }).click();
+  ok(await theme.isChecked(), '다크 모드가 유지되지 않음');
   ok(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme === 'dark'), '다크 모드 색상 미적용');
-  await theme.click();
+  ok(await music.isChecked() && !(await effects.isChecked()) && await volume.inputValue() === '35', '음량·오디오 설정이 유지되지 않음');
+  await music.uncheck();
+  await effects.check();
+  await volume.fill('100');
+  await theme.uncheck();
+  await settings.getByRole('button', { name: '닫기' }).click();
 });
 
 await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
@@ -69,6 +82,11 @@ await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.getByLabel('1라운드, 전체 3라운드').waitFor();
   await page.locator('.sectors').waitFor();
+  await page.getByRole('button', { name: '설정' }).click();
+  const settings = page.getByRole('dialog', { name: '설정' });
+  await settings.waitFor();
+  await page.keyboard.press('Escape');
+  await settings.waitFor({ state: 'hidden' });
   ok(/1,000\.00/.test(await page.locator('.index-strip').innerText()), '떡상 지수가 1,000.00으로 시작하지 않음');
   const news = page.locator('main .news').first();
   const newsBox = await news.boundingBox();

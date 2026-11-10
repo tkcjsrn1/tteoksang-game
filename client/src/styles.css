@@ -83,6 +83,14 @@ small { font-size: 12px; }
 .link { background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; padding: 8px; font-size: 13.5px; }
 .back { align-self: flex-start; padding-left: 0; }
 .home-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.settings-dialog { width: min(380px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: var(--panel); color: var(--fg); }
+.settings-dialog::backdrop { background: #09101BB0; }
+.settings-head, .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-head { margin-bottom: 8px; }
+.settings-row { min-height: 44px; border-top: 1px solid var(--line); }
+.settings-row input[type="checkbox"] { width: 20px; height: 20px; margin: 0; accent-color: var(--led); }
+.settings-volume { padding-block: 8px 12px; }
+.settings-volume input { padding: 0; border: 0; margin: 4px 0 0; accent-color: var(--led); }
 .home-actions { display: grid; gap: 8px; margin-top: 14px; }
 .room-settings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .room-settings label { display: grid; gap: 4px; color: var(--fg-3); font-size: 13px; }
