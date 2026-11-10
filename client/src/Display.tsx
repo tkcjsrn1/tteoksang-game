@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { intradayBp } from './live';
 import { joinNote, store, useJoinUrl, useRoom, useSecondsLeft } from './net';
-import { arrow, dir, Disclaimer, pct, pctBp } from './ui';
+import { arrow, dir, Disclaimer, formatCountdown, pct, pctBp } from './ui';
 
 export function Display({ code }: { code: string }) {
   const [operatorToken] = useState(() => store.get(`operator:${code}`));
@@ -33,7 +33,7 @@ export function Display({ code }: { code: string }) {
   return (
     <main className="display">
       <header className="d-top"><b className="num">R{String(view.round).padStart(2, '0')}/{view.totalRounds}</b>
-        {view.status === 'finished' ? <span>최종 결과</span> : <><span>{view.phase === 'news' ? '뉴스 확인' : view.phase === 'trade' ? '주문 가능' : view.phase === 'settling' ? '시장 결과 집계 중' : '라운드 결과'}</span><b className="num d-timer">00:{String(Math.ceil(left)).padStart(2, '0')}</b></>}
+        {view.status === 'finished' ? <span>최종 결과</span> : <><span>{view.phase === 'news' ? '뉴스 확인' : view.phase === 'trade' ? '주문 가능' : view.phase === 'settling' ? '시장 결과 집계 중' : '라운드 결과'}</span><b className="num d-timer">{formatCountdown(Math.ceil(left))}</b></>}
       </header>
       <div className="d-grid">
         <section className="d-news">{news?.cards.map(c => <article key={c.card.stageId}>

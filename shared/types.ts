@@ -1,7 +1,8 @@
 /* 서버와 클라이언트가 함께 쓰는 공개 타입. 미래 결말과 시드는 여기에 없습니다. */
-/** 종목 코드 G01~G24. 목록과 업종은 shared/rules.ts STOCKS */
+/** 종목 코드 G01~G30. 목록과 업종은 shared/rules.ts STOCKS */
 export type StockCode = `G${number}`;
 export type GameMode = 'friend' | 'solo' | 'academic';
+export interface RoomSettings { stocks?: number; rounds?: number; trade?: number }
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 export type Side = 'buy' | 'sell';
@@ -112,7 +113,7 @@ export interface Portfolio {
   cash: number; reserved: number; available: number; value: number; returnPct: number; fees: number;
   holdings: { code: StockCode; name: string; qty: number; avgCost: number; price: number; pnl: number; stop?: number | null; take?: number | null }[];
   orders: Order[];
-  fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; kind?: OrderKind; trigger?: 'stop' | 'take' }[];
+  fillLog: { round: number; code: StockCode; side: Side; qty: number; price: number; fee: number; tick?: number; kind?: OrderKind; trigger?: 'stop' | 'take' }[];
   /** 받은 배당금 */
   dividendLog?: DividendPaid[];
 }
@@ -122,12 +123,14 @@ export interface DividendView { recordRound: number; status: 'before' | 'upcomin
 export interface RoomView {
   code: string; mode: GameMode; status: RoomStatus; phase: Phase | null;
   round: number; totalRounds: number;
-  phaseEndsAt: number | null; phaseSeconds: number; serverNow: number;
+  phaseEndsAt: number | null; phaseSeconds: number; serverNow: number; tradeSeconds?: number;
   you: { id: string | null; label: string | null; role: Role; isHost: boolean };
   humanCount: number; maxPlayers: number; minToStart: number; startCash: number;
   leaderboard: LeaderRow[];
   stocks: StockView[];
   news: RoundNews[];
+  /** 이번 라운드에 공개된 속보가 나온 시점. 개장부터 지난 초 */
+  breakingAt?: number;
   card: CardView | null;
   prediction: PredictionView | null;
   portfolio: Portfolio | null;
