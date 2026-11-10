@@ -541,7 +541,7 @@ export class GameRoom {
   leaderboard(): LeaderRow[] {
     return this.s.players.map(p => ({
       playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected,
-      value: this.value(p), returnPct: (this.value(p) / START_CASH - 1) * 100, rank: this.rankOf(p)
+      value: this.value(p), returnPct: (this.value(p) / START_CASH - 1) * 100, rank: this.rankOf(p), prevRank: p.rankHist[p.rankHist.length - 2] ?? this.rankOf(p)
     })).sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
   }
 
@@ -619,7 +619,7 @@ export class GameRoom {
   private prevLeaderboard(): LeaderRow[] {
     return this.s.players.map(p => {
       const v = p.valueHist[p.valueHist.length - 2] ?? START_CASH;
-      return { playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected, value: v, returnPct: (v / START_CASH - 1) * 100, rank: p.rankHist[p.rankHist.length - 2] ?? 1 };
+      return { playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected, value: v, returnPct: (v / START_CASH - 1) * 100, rank: p.rankHist[p.rankHist.length - 2] ?? 1, prevRank: p.rankHist[p.rankHist.length - 2] ?? 1 };
     }).sort((a, b) => a.rank - b.rank);
   }
 }

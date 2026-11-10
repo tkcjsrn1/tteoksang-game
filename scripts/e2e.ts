@@ -80,6 +80,18 @@ await step('혼자 연습: 업종별 종목 10개', async () => {
   ok(await page.locator('.sectors button.row').count() === 10, '종목이 10개가 아님');
 });
 
+await step('설정: 배경음·효과음 스위치', async () => {
+  await page.getByRole('button', { name: '도움말' }).click();
+  const music = page.getByRole('switch', { name: /장중 배경음/ });
+  await music.waitFor();
+  const was = await music.isChecked();
+  await music.click();
+  ok(await music.isChecked() !== was, '배경음 스위치가 바뀌지 않음');
+  await music.click();
+  ok(await page.getByRole('switch', { name: /효과음/ }).count() === 1, '효과음 스위치 없음');
+  await page.locator('.sheet').getByRole('button', { name: '닫기' }).click();
+});
+
 await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
   const firstRow = page.locator('.sectors button.row').first();
@@ -93,6 +105,9 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.waitForTimeout(2_500);
   const after = await page.locator('.live-chart path').getAttribute('d');
   ok(before !== after, '2.5초 동안 시세 그래프가 그대로');
+  /* 그래프를 누르면 그 시각의 가격(십자선)이 나옵니다 */
+  await page.locator('.live-chart svg.probe-area').click({ position: { x: 20, y: 60 } });
+  ok(/\d초 · [\d,]+원/.test(await page.locator('.live-chart .probe').innerText()), '십자선 가격 표시 없음');
   /* 10초봉으로 바꾸면 봉(rect)이 그려지고, 다시 선으로 돌립니다 */
   await page.locator('.live-chart').getByRole('button', { name: '10초봉' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.live-chart svg rect').length >= 1, null, { timeout: 12_000 });
@@ -155,6 +170,8 @@ await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   ok(bars.length >= 3, '등락 막대가 없음');
   ok(bars.every(b => b.pos === 'absolute' && b.inside), '등락 막대가 칸 밖으로 나가거나 모양이 깨짐');
   ok(await page.locator('.replay svg rect').count() >= 1, '봉 재생 그림 없음');
+  ok(await page.locator('.rank-moves li').count() === 4, '순위 변화 4줄이 아님');
+  ok(await page.locator('.sectors .avatar svg, .board .avatar svg').count() >= 1, '기업 로고 없음');
   ok(await page.getByText(/1초 시세를 빠르게 다시/).count(), '실제 시세 재생 안내 없음');
 });
 
