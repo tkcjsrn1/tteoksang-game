@@ -115,6 +115,38 @@ export function perOf(code: StockCode, price: number): number | null {
 /** 배당수익률(bp) = 주당 배당금 ÷ 주가 */
 export const dividendYieldBp = (code: StockCode, price: number) => Math.round(fundOf(code).dps * 10000 / price);
 /** 배당 기준일 라운드(이 라운드 장 마감 때 가진 주식에 배당). 다음 라운드 시작 때 배당금 입금과 배당락. */
+/* ---------- 변동성 완화장치(VI) ----------
+   실제 정적 VI는 전일 종가 대비 ±10%에서 2분 단일가 매매로 바뀝니다.
+   이 게임은 한 라운드가 짧아서, 시가 대비 ±10%에서 그 종목만 VI_SECONDS초 동안 거래를 멈춥니다. */
+export const VI_BP = 1000;
+export const VI_SECONDS = 15;
+/** 시가 대비 등락이 VI 기준을 넘었는지. 넘었으면 방향(1 위, -1 아래), 아니면 0 */
+export function viDirection(open: number, price: number): 1 | -1 | 0 {
+  if (open <= 0) return 0;
+  const bp = Math.round((price - open) * 10000 / open);
+  return bp >= VI_BP ? 1 : bp <= -VI_BP ? -1 : 0;
+}
+
+/* ---------- 투자자별 매매(수급) ----------
+   외국인·기관·개인의 순매수 금액입니다. 셋을 더하면 0이 됩니다(누가 사면 누가 팝니다).
+   정산이 끝난 뒤에만 공개합니다. 시드로 정해져서 같은 판을 다시 보면 같은 값이 나옵니다. */
+export const INVESTORS = ['foreign', 'institution', 'retail'] as const;
+export type Investor = typeof INVESTORS[number];
+export const INVESTOR_LABEL: Record<Investor, string> = { foreign: '외국인', institution: '기관', retail: '개인' };
+/** 순매수 금액을 "+12.4억", "−3.0억"처럼 (0에 가까우면 "0") */
+export function formatFlow(won: number): string {
+  const eok = won / 100_000_000;
+  if (Math.abs(eok) < 0.05) return '0';
+  return `${eok > 0 ? '+' : '−'}${Math.abs(eok).toFixed(1)}억`;
+}
+/** 한 라운드 한 종목의 투자자별 순매수(원). 오른 날은 외국인·기관이 사고 개인이 파는 쪽으로 기웁니다. */
+export function netFlows(rnd: () => number, changeBp: number, turnoverWon: number): Record<Investor, number> {
+  const tilt = Math.max(-1, Math.min(1, changeBp / 600));
+  const foreign = Math.round(turnoverWon * (tilt * 0.35 + (rnd() - 0.5) * 0.3));
+  const institution = Math.round(turnoverWon * (tilt * 0.2 + (rnd() - 0.5) * 0.3));
+  return { foreign, institution, retail: -(foreign + institution) };
+}
+
 export const dividendRound = (rounds: number) => Math.ceil(rounds * 0.6);
 /** 배당락 뒤 시가: 배당금만큼 낮춰 10원 단위로 반올림, 최저 100원 */
 export const exDividendPrice = (price: number, dps: number) => Math.max(100, Math.round((price - dps) / 10) * 10);
