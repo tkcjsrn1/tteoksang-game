@@ -1,5 +1,5 @@
 /* 시드로 게임 전체 시나리오를 미리 확정합니다. 같은 시드와 설정이면 같은 결말과 변동이 나옵니다. */
-import { GROUPS, LEADERS, MARKET_MAX_BP, MODES, stockOf, STOCKS } from '../../shared/rules';
+import { GROUPS, LEADERS, MARKET_MAX_BP, MODES, stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { GameMode, RoomSettings, StockCode } from '../../shared/types';
 import { ARCS, CARDS, type Arc, type Outcome, type Stage } from './content';
 
@@ -10,8 +10,8 @@ export function mulberry(seed: number) {
 export interface PlannedStage { stageId: string; outcomeId: string; breaking: boolean }
 export interface RoundPlan { round: number; stages: PlannedStage[]; marketBp: number; stockBp: Record<StockCode, number>; cardId: string | null }
 export interface GamePlan { arcIds: string[]; rounds: RoundPlan[]; /** 이번 판에 나오는 종목. 예전 저장 데이터에는 없습니다 */ stockCodes?: StockCode[] }
-/** 한 판에 나오는 종목 수 */
-export const STOCKS_PER_GAME = 10;
+/* 한 판에 나오는 종목 수 기본값은 shared/rules.ts STOCKS_PER_GAME */
+export { STOCKS_PER_GAME };
 
 /** 대표 종목 6개는 항상 넣고(뉴스의 주인공), 이번 판 뉴스가 다루는 업종의 같은 업종 종목을 한 개씩 먼저 고른 뒤
     나머지를 무작위로 채웁니다. 업종 동조화를 화면에서 바로 볼 수 있게 하려는 순서입니다. */

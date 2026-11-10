@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import QRCode from 'qrcode';
 import { BOOK_SHOW, dividendYieldBp, feeOf, formatEok, fundOf, GROUPS, indexValue, INDEX_BASE, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, type QuoteBook } from '../../shared/rules';
 import { intradayBp } from './live';
@@ -7,14 +7,14 @@ import type { ClientMsg, NewsCard, NewsResult, Order, OrderKind, RoomView, Side,
 import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
 import { coachStep, type CoachStep } from './coach';
-import { play, revealTone, useCountUp } from './fx';
+import { buzz, fillTone, play, revealTone, setMusicScene, useCountUp } from './fx';
 import { SettingsButton } from './Settings';
 import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
 import { defaultOpenGroups, groupStocks } from './sectors';
 import type { StockGroup } from '../../shared/rules';
-import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, formatCountdown, LiveChart, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
+import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, formatCountdown, LiveChart, pct, pctBp, PriceChart, signedWon, Confetti, StockAvatar, useToast, won } from './ui';
 
 type Tab = 'market' | 'assets' | 'news';
 
@@ -52,7 +52,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
       <ul className="people">{humans.map(p => <li key={p.playerId} className={p.connected ? '' : 'off'}>{p.label}{p.playerId === view.you.id ? ' (나)' : ''}{!p.connected ? ' · 접속 끊김' : ''}</li>)}</ul>
       {view.you.isHost
         ? <button className="cta" disabled={!canStart} onClick={() => send({ t: 'start' })}>{canStart ? '게임 시작' : `${view.minToStart}명이 모이면 시작할 수 있어요`}</button>
-        : <p className="hint">{view.mode === 'academic' ? '운영자가 시작하면 자동으로 넘어갑니다.' : '방장이 시작하면 자동으로 넘어갑니다.'}</p>}
+        : <p className="hint">방장이 시작하면 자동으로 넘어갑니다.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <ul className="rules">
         <li>시장가 주문은 현재 호가로 바로 체결됩니다. 지정가 주문은 가격 조건을 충족하면 체결됩니다.</li>
@@ -98,6 +98,32 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   useEffect(() => { if (view.phase === 'recap') setDetail(null); }, [view.phase]);
   /* 효과음: 주문 마감 5초 전부터 째깍, 결과 공개 때 오름·내림, 상·하한가가 나오면 도장 소리 */
   useEffect(() => { if (view.phase === 'trade' && seconds > 0 && seconds <= 5) play('tick'); }, [view.phase, seconds]);
+  /* 장 시작·마감 종. 처음 들어왔을 때(새로 고침)는 울리지 않습니다 */
+  const prevPhase = useRef(view.phase);
+  useEffect(() => {
+    const before = prevPhase.current; prevPhase.current = view.phase;
+    if (before === view.phase) return;
+    if (view.phase === 'trade') { play('open'); buzz('bell'); }
+    else if (before === 'trade') { play('close'); buzz('bell'); }
+  }, [view.phase]);
+  /* 배경음: 장중에만. 마감 10초 전부터 빨라집니다 */
+  useEffect(() => { setMusicScene(view.phase === 'trade', soon); }, [view.phase, soon]);
+  useEffect(() => () => setMusicScene(false), []);
+  /* 장중 속보가 뜨면 알림음 */
+  const breakingCount = view.phase === 'trade' ? (view.news[view.news.length - 1]?.cards.filter(c => c.card.breaking).length ?? 0) : 0;
+  const prevBreaking = useRef(breakingCount);
+  useEffect(() => {
+    if (breakingCount > prevBreaking.current) { play('news'); buzz('news'); }
+    prevBreaking.current = breakingCount;
+  }, [breakingCount]);
+  /* 체결 소리와 진동: 바로 체결, 지정가 체결, 손절·익절 자동 매도 모두 체결 기록이 늘어날 때 울립니다 */
+  const fillCount = view.portfolio?.fillLog.length ?? 0;
+  const prevFills = useRef(fillCount);
+  useEffect(() => {
+    const f = view.portfolio?.fillLog[fillCount - 1];
+    if (f && fillCount > prevFills.current) { play(fillTone(f.side, f.trigger)); buzz(f.trigger ? 'trigger' : 'fill'); }
+    prevFills.current = fillCount;
+  }, [fillCount]); // eslint-disable-line react-hooks/exhaustive-deps
   const revealKey = view.phase === 'recap' ? `${view.round}` : '';
   useEffect(() => {
     if (!revealKey) return;
@@ -114,7 +140,6 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
     if (!lastTrig || triggered.length === 0) return;
     const name = view.stocks.find(s => s.code === lastTrig.code)?.name ?? '';
     toast.show(`${lastTrig.trigger === 'stop' ? '손절' : '익절'} 자동 매도 · ${name} ${lastTrig.qty.toLocaleString('ko-KR')}주 × ${won(lastTrig.price)}`);
-    play('book');
   }, [trigKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const stock = detail ? view.stocks.find(s => s.code === detail)! : null;
   const news = view.phase === 'news' || view.phase === 'trade'
@@ -148,7 +173,6 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
           <DividendNotice view={view} />
           {!coach && news}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send} />}
-          {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send} />}
           {favoriteStocks.length > 0 && <section className="panel flush" aria-label="관심종목">
             <div className="list-head"><span>★ 관심종목</span></div>
             <div className="board">{favoriteStocks.map(s => <StockRow key={s.code} s={s} view={view} onOpen={() => setDetail(s.code)} />)}</div>
@@ -198,6 +222,7 @@ function HelpSheet({ phase, onClose, onReplayTutorial }: { phase: RoomView['phas
   return (
     <Sheet title="짧은 도움말" onClose={onClose}>
       <p className="hint">타이머는 멈추지 않고 계속 진행됩니다.</p>
+      <p className="hint">소리·진동·다크 모드는 위쪽 톱니바퀴(설정)에서 바꿀 수 있어요.</p>
       <ul className="rules">
         {phase === 'news' && <li>지금은 뉴스 시간입니다. 곧 장이 열리고 시세가 움직이기 시작합니다.</li>}
         {phase === 'trade' && <li>장중입니다. 시세가 1초마다 움직이고, 중간에 속보가 뜰 수 있습니다. 종목을 눌러 사고팔 수 있습니다.</li>}
@@ -269,22 +294,6 @@ function Card({ view, send }: { view: RoomView; send: (m: ClientMsg) => void }) 
       <h3>{c.title}</h3><p><Rich text={c.body} /></p>
       <div className="seg">{c.options.map(o => <button key={o.key} aria-pressed={c.answered === o.key} onClick={() => send({ t: 'card', choice: o.key })}>{o.key}. {o.label}</button>)}</div>
       <p className="hint">{c.answered ? '판단을 저장했습니다. 마감 전까지 바꿀 수 있습니다. 주문은 주문 패널에서 따로 확정합니다.' : '응답은 판단 기록으로만 저장됩니다. 주문은 주문 패널에서 따로 확정합니다.'}</p>
-    </div>
-  );
-}
-function Prediction({ view, send }: { view: RoomView; send: (m: ClientMsg) => void }) {
-  const p = view.prediction!;
-  const [conf, setConf] = useState(p.confidence ?? 70);
-  const pick = (choice: 'A' | 'B', confidence = conf) => send({ t: 'predict', choice, confidence });
-  return (
-    <div className="card-box">
-      <h3>결과 예측</h3><p>{p.question}</p>
-      <div className="seg">
-        <button aria-pressed={p.choice === 'A'} onClick={() => pick('A')}>기대 이상</button>
-        <button aria-pressed={p.choice === 'B'} onClick={() => pick('B')}>기대 이하</button>
-      </div>
-      <p className="hint">얼마나 확신하나요?</p>
-      <div className="seg">{[50, 70, 90].map(v => <button key={v} aria-pressed={conf === v} onClick={() => { setConf(v); if (p.choice) pick(p.choice, v); }}>{v}%</button>)}</div>
     </div>
   );
 }
@@ -447,7 +456,7 @@ function OrderPanel({ stock, view, left, place, cancel, toast, intro }: { stock:
     const res = await place(stock.code, side, n, kind, isLimit ? lim : undefined);
     setBusy(false);
     if (!res.ok) { toast(res.reason ?? '주문하지 못했습니다'); return; }
-    play('book');
+    if (!res.fill) play('book');
     setQty('');
     if (res.fill) toast(`체결 · ${res.fill.side === 'buy' ? '매수' : '매도'} ${res.fill.qty.toLocaleString('ko-KR')}주 × ${won(res.fill.price)}`);
     else toast('지정가 예약 완료 · 시세가 닿으면 체결돼요');
@@ -665,15 +674,29 @@ function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => voi
   const now = view.news[view.news.length - 1];
   const movers = view.stocks.slice().sort((a, b) => Math.abs(b.lastChangeBp ?? 0) - Math.abs(a.lastChangeBp ?? 0));
   const delta = useCountUp(r?.delta ?? 0, 900);
+  /* 폭죽: 내가 가진 종목이 상한가를 쳤거나, 이번 라운드에 1위로 올라섰을 때 */
+  const held = new Set(view.portfolio?.holdings.map(h => h.code) ?? []);
+  const fire = view.stocks.some(s => held.has(s.code) && s.history[s.history.length - 1]?.round === view.round && s.history[s.history.length - 1]?.limit === 'upper')
+    || (!!r && r.rankAfter === 1 && r.rankBefore > 1);
   return (<>
     {r && <div className="panel recap-top">
       <p className="wallet-label">내 평가액 변화 {r.rankBefore !== r.rankAfter && <span className={`pill pop ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
       <p className={`delta-big ${dir(r.delta)}`} aria-label={signedWon(r.delta)}>{signedWon(delta)}</p>
       <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 ${won(r.slippage)}(체결가에 포함)` : ''}</p>
     </div>}
+    {fire && <Confetti key={view.round} />}
+    {view.leaderboard.length > 1 && <div className="panel">
+      <p className="wallet-label">순위 변화</p>
+      <ol className="rank-moves">{view.leaderboard.map(l => { const move = l.prevRank - l.rank; return (
+        <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''} style={{ '--from': `${move * 100}%` } as CSSProperties}>
+          <span className="r">{l.rank}</span>
+          <b>{l.playerId === view.you.id ? `나 · ${l.label}` : l.label}</b>
+          <span className={`mv ${move > 0 ? 'up' : move < 0 ? 'down' : 'flat'}`} aria-label={move > 0 ? `${move}계단 올라감` : move < 0 ? `${-move}계단 내려감` : '순위 그대로'}>{move > 0 ? `▲${move}` : move < 0 ? `▼${-move}` : '–'}</span>
+          <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
+        </li>); })}</ol>
+    </div>}
     {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
     {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
-    {view.prediction?.correct !== null && view.prediction?.correct !== undefined && <div className="panel"><p className="hint strong">결과 예측: {view.prediction.correct ? '맞혔어요' : '빗나갔어요'} (확신도 {view.prediction.confidence}%)</p></div>}
     <div className="panel flush">
       <div className="list-head"><span>종목별 결과 · 눌러서 이유 보기</span></div>
       <div className="board">{movers.map(s => <button key={s.code} className="row" onClick={() => onOpen(s.code)}>
@@ -741,6 +764,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) => void
     <main className="final">
       <section className="sec final-head">
         <p className="course">{MODES[view.mode].label} · {view.totalRounds}라운드 끝</p>
+        {rep?.rank === 1 && <Confetti />}
         {rep ? <>
           <div className={`trophy${rep.rank === 1 ? ' shine' : ''}`} aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={rep.rank === 1 ? 'var(--gold)' : 'var(--faint)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg></div>
           <h1 className="rank-big pop">{view.leaderboard.length}명 중 {rep.rank}위</h1>
@@ -756,7 +780,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) => void
       </section>
       {rep && <TradeJournal view={view} fees={rep.fees} fallback={rep.majorTrades} />}
       {rep && rep.judgments.length > 0 && <section className="sec"><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></section>}
-      {rep?.metrics && <section className="sec"><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></section>}
+      {rep && rep.metrics.length > 0 && <section className="sec"><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></section>}
       <GameTerms view={view} />
       <section className="sec tight">
         <div className="list-head"><span>종목 그래프 다시 보기</span><span>처음 대비</span></div>
@@ -767,7 +791,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) => void
       <div className="final-actions">
         <button className="ghost" onClick={() => navigate('/records')}>내 기록</button>
         {view.nextRoomCode
-          ? <button className="cta" onClick={() => navigate(`/${view.you.role === 'operator' ? 'display' : 'room'}/${view.nextRoomCode}`)}>다음 판 대기실로</button>
+          ? <button className="cta" onClick={() => navigate(`/room/${view.nextRoomCode}`)}>다음 판 대기실로</button>
           : <button className="cta" onClick={() => send({ t: 'rematch' })}>{view.mode === 'solo' ? '한 판 더' : '같은 멤버로 한 판 더'}</button>}
         <button className="link full" onClick={() => navigate('/')}>처음으로</button>
       </div>

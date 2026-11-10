@@ -14,7 +14,7 @@ npx tsc --noEmit     # 타입 검사
 npm test             # 전체 테스트. 커밋 전에 반드시 통과
 npm run build        # 타입 검사 + 클라이언트 빌드(dist/)
 npm run dev          # 서버 + Vite 개발 서버 (화면 http://localhost:5173)
-npm run load         # 60명 동시 주문 부하 검증 (서버·주문 로직을 바꿨다면)
+npm run load         # 방 8개 × 8명 동시 주문 부하 검증 (서버·주문 로직을 바꿨다면)
 npm run balance      # 사건 기대값과 NPC 성적 (content.ts나 npc.ts를 바꿨다면)
 npm run smoke -- <주소>   # 배포한 서버 점검: 화면·API·WebSocket·두 사람 입장·게임 시작
 npm run e2e          # 화면 자동 테스트(390px Chromium). 먼저 npm run build. 화면을 바꿨다면

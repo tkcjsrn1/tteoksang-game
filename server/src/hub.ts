@@ -11,7 +11,7 @@ import type { ForcedOutcomes } from './plan';
 import { GameRoom } from './room';
 import { MemoryStore, type Store } from './store';
 
-interface Conn { ws: WebSocket; room: GameRoom | null; token: string | null; role: Role; operator: boolean; alive: boolean; windowStart: number; msgCount: number }
+interface Conn { ws: WebSocket; room: GameRoom | null; token: string | null; role: Role; alive: boolean; windowStart: number; msgCount: number }
 export interface HubOptions { store?: Store; staticDir?: string; port?: number; allowTestHooks?: boolean; speed?: number; now?: () => number;
   /** 리버스 프록시 뒤에서 X-Forwarded-For의 첫 주소를 접속 주소로 씁니다. 프록시가 없을 때 켜면 주소를 속일 수 있습니다. */
   trustProxy?: boolean }
@@ -48,7 +48,8 @@ export class Hub {
   }
   async listen(port = this.opts.port ?? 8787): Promise<number> {
     await this.store.init();
-    for (const s of await this.store.loadActive()) this.rooms.set(s.code, new GameRoom(s));
+    /* 없어진 모드(예전 학술제 방)로 저장된 방은 건너뜁니다. */
+    for (const s of await this.store.loadActive()) if (MODES[s.mode]) this.rooms.set(s.code, new GameRoom(s));
     await new Promise<void>(r => this.server.listen(port, r));
     this.timer = setInterval(() => this.loop(), 100);
     return (this.server.address() as { port: number }).port;
@@ -164,11 +165,10 @@ export class Hub {
   private sendView(c: Conn, now = this.now()) {
     if (!c.room) return;
     const view = c.room.view(c.token, c.role, now);
-    if (c.operator) view.operatorToken = c.room.s.operatorToken ?? undefined;
     this.send(c, { t: 'view', view });
   }
   private onConnection(ws: WebSocket) {
-    const c: Conn = { ws, room: null, token: null, role: 'spectator', operator: false, alive: true, windowStart: Date.now(), msgCount: 0 };
+    const c: Conn = { ws, room: null, token: null, role: 'spectator', alive: true, windowStart: Date.now(), msgCount: 0 };
     this.conns.add(c);
     ws.on('message', d => {
       const t = Date.now();
@@ -195,13 +195,6 @@ export class Hub {
       const room = this.rooms.get(String(m.code));
       if (!room) return this.send(c, { t: 'error', reason: '방을 찾을 수 없습니다. 코드를 확인해 주세요' });
       c.room = room;
-      c.operator = !!m.operatorToken && m.operatorToken === room.s.operatorToken;
-      if (c.operator || m.display) {
-        c.role = c.operator ? 'operator' : 'display'; c.token = null;
-        this.send(c, { t: 'welcome', token: null, role: c.role, label: null, code: room.s.code });
-        this.broadcast(room);
-        return;
-      }
       const j = room.join(m.token, now);
       c.token = j.token; c.role = j.role;
       this.send(c, { t: 'welcome', token: j.token, role: j.role, label: j.label, code: room.s.code });
@@ -215,7 +208,7 @@ export class Hub {
     if (!room) return this.send(c, { t: 'error', reason: '먼저 방에 들어와 주세요' });
     switch (m.t) {
       case 'start':
-        if (!room.canStart(c.token, c.operator ? room.s.operatorToken : null)) return this.send(c, { t: 'error', reason: '지금은 시작할 수 없습니다' });
+        if (!room.canStart(c.token)) return this.send(c, { t: 'error', reason: '지금은 시작할 수 없습니다' });
         room.start(now); this.dirty.add(room.s.code); this.broadcast(room); return;
       case 'order': {
         const kind = m.kind === 'limit' ? 'limit' : 'market';
@@ -243,12 +236,10 @@ export class Hub {
         return;
       }
       case 'card': if (room.answerCard(c.token ?? '', m.choice, now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
-      case 'predict': if (room.predict(c.token ?? '', m.choice, Number(m.confidence), now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
       case 'rematch': {
-        if (room.s.status !== 'finished' || !(room.player(c.token) || c.operator)) return;
+        if (room.s.status !== 'finished' || !room.player(c.token)) return;
         if (!room.s.nextRoomCode) {
           const next = this.createRoom(room.s.mode, { excludedArcs: room.s.plan.arcIds, settings: room.s.settings });
-          next.s.operatorToken = room.s.operatorToken;   /* 학술제 운영자는 같은 권한으로 다음 판을 엽니다. */
           room.s.nextRoomCode = next.s.code;
           this.dirty.add(room.s.code);
         }
@@ -286,7 +277,7 @@ export class Hub {
           if (typeof p.mode === 'string' && Object.hasOwn(MODES, p.mode)) mode = p.mode;
           if (p.settings !== undefined) {
             const settings: unknown = p.settings;
-            if (mode === 'academic' || !settings || typeof settings !== 'object' || Array.isArray(settings)
+            if (!settings || typeof settings !== 'object' || Array.isArray(settings)
               || Object.entries(settings).some(([key, value]) => !Object.hasOwn(ROOM_OPTIONS, key)
                 || typeof value !== 'number' || !ROOM_OPTIONS[key as keyof RoomSettings].includes(value))) {
               return this.json(res, 400, { error: '선택할 수 없는 게임 설정입니다' });
@@ -297,7 +288,7 @@ export class Hub {
         } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
         if (!this.allowCreate(req)) return this.json(res, 429, { error: '방을 너무 많이 만들었습니다. 잠시 후 다시 시도해 주세요' });
         const room = this.createRoom(mode, extra);
-        this.json(res, 201, { code: room.s.code, mode, operatorToken: room.s.operatorToken });
+        this.json(res, 201, { code: room.s.code, mode });
       });
       return;
     }

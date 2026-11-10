@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { navigate } from './App';
 import { createRoom, roomInfo, store } from './net';
 import { TERMS } from '../../shared/glossary';
-import { MODES, ROOM_OPTIONS } from '../../shared/rules';
+import { cleanSettings, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { RoomSettings } from '../../shared/types';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
@@ -23,7 +23,8 @@ export function Home() {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [settings, setSettings] = useState<RoomSettings>({ stocks: 30 });
+  /* 게임 설정은 고른 값을 이 기기에 기억합니다. 처음에는 기본값(10종목·5라운드·90초) */
+  const [settings, setSettings] = useState<RoomSettings>(() => cleanSettings(store.get('settings')));
   const { open, seen } = useGlossary();
   const games = parseRecords(store.get(RECORDS_KEY)).length;
   const run = async (f: () => Promise<void>) => {
@@ -31,11 +32,9 @@ export function Home() {
     try { await f(); } catch (e) { setError(e instanceof Error && e.message !== 'Failed to fetch' ? e.message : '서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요'); } finally { setBusy(false); }
   };
   const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, settings); navigate(`/room/${r.code}`); });
-  const academic = () => run(async () => {
-    const r = await createRoom('academic');
-    store.set(`operator:${r.code}`, r.operatorToken ?? '');
-    navigate(`/display/${r.code}`);
-  });
+  const stocks = settings.stocks ?? STOCKS_PER_GAME, rounds = settings.rounds ?? MODES.solo.rounds, trade = settings.trade ?? MODES.solo.trade;
+  const minutes = Math.max(1, Math.round(rounds * (MODES.solo.news + trade + MODES.solo.recap) / 60));
+  const pick = (o: RoomSettings) => { const next = { ...settings, ...o }; setSettings(next); store.set('settings', JSON.stringify(next)); };
   const join = () => run(async () => { await roomInfo(code); navigate(`/room/${code}`); });
   const t = todayTerm();
   const links = [
@@ -53,23 +52,27 @@ export function Home() {
         <h1 className="hero">같은 뉴스, 다른 판단.<br />누가 왜 이겼는지 바로 나와요</h1>
         <p className="lede">가상 기업과 가상 자금 1,000만 원으로 하는 주식 게임</p>
         <div className="home-actions">
-          <div className="room-settings" role="group" aria-label="혼자 연습과 친구 대전 설정">
-            <label>종목 수
-              <select value={settings.stocks} onChange={e => setSettings({ ...settings, stocks: Number(e.target.value) })}>
-                {ROOM_OPTIONS.stocks.map(n => <option key={n} value={n}>{n}개</option>)}
-              </select>
-            </label>
-            <label>라운드 수
-              <select value={settings.rounds ?? MODES.solo.rounds} onChange={e => setSettings({ ...settings, rounds: Number(e.target.value) })}>
-                {ROOM_OPTIONS.rounds.map(n => <option key={n} value={n}>{n}회</option>)}
-              </select>
-            </label>
-            <label>장 시간
-              <select value={settings.trade ?? MODES.solo.trade} onChange={e => setSettings({ ...settings, trade: Number(e.target.value) })}>
-                {ROOM_OPTIONS.trade.map(n => <option key={n} value={n}>{n}초</option>)}
-              </select>
-            </label>
-          </div>
+          <details className="game-opts">
+            <summary>게임 설정 · {stocks}종목 · {rounds}라운드 · 장 {trade}초 <small className="hint">(한 판 약 {minutes}분)</small></summary>
+            <div className="room-settings" role="group" aria-label="혼자 연습과 친구 대전 설정">
+              <label>종목 수
+                <select value={stocks} onChange={e => pick({ stocks: Number(e.target.value) })}>
+                  {ROOM_OPTIONS.stocks.map(n => <option key={n} value={n}>{n}개</option>)}
+                </select>
+              </label>
+              <label>라운드 수
+                <select value={rounds} onChange={e => pick({ rounds: Number(e.target.value) })}>
+                  {ROOM_OPTIONS.rounds.map(n => <option key={n} value={n}>{n}회</option>)}
+                </select>
+              </label>
+              <label>장 시간
+                <select value={trade} onChange={e => pick({ trade: Number(e.target.value) })}>
+                  {ROOM_OPTIONS.trade.map(n => <option key={n} value={n}>{n}초</option>)}
+                </select>
+              </label>
+            </div>
+            <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다. 처음이라면 10종목·5라운드를 권합니다.</p>
+          </details>
           <button className="cta" disabled={busy} onClick={() => make('solo')}>혼자 연습 시작</button>
           <div className="btn-row">
             <button className="ghost" disabled={busy} onClick={() => make('friend')}>친구 방 만들기</button>
@@ -106,7 +109,6 @@ export function Home() {
       </section>
 
       <button className="link" style={{ alignSelf: 'center' }} onClick={() => setHowTo(true)}>게임 방법 다시 보기</button>
-      <button className="link" style={{ alignSelf: 'center', marginTop: -10 }} disabled={busy} onClick={academic}>학술제 운영자: 대형 화면과 QR 열기</button>
       <Disclaimer />
       {howTo && <Onboarding onDone={() => setHowTo(false)} />}
     </main>

@@ -1,12 +1,12 @@
 /* 서버와 클라이언트가 함께 쓰는 공개 타입. 미래 결말과 시드는 여기에 없습니다. */
 /** 종목 코드 G01~G30. 목록과 업종은 shared/rules.ts STOCKS */
 export type StockCode = `G${number}`;
-export type GameMode = 'friend' | 'solo' | 'academic';
+export type GameMode = 'friend' | 'solo';
 export interface RoomSettings { stocks?: number; rounds?: number; trade?: number }
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 export type Side = 'buy' | 'sell';
-export type Role = 'player' | 'spectator' | 'operator' | 'display';
+export type Role = 'player' | 'spectator';
 export type NpcType = 'chaser' | 'waiter' | 'diversifier';
 
 export interface EventImpact { stageId: string; label: string; bp: number; reason: string }
@@ -81,15 +81,13 @@ export interface CardView {
   options: { key: 'A' | 'B'; label: string }[];
   answered: 'A' | 'B' | null; feedback: string | null;
 }
-export interface PredictionView {
-  stageId: string; question: string;
-  choice: 'A' | 'B' | null; confidence: number | null; correct: boolean | null;
-}
 export interface LeaderRow {
   playerId: string; label: string; kind: 'human' | 'npc'; npcType: string | null; connected: boolean;
   /** NPC의 주문 규칙 설명. 사람은 null */
   npcRule: string | null;
   value: number; returnPct: number; rank: number;
+  /** 직전 라운드가 끝났을 때의 순위(결과 화면의 순위 변화 표시용). 첫 라운드 전에는 rank와 같습니다 */
+  prevRank: number;
 }
 export interface Contribution { code: StockCode; name: string; qty: number; won: number }
 export interface RoundResult {
@@ -106,7 +104,7 @@ export interface Metric {
 export interface FinalReport {
   rank: number; value: number; returnPct: number; fees: number;
   majorTrades: { round: number; code: StockCode; name: string; side: Side; qty: number; price: number }[];
-  metrics: Metric[] | null;
+  metrics: Metric[];
   judgments: { title: string; choice: string; concept: string }[];
 }
 export interface Portfolio {
@@ -132,23 +130,20 @@ export interface RoomView {
   /** 이번 라운드에 공개된 속보가 나온 시점. 개장부터 지난 초 */
   breakingAt?: number;
   card: CardView | null;
-  prediction: PredictionView | null;
   portfolio: Portfolio | null;
   lastResult: RoundResult | null;
   dividend?: DividendView | null;
   report: FinalReport | null;
   nextRoomCode: string | null;
-  operatorToken?: string;
 }
 
 export type ClientMsg =
-  | { t: 'hello'; code: string; token?: string | null; operatorToken?: string | null; display?: boolean }
+  | { t: 'hello'; code: string; token?: string | null }
   | { t: 'start' }
   | { t: 'order'; requestId: string; code: StockCode; side: Side; qty: number; kind?: OrderKind; limit?: number }
   | { t: 'cancel'; requestId: string; code: StockCode }
   | { t: 'stop'; requestId: string; code: StockCode; stop: number | null; take: number | null }
   | { t: 'card'; choice: 'A' | 'B' }
-  | { t: 'predict'; choice: 'A' | 'B'; confidence: number }
   | { t: 'rematch' }
   | { t: 'leave' }
   | { t: 'ping' };
