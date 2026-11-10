@@ -170,7 +170,9 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
         {tab === 'market' && view.phase !== 'recap' && <>
           <Standing view={view} />
           <IndexStrip view={view} />
+          <ViNotice view={view} />
           <DividendNotice view={view} />
+          <SchedulePanel view={view} />
           {!coach && news}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send} />}
           {favoriteStocks.length > 0 && <section className="panel flush" aria-label="관심종목">
@@ -577,6 +579,29 @@ function OrderBook({ book, price, open, onPick }: { book: QuoteBook; price: numb
 }
 /** 떡상 지수: 이번 판 10종목의 시가총액 가중 지수(시작 1,000). 라운드 종료 값과 지금 값을 작은 그래프로 */
 /** 배당 일정 안내: 기준일 전·당일·배당락 라운드에 보여 줍니다. */
+/** VI(변동성 완화장치)로 멈춘 종목 안내 */
+function ViNotice({ view }: { view: RoomView }) {
+  const halted = view.stocks.filter(s => s.haltLeft);
+  if (view.phase !== 'trade' || halted.length === 0) return null;
+  return (
+    <section className="panel vi-note" role="status" aria-label="변동성 완화장치 안내">
+      <p className="news-meta"><span className="chip alert">VI</span></p>
+      <p><b>{halted.map(s => s.name).join(', ')}의 거래가 잠깐 멈췄어요.</b> 시가 대비 10% 넘게 움직여 <TermLink id="vi">변동성 완화장치</TermLink>가 걸렸습니다. 걸어 둔 예약은 취소됐어요.</p>
+      <ul className="list">{halted.map(s => <li key={s.code}><span>{s.name}<small>시가 대비 {pctBp(Math.round((s.price - s.openPrice) * 10000 / s.openPrice))}</small></span><b className="num">{s.haltLeft}초 뒤 재개</b></li>)}</ul>
+    </section>
+  );
+}
+/** 다음 라운드 발표 예정(실제 시장의 실적 발표 일정표에 해당) */
+function SchedulePanel({ view }: { view: RoomView }) {
+  if (view.schedule.length === 0 || (view.phase !== 'trade' && view.phase !== 'recap')) return null;
+  return (
+    <section className="panel schedule" aria-label="다음 라운드 발표 예정">
+      <div className="list-head"><span><TermLink id="earnings-calendar">발표 일정</TermLink> · {view.schedule[0].round}라운드 예정</span></div>
+      <ul className="list">{view.schedule.map(x => <li key={x.code}><span>{x.name}<small>{x.arcTitle || '처음 나오는 소식'}</small></span></li>)}</ul>
+      <p className="hint">어떤 회사 소식이 나올지만 미리 알려 드려요. 내용과 결과는 그때 공개됩니다.</p>
+    </section>
+  );
+}
 function DividendNotice({ view }: { view: RoomView }) {
   const d = view.dividend;
   if (!d || d.status === 'before' || d.status === 'done') return null;

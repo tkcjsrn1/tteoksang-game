@@ -115,6 +115,42 @@ export function perOf(code: StockCode, price: number): number | null {
 /** 배당수익률(bp) = 주당 배당금 ÷ 주가 */
 export const dividendYieldBp = (code: StockCode, price: number) => Math.round(fundOf(code).dps * 10000 / price);
 /** 배당 기준일 라운드(이 라운드 장 마감 때 가진 주식에 배당). 다음 라운드 시작 때 배당금 입금과 배당락. */
+/* ---------- 변동성 완화장치(VI) ----------
+   실제 정적 VI는 전일 종가 대비 ±10%에서 2분 단일가 매매로 바뀝니다.
+   이 게임은 한 라운드가 짧아서, 시가 대비 ±10%에서 그 종목만 VI_SECONDS초 동안 거래를 멈춥니다. */
+export const VI_BP = 1000;
+export const VI_SECONDS = 15;
+/** 시가 대비 등락이 VI 기준을 넘었는지. 넘었으면 방향(1 위, -1 아래), 아니면 0 */
+export function viDirection(open: number, price: number): 1 | -1 | 0 {
+  if (open <= 0) return 0;
+  const bp = Math.round((price - open) * 10000 / open);
+  return bp >= VI_BP ? 1 : bp <= -VI_BP ? -1 : 0;
+}
+
+/* ---------- 투자자별 매매(수급) ----------
+   실제 체결에서 바로 뽑습니다. 지어낸 숫자가 아닙니다.
+   - 개인: 사람 참가자들이 산 금액 − 판 금액
+   - 기관: NPC들이 산 금액 − 판 금액
+   - 외국인: 그 둘을 받아 준 호가창(가상 유동성). 누가 사면 누가 팔기 때문에 셋을 더하면 0입니다.
+   실제 시장의 외국인·기관과는 다르다는 점을 용어 사전 '이 게임에서는' 칸에 적었습니다. */
+export const INVESTORS = ['foreign', 'institution', 'retail'] as const;
+export type Investor = typeof INVESTORS[number];
+export const INVESTOR_LABEL: Record<Investor, string> = { foreign: '외국인', institution: '기관', retail: '개인' };
+/** 순매수 금액을 "+1,240만", "−30만"처럼. 0에 가까우면 "0" */
+export function formatFlow(won: number): string {
+  if (Math.abs(won) < 10_000) return '0';
+  const man = Math.round(won / 10_000);
+  return `${man > 0 ? '+' : '−'}${Math.abs(man).toLocaleString('ko-KR')}만`;
+}
+/** 체결 하나하나를 투자자별 순매수(산 금액 − 판 금액)로 모읍니다. 셋을 더하면 0이 됩니다. */
+export function sumFlows(fills: { investor: Investor; side: Side; gross: number }[]): Record<Investor, number> {
+  const out: Record<Investor, number> = { foreign: 0, institution: 0, retail: 0 };
+  for (const f of fills) out[f.investor] += f.side === 'buy' ? f.gross : -f.gross;
+  /* 참가자와 NPC가 산 만큼을 호가창이 팔았습니다(그 반대도 마찬가지). */
+  out.foreign = -(out.institution + out.retail) || 0;   /* -0이 나오지 않게 */
+  return out;
+}
+
 export const dividendRound = (rounds: number) => Math.ceil(rounds * 0.6);
 /** 배당락 뒤 시가: 배당금만큼 낮춰 10원 단위로 반올림, 최저 100원 */
 export const exDividendPrice = (price: number, dps: number) => Math.max(100, Math.round((price - dps) / 10) * 10);

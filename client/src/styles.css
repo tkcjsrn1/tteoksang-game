@@ -553,3 +553,11 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .probe { margin: 0; font-size: 13px; min-height: 20px; }
 .probe-area { touch-action: pan-y; cursor: crosshair; }
 @media (prefers-reduced-motion: reduce) { .confetti { display: none; } .rank-moves li { animation: none; } }
+/* VI 안내와 발표 일정 */
+.vi-note { background: var(--up-soft); }
+.vi-note .list b { color: var(--up); }
+.schedule .list small { color: var(--muted); }
+/* 투자자별 순매수: 줄을 통째로 써서 왼쪽 라벨이 눌리지 않게 합니다 */
+.kv dt.flows-dt { grid-column: 1 / -1; margin-top: 2px; }
+.kv dd.flows { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 14px; justify-content: space-between; text-align: left; }
+.flows span { white-space: nowrap; font-variant-numeric: tabular-nums; }
