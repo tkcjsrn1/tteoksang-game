@@ -134,9 +134,27 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.locator('.live-chart svg.probe-area').click({ position: { x: 20, y: 60 } });
   ok(/\d초 · [\d,]+원/.test(await page.locator('.live-chart .probe').innerText()), '십자선 가격 표시 없음');
   /* 10초봉으로 바꾸면 봉(rect)이 그려지고, 다시 선으로 돌립니다 */
-  await page.locator('.live-chart').getByRole('button', { name: '10초봉' }).click();
+  const kinds = page.getByRole('group', { name: '그래프 종류' });
+  await kinds.getByRole('button', { name: '10초봉' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.live-chart svg rect').length >= 1, null, { timeout: 12_000 });
-  await page.locator('.live-chart').getByRole('button', { name: '선(1초)' }).click();
+  await kinds.getByRole('button', { name: '일봉' }).click();
+  await page.locator('.sheet .replay, .sheet .chart-fig svg').first().waitFor({ timeout: 5_000 });
+  ok(await page.locator('.live-chart').count() === 0, '일봉을 골랐는데 장중 그래프가 남아 있음');
+  await kinds.getByRole('button', { name: '1초' }).click();
+  await page.locator('.live-chart').waitFor({ timeout: 5_000 });
+});
+
+await step('장중 속보: 팝업이 뜨고 닫힌다', async () => {
+  /* 속보는 주문 시간 중간에 뜹니다. 뜨면 팝업을 확인하고 닫습니다. */
+  const pop = page.locator('.breaking');
+  await pop.waitFor({ timeout: 25_000 }).catch(() => {});
+  if (await pop.count()) {
+    ok(/속보/.test(await pop.innerText()), '속보 표시 없음');
+    ok(await pop.locator('.breaking-stocks li').count() >= 1, '속보 대상 종목이 없음');
+    await pop.getByRole('button', { name: /확인/ }).click();
+    await pop.waitFor({ state: 'detached', timeout: 5_000 });
+  }
+  if (!(await page.locator('.sheet').count())) await page.locator('.sectors button.row').first().click();
 });
 
 await step('호가창: 매도 5단계·매수 5단계, 가격을 누르면 지정가로', async () => {
@@ -237,6 +255,18 @@ await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   ok(labels.some(label => label.includes('속보')) && labels.some(label => label.includes('매수')), '속보 또는 매수가 이벤트 목록에 없음');
   ok(times.every((t, i) => i === 0 || times[i - 1] <= t), '차트 이벤트가 시간순이 아님');
   await filledStock.getByRole('button', { name: '닫기' }).click();
+});
+
+await step('대기실: 내 이름 바꾸기', async () => {
+  const res = await page.request.post(`${base}/api/rooms`, { data: { mode: 'friend' } });
+  const { code } = await res.json() as { code: string };
+  await page.goto(`${base}/#/room/${code}`);
+  await page.getByRole('button', { name: '이름 바꾸기' }).click();
+  const input = page.getByLabel('내 이름');
+  await input.fill('정혁');
+  await page.getByRole('button', { name: '저장' }).click();
+  await page.getByText('정혁', { exact: true }).first().waitFor({ timeout: 5_000 });
+  ok((await page.locator('.people').innerText()).includes('정혁'), '참가자 목록에 바뀐 이름이 없음');
 });
 
 await step('용어 설명 창 열고 닫기', async () => {

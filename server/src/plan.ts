@@ -1,5 +1,5 @@
 /* 시드로 게임 전체 시나리오를 미리 확정합니다. 같은 시드와 설정이면 같은 결말과 변동이 나옵니다. */
-import { GROUPS, LEADERS, MARKET_MAX_BP, MODES, stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
+import { GROUPS, LEADERS, MARKET_MAX_BP, MODES,  stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { GameMode, RoomSettings, StockCode } from '../../shared/types';
 import { ARCS, CARDS, type Arc, type Outcome, type Stage } from './content';
 
@@ -27,6 +27,7 @@ export function pickStocks(arcs: Arc[], rnd: () => number, count = STOCKS_PER_GA
     const pool = shuffled(peers.filter(p => p.group === g && !picked.includes(p.code)), rnd);
     if (pool[0] && picked.length < peerCount) picked.push(pool[0].code);
   }
+  /* 남은 자리는 전체 종목에서 무작위로 채웁니다. 뉴스가 없는 업종도 섞여 나옵니다(실제 시장처럼). */
   for (const p of shuffled(peers, rnd)) if (picked.length < peerCount && !picked.includes(p.code)) picked.push(p.code);
   const order = (c: StockCode) => Object.keys(GROUPS).indexOf(stockOf(c).group) * 100 + Number(c.slice(1));
   return [...LEADERS, ...picked].sort((a, b) => order(a) - order(b));

@@ -19,7 +19,7 @@ export const MODES: Record<GameMode, { rounds: number; news: number; trade: numb
 
 /* 방을 만들 때 고를 수 있는 값. 고르지 않으면 MODES와 STOCKS_PER_GAME 기본값을 씁니다. */
 export const ROOM_OPTIONS: Record<keyof RoomSettings, readonly number[]> = {
-  stocks: [10, 20, 30], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120]
+  stocks: [10, 20, 30, 50], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120]
 };
 /** 한 판에 나오는 종목 수 기본값 */
 export const STOCKS_PER_GAME = 10;
@@ -36,18 +36,23 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
   return out;
 }
 
-/* 종목 30개 = 업종 6개 × 5종목. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
+/* 종목 50개 = 업종 10개 × 5종목. 그중 뉴스가 붙는 업종은 앞의 6개입니다. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
    같은 업종 종목은 대표 종목 뉴스에 linkBeta 비율만큼 함께 움직입니다(업종 동조화).
    한 판에는 대표 종목 6개와 방 설정으로 정한 수의 관련 종목이 나옵니다(server/src/plan.ts pickStocks).
    모든 기업은 지어낸 가상 기업입니다. */
-export type StockGroup = 'power' | 'storage' | 'cold' | 'bio' | 'stage' | 'water';
+export type StockGroup = 'power' | 'storage' | 'cold' | 'bio' | 'stage' | 'water' | 'space' | 'farm' | 'care' | 'recycle';
 export const GROUPS: Record<StockGroup, { label: string; leader: StockCode; color: string }> = {
   power:   { label: '분산 전력',    leader: 'G01', color: '#E08E0B' },
   storage: { label: '열에너지 저장', leader: 'G02', color: '#7B61FF' },
   cold:    { label: '저온 물류',    leader: 'G03', color: '#00A88F' },
   bio:     { label: '배양 소재',    leader: 'G04', color: '#1F9D5C' },
   stage:   { label: '체험형 공연',  leader: 'G05', color: '#E8557A' },
-  water:   { label: '물 재이용',    leader: 'G06', color: '#3B8DD9' }
+  water:   { label: '물 재이용',    leader: 'G06', color: '#3B8DD9' },
+  /* 아래 네 업종은 아직 뉴스(사건)가 없습니다. 시장·종목 변동으로만 움직입니다. */
+  space:   { label: '위성 통신',    leader: 'G31', color: '#5B7FFF' },
+  farm:    { label: '스마트 농업',  leader: 'G36', color: '#6FA82B' },
+  care:    { label: '돌봄 로봇',    leader: 'G41', color: '#D9743B' },
+  recycle: { label: '금속 재활용',  leader: 'G46', color: '#8A8F98' }
 };
 export interface StockDef { code: StockCode; name: string; sector: string; group: StockGroup; start: number; maxMoveBp: number; linkBeta: number; desc: string }
 export const STOCKS: StockDef[] = [
@@ -80,6 +85,26 @@ export const STOCKS: StockDef[] = [
   { code: 'G27', name: '이르벤 온도센서', sector: '저온 운송 센서', group: 'cold', start: 5900, maxMoveBp: 75, linkBeta: 0.4, desc: '냉장 화물의 온도 기록기를 공급합니다. 신선식품 운송량이 늘거나 온도 관리 기준이 강화되면 수요가 커집니다.' },
   { code: 'G28', name: '메로칸 배양장비', sector: '배양 공정 장비', group: 'bio', start: 17800, maxMoveBp: 125, linkBeta: 0.5, desc: '배양 탱크와 공정 제어기를 만듭니다. 배양 소재 업체들이 생산 시설을 늘릴 때 수주가 증가합니다.' },
   { code: 'G29', name: '로테빈 무대제작', sector: '조립식 공연 무대', group: 'stage', start: 8200, maxMoveBp: 105, linkBeta: 0.45, desc: '공연장과 축제에 조립식 무대를 공급합니다. 야외 행사 일정이 늘면 장비 대여가 늘어납니다.' },
+  { code: 'G31', name: '레오링크 위성망',   sector: '저궤도 위성 통신', group: 'space', start: 21700, maxMoveBp: 130, linkBeta: 1, desc: '저궤도 위성으로 통신망을 운영합니다. 위성 수가 늘면 쓸 수 있는 지역이 넓어집니다.' },
+  { code: 'G32', name: '아스트라 지상국',   sector: '위성 지상국 장비', group: 'space', start: 9400, maxMoveBp: 95, linkBeta: 0.55, desc: '위성과 통신하는 지상국 장비를 짓습니다. 위성망이 커지면 지상국도 늘어야 합니다.' },
+  { code: 'G33', name: '페리온 안테나',     sector: '위상배열 안테나', group: 'space', start: 7200, maxMoveBp: 85, linkBeta: 0.5, desc: '움직이는 차량과 선박에 다는 납작한 안테나를 만듭니다.' },
+  { code: 'G34', name: '하람 궤도추적',     sector: '궤도 추적 소프트웨어', group: 'space', start: 5600, maxMoveBp: 70, linkBeta: 0.45, desc: '위성 궤도를 계산하고 충돌을 피하게 하는 소프트웨어를 공급합니다.' },
+  { code: 'G35', name: '미르반 발사지원',   sector: '발사 지상 설비', group: 'space', start: 13900, maxMoveBp: 110, linkBeta: 0.5, desc: '발사체를 세우고 연료를 넣는 지상 설비를 운영합니다. 발사 일정에 실적이 몰립니다.' },
+  { code: 'G36', name: '그로벤 수직농장',   sector: '실내 수직 농장', group: 'farm', start: 8800, maxMoveBp: 100, linkBeta: 1, desc: '건물 안에서 층층이 작물을 기릅니다. 전기값과 수확량에 수익이 갈립니다.' },
+  { code: 'G37', name: '하벤 양액제어',     sector: '양액 공급 제어', group: 'farm', start: 6300, maxMoveBp: 75, linkBeta: 0.5, desc: '작물에 주는 영양액의 농도를 자동으로 맞추는 장치를 만듭니다.' },
+  { code: 'G38', name: '솔루마 생장조명',   sector: '식물 생장 조명', group: 'farm', start: 4900, maxMoveBp: 80, linkBeta: 0.55, desc: '작물이 잘 자라는 파장의 조명을 공급합니다. 농장이 늘면 함께 늘어납니다.' },
+  { code: 'G39', name: '테르미 토양센서',   sector: '토양 수분 센서', group: 'farm', start: 3800, maxMoveBp: 65, linkBeta: 0.4, desc: '흙의 수분과 양분을 재는 센서를 밭과 농장에 공급합니다.' },
+  { code: 'G40', name: '카로스 수확로봇',   sector: '수확 자동화 로봇', group: 'farm', start: 15200, maxMoveBp: 120, linkBeta: 0.55, desc: '열매를 알아보고 따는 로봇을 만듭니다. 일손이 부족할수록 수요가 커집니다.' },
+  { code: 'G41', name: '케어민 보행보조',   sector: '보행 보조 로봇', group: 'care', start: 16400, maxMoveBp: 115, linkBeta: 1, desc: '걷기 힘든 사람을 돕는 착용형 로봇을 만듭니다. 요양 시설 도입이 실적을 좌우합니다.' },
+  { code: 'G42', name: '노바린 이송로봇',   sector: '시설 내 이송 로봇', group: 'care', start: 10300, maxMoveBp: 90, linkBeta: 0.5, desc: '병원과 요양원 안에서 물품을 옮기는 로봇을 공급합니다.' },
+  { code: 'G43', name: '셀리안 생체신호',   sector: '생체신호 측정 장비', group: 'care', start: 7700, maxMoveBp: 85, linkBeta: 0.5, desc: '맥박과 호흡을 멀리서 재는 장비를 만듭니다. 야간 관찰에 많이 씁니다.' },
+  { code: 'G44', name: '포르테 재활기기',   sector: '재활 운동 기기', group: 'care', start: 5400, maxMoveBp: 70, linkBeta: 0.45, desc: '재활 운동을 돕는 기기를 병원에 납품합니다. 교체 주기가 꾸준합니다.' },
+  { code: 'G45', name: '하늘솔 돌봄연계',   sector: '돌봄 연계 서비스', group: 'care', start: 11800, maxMoveBp: 75, linkBeta: 0.4, desc: '돌봄 인력과 가정을 이어 주는 서비스를 운영합니다. 계약 수가 실적입니다.' },
+  { code: 'G46', name: '리메탈 정련',       sector: '폐금속 정련', group: 'recycle', start: 18600, maxMoveBp: 105, linkBeta: 1, desc: '버려진 금속을 녹여 다시 쓸 수 있게 만듭니다. 금속 시세에 실적이 크게 흔들립니다.' },
+  { code: 'G47', name: '파우르 분쇄설비',   sector: '폐기물 분쇄 설비', group: 'recycle', start: 6700, maxMoveBp: 80, linkBeta: 0.5, desc: '폐기물을 잘게 부수는 설비를 만듭니다. 재활용 공장이 늘면 함께 늘어납니다.' },
+  { code: 'G48', name: '엔베르 선별기',     sector: '금속 자동 선별', group: 'recycle', start: 9100, maxMoveBp: 90, linkBeta: 0.55, desc: '섞인 금속을 종류별로 자동으로 가려냅니다. 선별이 정확할수록 값을 더 받습니다.' },
+  { code: 'G49', name: '크로마 합금회수',   sector: '희귀 합금 회수', group: 'recycle', start: 24300, maxMoveBp: 140, linkBeta: 0.6, desc: '적게 섞인 귀한 금속을 뽑아냅니다. 회수율이 조금만 올라도 수익이 크게 바뀝니다.' },
+  { code: 'G50', name: '지온테크 폐배터리', sector: '폐배터리 재활용', group: 'recycle', start: 14700, maxMoveBp: 125, linkBeta: 0.55, desc: '다 쓴 배터리에서 금속을 회수합니다. 배터리 폐기량이 늘면 물량이 늘어납니다.' },
   { code: 'G30', name: '바노렐 수질계측', sector: '재이용수 수질 검사', group: 'water', start: 9700, maxMoveBp: 55, linkBeta: 0.45, desc: '재이용수의 탁도와 오염도를 측정하는 장비를 공급합니다. 처리 시설의 정기 검사와 신규 발주에 영향을 받습니다.' }
 ];
 /* ---------- 기업 정보(가상) ----------
@@ -99,6 +124,16 @@ export const FUNDAMENTALS: Record<StockCode, Fundamentals> = {
   G19: { shares: 21_000_000, netIncome: 104, dps: 0 },   G20: { shares: 12_000_000, netIncome: 70, dps: 0 },
   G21: { shares: 10_000_000, netIncome: 41, dps: 0 },    G22: { shares: 19_000_000, netIncome: 108, dps: 180 },
   G23: { shares: 26_000_000, netIncome: 86, dps: 0 },    G24: { shares: 28_000_000, netIncome: 395, dps: 450 },
+  G31: { shares: 24_000_000, netIncome: -140, dps: 0 },  G32: { shares: 18_000_000, netIncome: 77, dps: 0 },
+  G33: { shares: 22_000_000, netIncome: 61, dps: 0 },    G34: { shares: 15_000_000, netIncome: 44, dps: 0 },
+  G35: { shares: 13_000_000, netIncome: 119, dps: 200 }, G36: { shares: 20_000_000, netIncome: -62, dps: 0 },
+  G37: { shares: 17_000_000, netIncome: 58, dps: 0 },    G38: { shares: 25_000_000, netIncome: 71, dps: 90 },
+  G39: { shares: 29_000_000, netIncome: 48, dps: 60 },   G40: { shares: 12_000_000, netIncome: 96, dps: 0 },
+  G41: { shares: 14_000_000, netIncome: 88, dps: 0 },    G42: { shares: 19_000_000, netIncome: 93, dps: 0 },
+  G43: { shares: 21_000_000, netIncome: 74, dps: 0 },    G44: { shares: 27_000_000, netIncome: 112, dps: 150 },
+  G45: { shares: 16_000_000, netIncome: 168, dps: 260 }, G46: { shares: 11_000_000, netIncome: 233, dps: 380 },
+  G47: { shares: 23_000_000, netIncome: 69, dps: 0 },    G48: { shares: 18_000_000, netIncome: 101, dps: 0 },
+  G49: { shares: 9_000_000, netIncome: 187, dps: 0 },    G50: { shares: 26_000_000, netIncome: 124, dps: 0 },
   G25: { shares: 17_000_000, netIncome: 98, dps: 0 },    G26: { shares: 19_000_000, netIncome: 103, dps: 0 },
   G27: { shares: 21_000_000, netIncome: 90, dps: 120 },  G28: { shares: 16_000_000, netIncome: 102, dps: 0 },
   G29: { shares: 14_000_000, netIncome: 66, dps: 0 },    G30: { shares: 23_000_000, netIncome: 174, dps: 240 }
@@ -170,7 +205,21 @@ export function formatEok(won: number): string {
   return `${sign}${jo.toLocaleString('ko-KR')}조${rest ? ` ${rest.toLocaleString('ko-KR')}억` : ''} 원`;
 }
 
-export const LEADERS: StockCode[] = Object.values(GROUPS).map(g => g.leader);
+/* ---------- 참가자 이름 ---------- */
+export const LABEL_MAX = 12;
+/** 이름 다듬기: 앞뒤 공백과 연속 공백을 정리하고, 보이지 않는 글자와 꺾쇠를 막습니다. 쓸 수 없으면 null */
+export function cleanLabel(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  /* 제어 문자와 줄바꿈, 꺾쇠(<>)를 빼고 공백을 한 칸으로 */
+  const t = raw.replace(/[\u0000-\u001F\u007F<>]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (t.length === 0 || t.length > LABEL_MAX) return null;
+  return t;
+}
+
+/** 뉴스(사건)의 주인공이 되는 대장주. 한 판에 늘 들어갑니다.
+    뉴스가 없는 업종(위성 통신·스마트 농업·돌봄 로봇·금속 재활용)의 대장주는 여기 넣지 않습니다. */
+export const NEWS_GROUPS: StockGroup[] = ['power', 'storage', 'cold', 'bio', 'stage', 'water'];
+export const LEADERS: StockCode[] = NEWS_GROUPS.map(g => GROUPS[g].leader);
 /** 예전 저장 데이터(종목 6개 시절)를 복구할 때 쓰는 기본 종목 */
 export const LEGACY_CODES: StockCode[] = ['G01', 'G02', 'G03', 'G04', 'G05', 'G06'];
 export const stockOf = (code: StockCode) => STOCKS.find(s => s.code === code)!;
@@ -309,8 +358,9 @@ export function maxBuyQty(ctx: OrderContext, code: StockCode, ref: number, opts:
    주문 시간 동안 1초마다 가격이 움직입니다. 움직임은 시장 분위기(marketBp)와 종목 변동(stockBp), 장중 속보 반응을 합친
    목표까지 가는 무작위 경로(브라운 다리)입니다. 사건의 최종 결과는 경로에 넣지 않고 마감 때 한 번에 반영하므로,
    장중 시세로 결말을 미리 알 수 없습니다. 같은 시드면 같은 경로가 나옵니다. */
-/** 장중 속보가 뜰 때 헤드라인 방향으로 먼저 튀는 폭(대표 종목 기준, bp). 같은 업종 종목은 linkBeta배 */
-export const REACT_BP = 120;
+/** 장중 속보가 뜰 때 헤드라인 방향으로 먼저 튀는 폭(대표 종목 기준, bp = 3.5%). 같은 업종 종목은 linkBeta배.
+    종목 하루 변동폭(maxMoveBp 50~150bp)보다 크게 잡아야 속보가 떴다는 걸 화면에서 알아볼 수 있습니다. */
+export const REACT_BP = 350;
 /** 장중 흔들림 크기: 종목 변동폭(maxMoveBp)의 이 배수가 한 라운드 표준편차 */
 export const WIGGLE_X = 1.2;
 /** 0~1 균등 난수 함수 */
