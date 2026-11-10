@@ -13,7 +13,7 @@ import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
 import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
 import { defaultOpenGroups, groupStocks } from './sectors';
 import type { StockGroup } from '../../shared/rules';
-import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, LiveChart, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
+import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, formatCountdown, LiveChart, pct, pctBp, PriceChart, signedWon, StockAvatar, useToast, won } from './ui';
 
 type Tab = 'market' | 'assets' | 'news';
 
@@ -117,7 +117,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
         </div>
         {view.phase !== 'settling' && <span className={`clock${soon ? ' soon' : ''}`} role="timer" aria-label={`${CLOCK_LABEL[view.phase ?? 'news']} ${seconds}초`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
-          {CLOCK_LABEL[view.phase ?? 'news']} 0:{String(seconds).padStart(2, '0')}
+          {CLOCK_LABEL[view.phase ?? 'news']} {formatCountdown(seconds)}
         </span>}
         <button className="help-btn" aria-label={soundOn ? '효과음 끄기' : '효과음 켜기'} aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z" />{soundOn ? <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /> : <path d="M16 9l5 6M21 9l-5 6" />}</svg>

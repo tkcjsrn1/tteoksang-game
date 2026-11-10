@@ -9,6 +9,11 @@ export const won = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 export const signedWon = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n)).toLocaleString('ko-KR')}원`;
 export const pctBp = (bp: number) => formatPct(bp, 2);
 export const pct = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toFixed(2)}%`;
+export function formatCountdown(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 export const dir = (x: number) => (x > 0 ? 'up' : x < 0 ? 'down' : 'flat');
 export const arrow = (x: number) => (x > 0 ? '▲' : x < 0 ? '▼' : '·');
 
