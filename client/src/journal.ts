@@ -22,7 +22,7 @@ export function buildJournal(view: RoomView): JournalEntry[] {
     return {
       key: `${f.round}-${n}`, round: f.round, code: f.code, name: stock?.name ?? f.code, side: f.side, qty: f.qty, price: f.price,
       kind: f.kind ?? 'market', trigger: f.trigger ?? null,
-      headline: view.news.find(r => r.round === f.round)?.cards[0]?.card.headline ?? null,
+      headline: view.news.find(r => r.round === f.round)?.cards.find(c => c.card.targets.includes(f.code))?.card.headline ?? null,
       close, afterBp, verdict
     };
   });

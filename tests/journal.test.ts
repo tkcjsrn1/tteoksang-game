@@ -43,11 +43,26 @@ test('매매일지: 내 체결마다 라운드 뉴스와 그 라운드 종가 �
   for (const e of j) {
     assert.equal(e.close, close);
     assert.equal(e.kind, 'market');
-    assert.ok(e.headline, '라운드 뉴스 제목 없음');
     const want = Math.round(e.side === 'buy' ? (close - e.price) * 10000 / e.price : (e.price - close) * 10000 / close);
     assert.equal(e.afterBp, want);
     assert.equal(e.verdict, want > 20 ? 'good' : want < -20 ? 'bad' : 'flat');
   }
+});
+
+test('매매일지: 종목과 관련된 속보만 연결하고 관련 뉴스가 없으면 비운다', () => {
+  const now = 2_000_000;
+  const room = GameRoom.create({ code: '424242', mode: 'solo', now, seed: 1 });
+  const token = room.join(null, now).token;
+  room.start(now);
+  room.tick(room.s.phaseEndsAt!);
+  const live = room.s.live!;
+  assert.notEqual(live.breakAt, null);
+  const at = live.startedAt + live.breakAt! * 1000;
+  room.tick(at);
+  assert.equal(room.placeOrder(token, 'related', 'G02', 'buy', 5, at).ok, true);
+  assert.equal(room.placeOrder(token, 'unrelated', 'G05', 'buy', 5, at).ok, true);
+  const entries = buildJournal(room.view(token, 'player', at));
+  assert.deepEqual(entries.map(e => e.headline), ['중앙은행 금리 결정 회의 시작', null]);
 });
 
 test('매매일지 메모: 깨진 저장값은 비우고, 200자로 자른다', () => {
