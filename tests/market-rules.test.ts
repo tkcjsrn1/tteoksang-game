@@ -2,8 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
-import { mulberry } from '../server/src/plan';
-import { INVESTORS, netFlows, VI_BP, VI_SECONDS, viDirection } from '../shared/rules';
+import { INVESTORS, sumFlows, VI_BP, VI_SECONDS, viDirection } from '../shared/rules';
 import { stageById } from '../server/src/content';
 import type { StockCode } from '../shared/types';
 
@@ -77,33 +76,39 @@ test('VI는 한 라운드에 종목마다 한 번만 걸린다', () => {
   assert.deepEqual(room.s.live!.halts!.G01, first, '두 번째는 걸리지 않음');
 });
 
-test('투자자별 순매수: 셋을 더하면 0이고, 오른 라운드는 개인이 파는 쪽', () => {
-  for (let seed = 1; seed <= 200; seed++) {
-    const rnd = mulberry(seed);
-    const f = netFlows(rnd, 0, 1_000_000_000);
-    assert.equal(f.foreign + f.institution + f.retail, 0, `시드 ${seed}`);
-  }
-  let retailSold = 0;
-  for (let seed = 1; seed <= 200; seed++) retailSold += netFlows(mulberry(seed), 900, 1_000_000_000).retail < 0 ? 1 : 0;
-  assert.ok(retailSold > 150, `크게 오른 라운드에는 개인이 파는 쪽이 많아야 함: ${retailSold}/200`);
+test('투자자별 순매수: 체결에서 바로 뽑고, 셋을 더하면 0', () => {
+  const f = sumFlows([
+    { investor: 'retail', side: 'buy', gross: 1_000_000 },
+    { investor: 'retail', side: 'sell', gross: 400_000 },
+    { investor: 'institution', side: 'buy', gross: 250_000 }
+  ]);
+  assert.equal(f.retail, 600_000, '사람 참가자가 산 금액 − 판 금액');
+  assert.equal(f.institution, 250_000, 'NPC');
+  assert.equal(f.foreign, -850_000, '호가창이 그만큼 받아 줌');
+  assert.equal(f.foreign + f.institution + f.retail, 0);
+  assert.deepEqual(sumFlows([]), { foreign: 0, institution: 0, retail: 0 }, '거래가 없으면 모두 0');
 });
 
-test('투자자별 순매수는 정산 뒤에만 나오고, 같은 판은 늘 같은 값', () => {
-  const { room, a } = trading(5);
-  assert.ok(room.view(a, 'player', T0).stocks.every(s => s.history.every(h => h.flows === undefined) || s.history.length === 0));
+test('투자자별 순매수는 내가 실제로 산 금액과 일치한다', () => {
+  const { room, a, t } = trading(5);
+  const buy = room.placeOrder(a, 'f1', 'G01', 'buy', 40, t);
+  assert.equal(buy.ok, true);
+  const myWon = buy.fill!.price * buy.fill!.qty;
+  /* 정산 전에는 내려보내지 않습니다 */
+  assert.ok(room.view(a, 'player', t).stocks.every(s => (s.history[s.history.length - 1]?.flows) === undefined));
   const end = room.s.phaseEndsAt!;
   room.tick(end); room.beginRecap(end);
-  const got = room.view(a, 'player', end).stocks.map(s => s.history[s.history.length - 1].flows!);
-  assert.equal(got.length, 10);
-  for (const f of got) {
-    assert.ok(INVESTORS.every(k => Number.isSafeInteger(f[k])), '정수여야 함');
-    assert.equal(f.foreign + f.institution + f.retail, 0);
+  const stocks = room.view(a, 'player', end).stocks;
+  const g01 = stocks.find(s => s.code === 'G01')!.history.at(-1)!.flows!;
+  assert.equal(g01.retail, myWon, '내가 산 금액이 개인 순매수에 그대로 잡힘');
+  for (const s of stocks) {
+    const f = s.history.at(-1)!.flows!;
+    assert.equal(f.foreign + f.institution + f.retail, 0, s.code);
+    assert.ok(INVESTORS.every(k => Number.isSafeInteger(f[k])));
   }
-  /* 같은 시드로 다시 돌리면 같은 값 */
-  const again = trading(5);
-  const end2 = again.room.s.phaseEndsAt!;
-  again.room.tick(end2); again.room.beginRecap(end2);
-  assert.deepEqual(again.room.view(again.a, 'player', end2).stocks.map(s => s.history[s.history.length - 1].flows!), got);
+  /* 아무도 거래하지 않은 종목은 모두 0 */
+  const quiet = stocks.find(s => (s.history.at(-1)!.volume ?? 0) === 0);
+  if (quiet) assert.deepEqual(quiet.history.at(-1)!.flows, { foreign: 0, institution: 0, retail: 0 });
 });
 
 test('발표 일정: 다음 라운드 종목만 알려 주고 헤드라인·결과는 담지 않는다', () => {
