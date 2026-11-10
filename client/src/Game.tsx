@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import QRCode from 'qrcode';
-import { BOOK_SHOW, dividendYieldBp, feeOf, formatEok, fundOf, GROUPS, indexValue, INDEX_BASE, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, type QuoteBook } from '../../shared/rules';
+import { BOOK_SHOW, dividendYieldBp, feeOf, taxOf, formatEok, fundOf, GROUPS, indexValue, INDEX_BASE, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, type QuoteBook } from '../../shared/rules';
 import { intradayBp } from './live';
 import { buildJournal, journalKey, parseNotes } from './journal';
 import type { ClientMsg, NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
@@ -231,7 +231,7 @@ function HelpSheet({ phase, onClose, onReplayTutorial }: { phase: RoomView['phas
         <li><TermLink id="limit-order">지정가</TermLink>는 원하는 가격을 걸어 두는 예약입니다. 시세가 닿으면 그 가격에 체결되고, 라운드가 끝날 때까지 안 닿으면 자동 취소됩니다.</li>
         <li>뉴스의 실제 결과는 장 마감 때 공개되고, 그때 주가가 크게 움직입니다.</li>
         <li>같은 <TermLink id="sector">업종</TermLink> 종목은 <TermLink id="leader-stock">대장주</TermLink> 뉴스에 함께 움직입니다.</li>
-        <li><TermLink id="fee">수수료</TermLink>는 매수와 매도 모두 <TermLink id="turnover">거래대금</TermLink>의 0.20%입니다.</li>
+        <li><TermLink id="fee">수수료</TermLink>는 매수와 매도 모두 <TermLink id="turnover">거래대금</TermLink>의 0.10%이고, 팔 때는 <TermLink id="transaction-tax">증권거래세</TermLink> 0.20%가 더 붙습니다.</li>
         <li><TermLink id="sell">매도</TermLink> 대금은 바로 다시 쓸 수 있습니다(<TermLink id="settlement">결제일</TermLink>을 단순화).</li>
         <li>1<TermLink id="bp">bp</TermLink>는 0.01%입니다. 100bp가 1%입니다.</li>
         <li>밑줄 친 낱말을 누르면 뜻이 나옵니다.</li>
@@ -444,7 +444,7 @@ function OrderPanel({ stock, view, left, place, cancel, toast, intro }: { stock:
   const n = Math.floor(Number(qty) || 0);
   const mf = isLimit ? null : marketFill(book, side, n);
   const fp = isLimit ? { price: lim, slipBp: 0, best: lim } : mf ?? { price: 0, slipBp: 0, best: 0 };
-  const gross = n * fp.price, fee = feeOf(gross);
+  const gross = n * fp.price, commission = feeOf(gross), tax = side === 'sell' ? taxOf(gross) : 0, fee = commission + tax;
   const slipWon = isLimit ? 0 : Math.abs(fp.price - fp.best) * n;
   const bestBid = book.bids[0]?.price ?? null;
   const marketable = isLimit && limitOk && (side === 'buy' ? stock.price <= lim : bestBid !== null && bestBid >= lim);
@@ -507,7 +507,8 @@ function OrderPanel({ stock, view, left, place, cancel, toast, intro }: { stock:
           : <><dt>예상 체결가</dt><dd>{won(fp.price)}</dd>
             <dt><TermLink id="slippage">슬리피지</TermLink>{fp.slipBp ? ` ${fp.slipBp}bp` : ''}</dt><dd>{slipWon ? `${side === 'buy' ? '+' : '−'}${won(slipWon)}` : '없음'}</dd></>}
         <dt>주문 금액</dt><dd>{won(gross)}</dd>
-        <dt><TermLink id="fee">수수료</TermLink> 0.20%</dt><dd>{won(fee)}</dd>
+        <dt><TermLink id="fee">수수료</TermLink> 0.10%</dt><dd>{won(commission)}</dd>
+        {side === 'sell' && <><dt><TermLink id="transaction-tax">증권거래세</TermLink> 0.20%</dt><dd>{won(tax)}</dd></>}
         <dt className="total">{side === 'buy' ? (isLimit ? '묶어 둘 돈(예약금)' : '빠져나갈 돈') : '받을 돈'}</dt><dd className="total">{won(side === 'buy' ? gross + fee : Math.max(0, gross - fee))}</dd>
       </dl>
       {n > max && <p className="error">가능한 수량을 넘었어요</p>}
@@ -642,7 +643,7 @@ function Assets({ view, cancel, toast }: { view: RoomView; cancel: PlayProps['ca
         <dt><TermLink id="return-rate">수익률</TermLink></dt><dd className={`num ${dir(p.returnPct)}`}>{pct(p.returnPct)}</dd>
         <dt><TermLink id="cash">보유 현금</TermLink></dt><dd className="num">{won(p.cash)}</dd>
         <dt><TermLink id="deposit-reserved">매수 예약금</TermLink></dt><dd className="num">{won(p.reserved)}</dd>
-        <dt>낸 <TermLink id="fee">수수료</TermLink></dt><dd className="num">{won(p.fees)}</dd>
+        <dt>낸 <TermLink id="fee">수수료</TermLink>·<TermLink id="transaction-tax">세금</TermLink></dt><dd className="num">{won(p.fees)}</dd>
       </dl>
       <h3 className="h small">보유 종목 <small className="hint">· 오른쪽 숫자는 <TermLink id="unrealized-pnl">평가손익</TermLink></small></h3>
       {p.holdings.length ? <ul className="list">{p.holdings.map(h => <li key={h.code}><span>{h.name}<small>{h.qty.toLocaleString('ko-KR')}주 · 평균 {won(h.avgCost)}</small></span><span className={dir(h.pnl)}>{signedWon(h.pnl)}</span></li>)}</ul> : <p className="hint">아직 보유 종목이 없습니다.</p>}
@@ -682,7 +683,7 @@ function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => voi
     {r && <div className="panel recap-top">
       <p className="wallet-label">내 평가액 변화 {r.rankBefore !== r.rankAfter && <span className={`pill pop ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
       <p className={`delta-big ${dir(r.delta)}`} aria-label={signedWon(r.delta)}>{signedWon(delta)}</p>
-      <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 ${won(r.slippage)}(체결가에 포함)` : ''}</p>
+      <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료·세금 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 ${won(r.slippage)}(체결가에 포함)` : ''}</p>
     </div>}
     {fire && <Confetti key={view.round} />}
     {view.leaderboard.length > 1 && <div className="panel">
@@ -820,7 +821,7 @@ function TradeJournal({ view, fees, fallback }: { view: RoomView; fees: number; 
   );
   return (
     <section className="sec journal">
-      <h2 className="h"><TermLink id="trading-journal">매매일지</TermLink> <small className="hint">· 거래 {entries.length}건 · 수수료 {won(fees)}</small></h2>
+      <h2 className="h"><TermLink id="trading-journal">매매일지</TermLink> <small className="hint">· 거래 {entries.length}건 · 수수료·세금 {won(fees)}</small></h2>
       {entries.length === 0 ? <p className="hint">이번 판에는 거래가 없었습니다.</p> : <>
         <p className="hint">체결가를 그 라운드 종가와 비교했어요. 유리 {good}건 · 불리 {bad}건. 다음 판을 위해 이유를 한 줄 남겨 보세요.</p>
         <ol className="journal-list">{entries.map(e => (
