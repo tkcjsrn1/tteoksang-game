@@ -55,6 +55,51 @@ export const STOCKS: StockDef[] = [
   { code: 'G23', name: '테라젠 배관',     sector: '배관 시공', group: 'water', start: 4300, maxMoveBp: 70, linkBeta: 0.4, desc: '물 재이용 설비 배관 공사. 발주가 늘면 공사가 늡니다.' },
   { code: 'G24', name: '리베아 수처리',   sector: '하수 처리 운영', group: 'water', start: 14100, maxMoveBp: 50, linkBeta: 0.45, desc: '지자체 하수 처리장을 장기 계약으로 운영합니다. 대표적인 방어주입니다.' }
 ];
+/* ---------- 기업 정보(가상) ----------
+   shares: 발행 주식 수(주), netIncome: 지난해 순이익(억 원, 적자면 음수), dps: 지난해 주당 배당금(원).
+   모두 지어낸 숫자입니다. 시작 가격 기준 PER이 업종 성격(성장주는 높고, 방어주는 낮음)에 맞게 정했습니다. */
+export interface Fundamentals { shares: number; netIncome: number; dps: number }
+export const FUNDAMENTALS: Record<StockCode, Fundamentals> = {
+  G01: { shares: 40_000_000, netIncome: 310, dps: 0 },   G02: { shares: 30_000_000, netIncome: -120, dps: 0 },
+  G03: { shares: 50_000_000, netIncome: 290, dps: 0 },   G04: { shares: 25_000_000, netIncome: 148, dps: 0 },
+  G05: { shares: 35_000_000, netIncome: 98, dps: 0 },    G06: { shares: 42_000_000, netIncome: 476, dps: 350 },
+  G07: { shares: 18_000_000, netIncome: 72, dps: 0 },    G08: { shares: 15_000_000, netIncome: 117, dps: 200 },
+  G09: { shares: 22_000_000, netIncome: 89, dps: 0 },    G10: { shares: 16_000_000, netIncome: 93, dps: 0 },
+  G11: { shares: 14_000_000, netIncome: 31, dps: 0 },    G12: { shares: 12_000_000, netIncome: -85, dps: 0 },
+  G13: { shares: 20_000_000, netIncome: 197, dps: 300 }, G14: { shares: 30_000_000, netIncome: 147, dps: 150 },
+  G15: { shares: 13_000_000, netIncome: 114, dps: 0 },   G16: { shares: 11_000_000, netIncome: 79, dps: 0 },
+  G17: { shares: 17_000_000, netIncome: 92, dps: 0 },    G18: { shares: 15_000_000, netIncome: 50, dps: 0 },
+  G19: { shares: 21_000_000, netIncome: 104, dps: 0 },   G20: { shares: 12_000_000, netIncome: 70, dps: 0 },
+  G21: { shares: 10_000_000, netIncome: 41, dps: 0 },    G22: { shares: 19_000_000, netIncome: 108, dps: 180 },
+  G23: { shares: 26_000_000, netIncome: 86, dps: 0 },    G24: { shares: 28_000_000, netIncome: 395, dps: 450 }
+};
+export const fundOf = (code: StockCode): Fundamentals => FUNDAMENTALS[code] ?? { shares: 10_000_000, netIncome: 0, dps: 0 };
+/** 시가총액(원) = 주가 × 발행 주식 수 */
+export const marketCapWon = (code: StockCode, price: number) => price * fundOf(code).shares;
+/** PER(배) = 시가총액 ÷ 순이익. 적자면 null(계산하지 않음). 소수 첫째 자리 */
+export function perOf(code: StockCode, price: number): number | null {
+  const ni = fundOf(code).netIncome;
+  if (ni <= 0) return null;
+  return Math.round(marketCapWon(code, price) / (ni * 100_000_000) * 10) / 10;
+}
+/** 배당수익률(bp) = 주당 배당금 ÷ 주가 */
+export const dividendYieldBp = (code: StockCode, price: number) => Math.round(fundOf(code).dps * 10000 / price);
+/** 이번 판 종목으로 만든 시가총액 가중 지수. 판 시작 = 1000 */
+export const INDEX_BASE = 1000;
+export function indexValue(stocks: { code: StockCode; price: number; startPrice: number }[]): number {
+  const now = stocks.reduce((a, s) => a + marketCapWon(s.code, s.price), 0);
+  const base = stocks.reduce((a, s) => a + marketCapWon(s.code, s.startPrice), 0);
+  return base ? INDEX_BASE * now / base : INDEX_BASE;
+}
+/** 억 원 단위 금액을 "4,960억 원", "1조 2,340억 원"처럼 */
+export function formatEok(won: number): string {
+  const eok = Math.round(won / 100_000_000);
+  const jo = Math.floor(Math.abs(eok) / 10000), rest = Math.abs(eok) % 10000;
+  const sign = eok < 0 ? '−' : '';
+  if (!jo) return `${sign}${rest.toLocaleString('ko-KR')}억 원`;
+  return `${sign}${jo.toLocaleString('ko-KR')}조${rest ? ` ${rest.toLocaleString('ko-KR')}억` : ''} 원`;
+}
+
 export const LEADERS: StockCode[] = Object.values(GROUPS).map(g => g.leader);
 /** 예전 저장 데이터(종목 6개 시절)를 복구할 때 쓰는 기본 종목 */
 export const LEGACY_CODES: StockCode[] = ['G01', 'G02', 'G03', 'G04', 'G05', 'G06'];

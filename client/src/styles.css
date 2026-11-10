@@ -485,3 +485,14 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .qbook tr.bid .lvl b { color: var(--up); }
 .qbook .lvl small { font-size: 11px; color: var(--muted); }
 .qbook tr.now td:nth-child(2) { outline: 2px solid var(--ink-2, #191F28); outline-offset: -2px; }
+/* 떡상 지수 · 기업 정보 */
+.panel.index-strip { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+.index-strip > div { display: grid; gap: 2px; min-width: 0; }
+.index-strip svg { flex-shrink: 0; }
+.index-strip p { margin: 0; }
+.index-strip .idx { display: flex; align-items: baseline; gap: 8px; }
+.index-strip .idx b { font-size: 20px; }
+.index-strip .idx small { font-size: 13px; font-weight: 600; }
+.company { border-radius: 12px; background: var(--panel-3); padding: 10px 12px; }
+.company summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.company .kv { margin-top: 8px; }

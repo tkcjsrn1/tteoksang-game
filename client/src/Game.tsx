@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { BOOK_SHOW, feeOf, GROUPS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, upperLimit, type QuoteBook } from '../../shared/rules';
+import { BOOK_SHOW, dividendYieldBp, feeOf, formatEok, fundOf, GROUPS, indexValue, INDEX_BASE, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, upperLimit, type QuoteBook } from '../../shared/rules';
 import { intradayBp } from './live';
 import type { NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
 import { termById, termsIn } from '../../shared/glossary';
@@ -119,12 +119,13 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder }: PlayPr
         {view.phase === 'settling' && <div className="panel"><p className="headline">시장 결과 집계 중</p><p className="hint">체결을 확인하고 있습니다. 잠시만 기다려 주세요.</p></div>}
         {tab === 'market' && view.phase !== 'recap' && <>
           <Standing view={view} />
+          <IndexStrip view={view} />
           {(view.phase === 'news' || view.phase === 'trade') && <CurrentNews view={view} />}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send2} />}
           {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send2} />}
           <div className="panel flush">
             <div className="list-head"><span><TermLink id="sector">업종</TermLink>별 종목</span>{view.phase === 'trade' ? <span className="live-dot">실시간 시세 · 오늘 등락</span> : <span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span>}</div>
-            <SectorBoard stocks={view.stocks} defaultOpen={defaultOpenGroups(view)} pinned={coach?.no === 2 && coach.target ? [coach.target] : []}
+            <SectorBoard stocks={view.stocks} live={view.phase === 'trade'} defaultOpen={defaultOpenGroups(view)} pinned={coach?.no === 2 && coach.target ? [coach.target] : []}
               renderRow={s => <StockRow key={s.code} s={s} view={view} hint={coach?.no === 2 && coach.target === s.code} onOpen={() => setDetail(s.code)} />} />
           </div>
         </>}
@@ -270,12 +271,12 @@ function Standing({ view }: { view: RoomView }) {
 }
 /** 업종별로 묶은 종목 목록. 머리줄을 누르면 접고 펼칩니다. 접힌 업종은 종목 수와 평균 등락만 보여 줍니다.
     pinned 종목이 있는 업종(따라 하기 안내 대상)은 항상 펼칩니다. 머리줄은 버튼이라 안에 용어 링크를 넣지 않습니다. */
-function SectorBoard({ stocks, defaultOpen, pinned, renderRow, summary }: {
-  stocks: StockView[]; defaultOpen: Set<StockGroup>; pinned: StockCode[];
+function SectorBoard({ stocks, defaultOpen, pinned, renderRow, summary, live = false }: {
+  stocks: StockView[]; defaultOpen: Set<StockGroup>; pinned: StockCode[]; live?: boolean;
   renderRow: (s: StockView) => React.ReactNode; summary?: (b: ReturnType<typeof groupStocks>[number]) => React.ReactNode;
 }) {
   const [toggled, setToggled] = useState<Partial<Record<StockGroup, boolean>>>({});
-  const blocks = groupStocks(stocks);
+  const blocks = groupStocks(stocks, live);
   const isOpen = (g: StockGroup) => pinned.some(c => stockOf(c).group === g) || (toggled[g] ?? defaultOpen.has(g));
   const allOpen = blocks.every(b => isOpen(b.group));
   return (
@@ -289,7 +290,7 @@ function SectorBoard({ stocks, defaultOpen, pinned, renderRow, summary }: {
               <i className="sector-dot" style={{ background: b.color }} aria-hidden="true" />
               <b>{b.label}</b>
               <span className="sector-meta">{b.stocks.length}종목</span>
-              <span className="sector-sum">{summary ? summary(b) : avg === null ? <small className="flat">—</small> : <small className={dir(avg)}>평균 {arrow(avg)} {pctBp(avg)}</small>}</span>
+              <span className="sector-sum">{summary ? summary(b) : avg === null ? <small className="flat">—</small> : <small className={dir(avg)}>{live ? '오늘' : '평균'} {arrow(avg)} {pctBp(avg)}</small>}</span>
               <svg className={`chev sector-chev${open ? ' up' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
             </button>
             {open && <div className="board">{b.stocks.map(renderRow)}</div>}
@@ -339,6 +340,7 @@ function StockSheet({ stock, view, left, coach, onClose, place, cancel, toast }:
     <Sheet title={stock.name} onClose={onClose}>
       <p className="hint"><Rich text={`${GROUPS[stockOf(stock.code).group].label} 업종 · ${stock.sector}${stockOf(stock.code).linkBeta === 1 ? ' · 대장주' : ''}`} /></p>
       <p className="hint">{stock.desc}</p>
+      <CompanyInfo stock={stock} />
       {view.phase === 'trade' && stock.ticks
         ? <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 <small className={dir(intradayBp(stock))}>{arrow(intradayBp(stock))} {pctBp(intradayBp(stock))} <span className="hint">오늘</span></small></p>
         : <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 {stock.lastChangeBp !== null && <small className={dir(stock.lastChangeBp)}>{arrow(stock.lastChangeBp)} {pctBp(stock.lastChangeBp)}</small>}</p>}
@@ -468,6 +470,47 @@ function OrderBook({ book, price, open, onPick }: { book: QuoteBook; price: numb
       </table>
       <figcaption className="chart-note"><TermLink id="order-book">호가창</TermLink> · 가격을 누르면 그 값으로 <TermLink id="limit-order">지정가</TermLink>를 채워요. 상대방은 가상 시장이고, 수량은 1초마다 바뀌어요.</figcaption>
     </figure>
+  );
+}
+/** 떡상 지수: 이번 판 10종목의 시가총액 가중 지수(시작 1,000). 라운드 종료 값과 지금 값을 작은 그래프로 */
+function IndexStrip({ view }: { view: RoomView }) {
+  const now = indexValue(view.stocks);
+  const rounds = Math.max(0, ...view.stocks.map(s => s.history.length));
+  const closes = [INDEX_BASE, ...Array.from({ length: rounds }, (_, i) => indexValue(view.stocks.map(s => ({ ...s, price: s.history[i]?.closePrice ?? s.price }))))];
+  const prev = closes[closes.length - 1];
+  const live = view.phase === 'trade' && view.stocks.some(s => s.ticks);
+  const pts = live ? [...closes, now] : closes;
+  const chgBp = Math.round((now - prev) * 10000 / prev), totalBp = Math.round((now - INDEX_BASE) * 10000 / INDEX_BASE);
+  const W = 96, H = 30;
+  const lo = Math.min(...pts), hi = Math.max(...pts), span = hi - lo || 1;
+  const d = pts.map((v, i) => `${i ? 'L' : 'M'}${(pts.length > 1 ? i / (pts.length - 1) * W : W / 2).toFixed(1)},${(H - 3 - (v - lo) / span * (H - 6)).toFixed(1)}`).join('');
+  return (
+    <section className="panel index-strip" aria-label="떡상 지수">
+      <div>
+        <p className="hint"><TermLink id="stock-index">떡상 지수</TermLink>{live && <span className="live-dot"> 실시간</span>}</p>
+        <p className="idx num"><b>{now.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+          <small className={dir(chgBp)}>{arrow(chgBp)} {pctBp(chgBp)} {live ? '오늘' : '직전'}</small></p>
+        <p className="hint">판 시작 대비 <span className={dir(totalBp)}>{pctBp(totalBp)}</span></p>
+      </div>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true"><path d={d} fill="none" stroke={now >= INDEX_BASE ? 'var(--up)' : 'var(--down)'} strokeWidth="1.8" strokeLinejoin="round" /></svg>
+    </section>
+  );
+}
+/** 기업 정보: 시가총액, 발행 주식 수, 순이익, PER, 배당(모두 가상) */
+function CompanyInfo({ stock }: { stock: StockView }) {
+  const f = fundOf(stock.code), per = perOf(stock.code, stock.price), dy = dividendYieldBp(stock.code, stock.price);
+  return (
+    <details className="company">
+      <summary>기업 정보 · 시가총액 {formatEok(marketCapWon(stock.code, stock.price))} · PER {per === null ? '적자' : `${per}배`}</summary>
+      <dl className="kv">
+        <dt>발행 주식 수</dt><dd className="num">{(f.shares / 10000).toLocaleString('ko-KR')}만 주</dd>
+        <dt><TermLink id="market-cap">시가총액</TermLink></dt><dd className="num">{formatEok(marketCapWon(stock.code, stock.price))}</dd>
+        <dt>지난해 <TermLink id="net-income">순이익</TermLink></dt><dd className={`num ${f.netIncome < 0 ? 'down' : ''}`}>{f.netIncome < 0 ? `−${Math.abs(f.netIncome).toLocaleString('ko-KR')}억 원(적자)` : `${f.netIncome.toLocaleString('ko-KR')}억 원`}</dd>
+        <dt><TermLink id="per">PER</TermLink></dt><dd className="num">{per === null ? '적자라 계산하지 않음' : `${per}배`}</dd>
+        <dt>주당 <TermLink id="dividend">배당금</TermLink></dt><dd className="num">{f.dps ? `${f.dps.toLocaleString('ko-KR')}원 · ` : '없음'}{f.dps ? <><TermLink id="dividend-yield">배당수익률</TermLink> {pctBp(dy)}</> : null}</dd>
+      </dl>
+      <p className="hint">가상 기업의 지어낸 숫자입니다. PER은 지금 주가로 계산해서 주가가 오르면 함께 올라갑니다.</p>
+    </details>
   );
 }
 function Assets({ view, cancel, toast }: { view: RoomView; cancel: PlayProps['cancelOrder']; toast: (m: string) => void }) {

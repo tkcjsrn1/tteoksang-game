@@ -62,18 +62,20 @@ await step('혼자 연습: 업종별 종목 10개', async () => {
   const off = page.getByRole('button', { name: '안내 끄기' });
   if (await off.count()) await off.click();
   ok(await page.locator('.sector-head').count() >= 1, '업종 머리줄 없음');
+  ok(/1,000\.00/.test(await page.locator('.index-strip').innerText()), '떡상 지수가 1,000.00으로 시작하지 않음');
   await page.getByRole('button', { name: '모두 펼치기' }).click();
   ok(await page.locator('.sectors button.row').count() === 10, '종목이 10개가 아님');
 });
 
 await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
-  await page.locator('.live-dot').waitFor({ timeout: 15_000 });
+  await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
   const firstRow = page.locator('.sectors button.row').first();
-  const t0 = await page.locator('.live-dot').count();
+  const t0 = await page.locator('.list-head .live-dot').count();
   ok(t0 === 1, '실시간 시세 표시 없음');
   /* 이번 라운드 시세 그래프가 열리는지(종목 창) */
   await firstRow.click();
   await page.locator('.live-chart').waitFor({ timeout: 5_000 });
+  ok(/시가총액 .*억 원/.test(await page.locator('.company summary').innerText()), '기업 정보 없음');
   const before = await page.locator('.live-chart path').getAttribute('d');
   await page.waitForTimeout(2_500);
   const after = await page.locator('.live-chart path').getAttribute('d');

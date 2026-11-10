@@ -242,3 +242,22 @@ test('수업 2: 1분봉을 5분봉으로 묶어도 가격과 거래량이 맞다
   assert.equal(aggregate(t, 1).reduce((a, c) => a + c.volume, 0), five.reduce((a, c) => a + c.volume, 0));
   assert.deepEqual(movingAverage([1, 2, 3, 4, 5, 6], 5), [null, null, null, null, 3, 4]);
 });
+
+test('기업 정보: 시가총액·PER·배당수익률·지수 계산', async () => {
+  const { marketCapWon, perOf, dividendYieldBp, indexValue, formatEok, FUNDAMENTALS } = await import('../shared/rules');
+  assert.equal(Object.keys(FUNDAMENTALS).length, STOCKS.length);
+  assert.equal(marketCapWon('G01', 12400), 12400 * 40_000_000);
+  assert.equal(formatEok(marketCapWon('G01', 12400)), '4,960억 원');
+  assert.equal(formatEok(1_234_500_000_000), '1조 2,345억 원');
+  assert.equal(perOf('G01', 12400), 16);
+  assert.equal(perOf('G02', 18600), null, '적자면 계산하지 않음');
+  assert.equal(dividendYieldBp('G06', 10200), 343);
+  /* 시작 가격 기준 PER은 3~60배 안(적자 제외) */
+  for (const st of STOCKS) { const p = perOf(st.code, st.start); if (p !== null) assert.ok(p >= 3 && p <= 60, `${st.code} ${p}`); }
+  /* 지수: 시작 1000, 모든 종목 10% 오르면 1100, 큰 회사 영향이 더 큼 */
+  const base = [{ code: 'G01' as const, price: 12400, startPrice: 12400 }, { code: 'G11' as const, price: 6100, startPrice: 6100 }];
+  assert.equal(indexValue(base), 1000);
+  assert.ok(Math.abs(indexValue(base.map(s => ({ ...s, price: s.startPrice * 1.1 }))) - 1100) < 1e-9);
+  const bigUp = indexValue([{ ...base[0], price: 13640 }, base[1]]), smallUp = indexValue([base[0], { ...base[1], price: 6710 }]);
+  assert.ok(bigUp > smallUp);
+});
