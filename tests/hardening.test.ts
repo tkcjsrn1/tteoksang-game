@@ -89,3 +89,35 @@ test('QR용 와이파이 주소: 같은 PC 요청에만 알려 주고, 프록시
   const proxied = await fetch(`http://127.0.0.1:${port}/api/lan`, { headers: { 'x-forwarded-for': '1.2.3.4' } });
   assert.equal(proxied.status, 404);
 });
+
+test('한 방에서 오류가 나도 다른 방은 계속 진행되고 서버는 살아 있다', async () => {
+  const bad = hub.createRoom('solo'), good = hub.createRoom('solo');
+  const origErr = console.error; const logged: unknown[] = []; console.error = (...a: unknown[]) => { logged.push(a); };
+  try {
+    bad.tick = () => { throw new Error('일부러 낸 오류'); };
+    let ticked = 0; const t = good.tick.bind(good); good.tick = (n: number) => { ticked++; return t(n); };
+    (hub as unknown as { loop(): void }).loop();
+    (hub as unknown as { loop(): void }).loop();
+    assert.equal(ticked, 2, '다른 방은 계속 진행');
+    assert.equal(logged.filter(l => String((l as unknown[])[0]).includes(bad.s.code)).length, 1, '같은 방 오류는 1분에 한 번만 기록');
+    const h = await (await fetch(`http://localhost:${port}/api/health`)).json() as Record<string, unknown>;
+    assert.equal(h.ok, true);
+    assert.ok((h.errors as number) >= 2);
+    assert.equal(typeof h.uptimeSec, 'number');
+    assert.equal(typeof h.memoryMB, 'number');
+    /* 상태 확인에 방 코드나 접속 주소를 넣지 않습니다 */
+    assert.equal(JSON.stringify(h).includes(bad.s.code), false);
+  } finally { console.error = origErr; }
+});
+
+test('JSON이 아니거나 형식이 틀린 메시지는 거절하고, 연결과 서버는 유지된다', async () => {
+  const ws = new WebSocket(`ws://localhost:${port}/ws`);
+  await new Promise(r => ws.once('open', r));
+  const msgs: ServerMsg[] = [];
+  ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+  for (const raw of ['not json', 'null', '42', '[]', '{"t":1}', '{}']) ws.send(raw);
+  await new Promise(r => setTimeout(r, 200));
+  assert.equal(msgs.filter(m => m.t === 'error' && m.reason === '잘못된 요청입니다').length, 6);
+  assert.equal(ws.readyState, WebSocket.OPEN);
+  ws.close();
+});

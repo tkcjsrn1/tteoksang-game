@@ -17,4 +17,16 @@ const hub = new Hub({
 const port = await hub.listen(Number(process.env.PORT ?? 8787));
 console.log(`서버 실행 중: http://localhost:${port} (저장소: ${store.name})`);
 if (store.name === 'memory') console.log('DATABASE_URL이 없어 메모리에 저장합니다. 서버를 끄면 방이 사라집니다.');
-for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { void hub.close().then(() => process.exit(0)); });
+/* 종료 신호(배포 교체 포함)를 받으면 방 상태를 저장하고 끕니다. 10초 안에 안 끝나면 강제로 끕니다. */
+let stopping = false;
+function shutdown(code: number, why: string) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`서버 종료: ${why}`);
+  setTimeout(() => { console.error('종료가 10초를 넘어 강제로 끕니다'); process.exit(code || 1); }, 10_000).unref();
+  hub.close().then(() => process.exit(code), e => { console.error('종료 중 오류', e); process.exit(1); });
+}
+for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => shutdown(0, sig));
+/* 예상하지 못한 오류: 기록하고, 상태를 저장한 뒤 다시 시작되게 끝냅니다(Render·Docker가 다시 띄움). */
+process.on('uncaughtException', e => { console.error('처리되지 않은 오류', e); shutdown(1, 'uncaughtException'); });
+process.on('unhandledRejection', e => { console.error('처리되지 않은 Promise 거부', e); });

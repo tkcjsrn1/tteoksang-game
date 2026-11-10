@@ -33,6 +33,9 @@ export class Hub {
   private busy = new Set<string>();
   private dirty = new Set<string>();
   private lastFlush = 0;
+  private readonly startedAt = Date.now();
+  private errors = 0;
+  private lastRoomError = new Map<string, number>();
   private createLog = new Map<string, number[]>();
   now: () => number;
   constructor(private opts: HubOptions = {}) {
@@ -53,9 +56,27 @@ export class Hub {
     if (this.timer) clearInterval(this.timer);
     this.conns.forEach(c => c.ws.terminate());
     this.wss.close();
-    await new Promise(r => this.server.close(r));
+    const closed = new Promise(r => this.server.close(r));
+    this.server.closeAllConnections();   // 열려 있는 HTTP keep-alive 연결 때문에 종료가 멈추지 않게
+    await closed;
     await this.flush();
     await this.store.close();
+  }
+  /** 서버 상태 요약. 방 내용이나 접속 주소는 넣지 않습니다. */
+  health() {
+    const commit = process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? '';
+    return {
+      ok: true, store: this.store.name, rooms: this.rooms.size, connections: this.conns.size,
+      uptimeSec: Math.floor((this.now() - this.startedAt) / 1000),
+      memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      errors: this.errors, version: commit.slice(0, 7) || 'dev'
+    };
+  }
+  private logRoomError(code: string, e: unknown, now: number) {
+    const last = this.lastRoomError.get(code) ?? 0;
+    if (now - last < 60_000) return;
+    this.lastRoomError.set(code, now);
+    console.error(`방 ${code} 진행 오류`, e);
   }
   newCode() {
     for (;;) { const c = String(randomInt(100000, 1000000)); if (!this.rooms.has(c)) return c; }
@@ -72,7 +93,10 @@ export class Hub {
     const now = this.now();
     for (const room of this.rooms.values()) {
       if (this.busy.has(room.s.code)) continue;
-      const r = room.tick(now);
+      /* 한 방의 오류가 타이머 전체(=모든 방)를 멈추지 않게 방마다 따로 잡습니다. 같은 방 오류는 1분에 한 번만 기록합니다. */
+      let r: ReturnType<GameRoom['tick']>;
+      try { r = room.tick(now); }
+      catch (e) { this.errors++; this.logRoomError(room.s.code, e, now); continue; }
       if (r === 'changed') { this.dirty.add(room.s.code); this.broadcast(room); }
       else if (r === 'finished') { this.dirty.add(room.s.code); this.broadcast(room); }
       else if (r === 'settled') void this.afterSettle(room);
@@ -121,7 +145,11 @@ export class Hub {
       const t = Date.now();
       if (t - c.windowStart >= 1000) { c.windowStart = t; c.msgCount = 0; }
       if (++c.msgCount > MSG_LIMIT_PER_SEC) { if (c.msgCount === MSG_LIMIT_PER_SEC + 1) this.send(c, { t: 'error', reason: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요' }); return; }
-      try { this.onMessage(c, JSON.parse(d.toString())); } catch { this.send(c, { t: 'error', reason: '잘못된 요청입니다' }); } });
+      let m: unknown;
+      try { m = JSON.parse(d.toString()); } catch { m = null; }
+      if (!m || typeof m !== 'object' || typeof (m as { t?: unknown }).t !== 'string') { this.send(c, { t: 'error', reason: '잘못된 요청입니다' }); return; }
+      try { this.onMessage(c, m as ClientMsg); }
+      catch (e) { this.errors++; console.error('메시지 처리 오류', e); this.send(c, { t: 'error', reason: '처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요' }); } });
     ws.on('close', () => {
       this.conns.delete(c);
       if (c.room && c.token && c.role === 'player') {
@@ -205,7 +233,7 @@ export class Hub {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-    if (url.pathname === '/api/health') return this.json(res, 200, { ok: true, store: this.store.name, rooms: this.rooms.size });
+    if (url.pathname === '/api/health') return this.json(res, 200, this.health());
     /* PC에서 localhost로 열었을 때 QR에 넣을 와이파이 주소. 같은 PC에서 온 요청에만 알려 줍니다. */
     if (url.pathname === '/api/lan') return isLoopback(req.socket.remoteAddress) && !req.headers['x-forwarded-for'] ? this.json(res, 200, { addrs: lanAddresses() }) : this.json(res, 404, { error: '없음' });
     if (url.pathname === '/api/rooms' && req.method === 'POST') {
