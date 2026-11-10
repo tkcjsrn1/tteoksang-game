@@ -555,10 +555,17 @@ export class GameRoom {
   }
 
   leaderboard(): LeaderRow[] {
-    return this.s.players.map(p => ({
-      playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected,
-      value: this.value(p), returnPct: (this.value(p) / START_CASH - 1) * 100, rank: this.rankOf(p)
-    })).sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
+    const sorted = this.s.players.map(p => ({ p, value: this.value(p) }))
+      .sort((a, b) => b.value - a.value || a.p.label.localeCompare(b.p.label));
+    let rank = 0;
+    return sorted.map(({ p, value }, i) => {
+      if (i === 0 || value !== sorted[i - 1].value) rank = i + 1;
+      return {
+        playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null,
+        npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected,
+        value, returnPct: (value / START_CASH - 1) * 100, rank
+      };
+    });
   }
 
   private newsView(): RoundNews[] {

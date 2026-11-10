@@ -317,6 +317,16 @@ test('같은 평가액은 공동 순위다', () => {
   const lb = room.leaderboard();
   assert.ok(lb.every(x => x.rank === 1));
 });
+test('순위표는 평가액을 참가자당 한 번 계산하고 공동 순위 다음은 건너뛴다', t => {
+  const { room } = setup();
+  room.s.players[0].cash += 1000;
+  room.s.players[1].cash += 1000;
+  const value = t.mock.method(room, 'value');
+  const rows = room.leaderboard();
+  assert.deepEqual(rows.map(r => r.rank), [1, 1, 3, 3, 3]);
+  assert.equal(value.mock.callCount(), rows.length);
+});
+
 test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', () => {
   const { room, a } = setup({ forcedArcs: ['nuvakan', 'rate'] });
   const secretTexts = ARCS.flatMap(x => x.stages.flatMap(s => s.outcomes.map(o => o.actual)));
