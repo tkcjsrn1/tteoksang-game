@@ -1,11 +1,12 @@
 /* 소리와 숫자 연출.
    - 효과음은 파일 없이 브라우저의 WebAudio로 짧게 합성합니다(저작권·용량 걱정 없음).
    - 브라우저는 사용자가 한 번 누르기 전에는 소리를 막으므로, 첫 클릭 때 오디오를 엽니다.
-   - 소리 켜고 끄기는 이 기기에만 저장합니다. 움직임 줄이기 설정이면 숫자 애니메이션을 건너뜁니다.
-   계산 함수(countValue, revealTone)는 React와 브라우저 없이 tests/fx.test.ts에서 검사합니다. */
+   - 배경음도 WebAudio로 만듭니다(장중에만, 마감 10초 전부터 빨라짐). 진동은 지원하는 휴대폰에서만 울립니다.
+   - 소리·배경음·진동 켜고 끄기는 이 기기에만 저장합니다. 움직임 줄이기 설정이면 숫자 애니메이션을 건너뜁니다.
+   계산 함수(countValue, revealTone, fillTone, musicStep, musicBpm)는 React와 브라우저 없이 tests/fx.test.ts에서 검사합니다. */
 import { useEffect, useRef, useState } from 'react';
 
-export type Tone = 'tick' | 'book' | 'up' | 'down' | 'flat' | 'stamp' | 'win';
+export type Tone = 'tick' | 'book' | 'up' | 'down' | 'flat' | 'stamp' | 'win' | 'open' | 'close' | 'news' | 'buy' | 'sell' | 'trigger';
 
 /** 0~1 진행도에서 보여 줄 숫자. 끝으로 갈수록 천천히(ease-out) 다가가고, 끝에서는 정확히 목표값입니다. */
 export function countValue(from: number, to: number, t: number): number {
@@ -17,6 +18,10 @@ export function countValue(from: number, to: number, t: number): number {
 /** 라운드 결과 공개 때 낼 소리. 평가액이 늘면 올라가는 소리, 줄면 내려가는 소리 */
 export function revealTone(delta: number): Tone {
   return delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+}
+/** 체결 소리: 매수는 올라가는 두 음, 매도는 내려가는 두 음, 손절·익절 자동 매도는 경고음 */
+export function fillTone(side: 'buy' | 'sell', trigger?: 'stop' | 'take' | null): Tone {
+  return trigger ? 'trigger' : side === 'buy' ? 'buy' : 'sell';
 }
 
 /* ---------- 효과음 ---------- */
@@ -51,6 +56,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pointerdown', unlock);
 }
 function note(ac: AudioContext, freq: number, start: number, dur: number, type: OscillatorType, gain: number) {
+  if (dur <= 0 || gain <= 0) return;
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(0, start);
@@ -72,10 +78,99 @@ export function play(tone: Tone) {
     down:  [[523, 0, 0.14, 'triangle', 0.1], [415, 0.12, 0.14, 'triangle', 0.1], [330, 0.24, 0.26, 'triangle', 0.1]],
     flat:  [[587, 0, 0.12, 'sine', 0.08]],
     stamp: [[110, 0, 0.18, 'square', 0.12], [70, 0.02, 0.2, 'sine', 0.2]],
-    win:   [[523, 0, 0.14, 'triangle', 0.12], [659, 0.12, 0.14, 'triangle', 0.12], [784, 0.24, 0.14, 'triangle', 0.12], [1047, 0.36, 0.4, 'triangle', 0.14]]
+    win:   [[523, 0, 0.14, 'triangle', 0.12], [659, 0.12, 0.14, 'triangle', 0.12], [784, 0.24, 0.14, 'triangle', 0.12], [1047, 0.36, 0.4, 'triangle', 0.14]],
+    /* 장 시작 종: 맑은 종소리 두 번. 종은 기본음에 높은 배음을 얹어 만듭니다 */
+    open:  [[1175, 0, 0.9, 'sine', 0.12], [2350, 0, 0.5, 'sine', 0.04], [1175, 0.32, 1.1, 'sine', 0.12], [2350, 0.32, 0.6, 'sine', 0.04]],
+    /* 장 마감 종: 낮은 종소리 세 번 */
+    close: [[784, 0, 0.7, 'sine', 0.12], [1568, 0, 0.35, 'sine', 0.04], [784, 0.28, 0.7, 'sine', 0.12], [1568, 0.28, 0.35, 'sine', 0.04], [784, 0.56, 1.2, 'sine', 0.12], [1568, 0.56, 0.5, 'sine', 0.04]],
+    /* 속보: 짧게 두 번 */
+    news:  [[988, 0, 0.09, 'square', 0.06], [988, 0.14, 0.09, 'square', 0.06], [1319, 0.28, 0.2, 'square', 0.06]],
+    buy:   [[587, 0, 0.08, 'triangle', 0.13], [880, 0.07, 0.14, 'triangle', 0.13]],
+    sell:  [[880, 0, 0.08, 'triangle', 0.13], [587, 0.07, 0.14, 'triangle', 0.13]],
+    trigger: [[740, 0, 0.1, 'sawtooth', 0.07], [554, 0.12, 0.1, 'sawtooth', 0.07], [740, 0.24, 0.1, 'sawtooth', 0.07], [554, 0.36, 0.22, 'sawtooth', 0.07]]
   };
   for (const [f, at, d, type, g] of seq[tone]) note(ac, f, t + at, d, type, g);
 }
+
+/* ---------- 진동 ---------- */
+const HAPTIC_KEY = 'tteoksang:haptic';
+let hapticOn = (() => { try { return localStorage.getItem(HAPTIC_KEY) !== 'off'; } catch { return true; } })();
+const hapticListeners = new Set<(on: boolean) => void>();
+export type Buzz = 'fill' | 'trigger' | 'news' | 'bell';
+/** 진동 길이(ms). 배열이면 진동·쉼·진동 순서입니다 */
+export const BUZZ: Record<Buzz, number | number[]> = { fill: 25, trigger: [70, 50, 70], news: [30, 40, 30], bell: 40 };
+export function buzz(kind: Buzz) {
+  if (!hapticOn || typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+  try { navigator.vibrate(BUZZ[kind]); } catch { /* 막혀 있으면 넘어갑니다 */ }
+}
+export function setHaptic(on: boolean) {
+  hapticOn = on;
+  try { localStorage.setItem(HAPTIC_KEY, on ? 'on' : 'off'); } catch { /* 저장 불가 환경 */ }
+  hapticListeners.forEach(f => f(on));
+  if (on) buzz('fill');
+}
+export function useHapticSetting(): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(hapticOn);
+  useEffect(() => { hapticListeners.add(setOn); return () => { hapticListeners.delete(setOn); }; }, []);
+  return [on, setHaptic];
+}
+
+/* ---------- 배경음 ----------
+   네 마디(가단조 → 바장조 → 다장조 → 사장조)를 여덟 박씩 도는 조용한 분산화음입니다. 파일 없이 그때그때 만듭니다. */
+const MUSIC_KEY = 'tteoksang:music';
+let musicOn = (() => { try { return localStorage.getItem(MUSIC_KEY) !== 'off'; } catch { return true; } })();
+const musicListeners = new Set<(on: boolean) => void>();
+const CHORDS: number[][] = [
+  [220.00, 261.63, 329.63, 392.00],   // Am7
+  [174.61, 220.00, 261.63, 329.63],   // Fmaj7
+  [130.81, 196.00, 261.63, 329.63],   // C
+  [196.00, 246.94, 293.66, 392.00]    // G
+];
+const ARP = [0, 1, 2, 3, 2, 1, 2, 3];
+export const MUSIC_STEPS = CHORDS.length * ARP.length;
+/** i번째 박에 낼 음(Hz). bass는 마디 첫 박에만 깔리는 낮은 음입니다 */
+export function musicStep(i: number): { freq: number; bass: number | null } {
+  const k = ((i % MUSIC_STEPS) + MUSIC_STEPS) % MUSIC_STEPS;
+  const chord = CHORDS[Math.floor(k / ARP.length)], beat = k % ARP.length;
+  return { freq: chord[ARP[beat]] * 2, bass: beat === 0 ? chord[0] / 2 : null };
+}
+/** 박자 빠르기. 평소 84, 마감이 가까우면(urgent) 132 */
+export const musicBpm = (urgent: boolean) => urgent ? 132 : 84;
+let musicTimer: ReturnType<typeof setInterval> | null = null;
+let musicNext = 0, musicI = 0, musicUrgent = false, musicWanted = false;
+function musicTick() {
+  const ac = audio();
+  if (!ac || ac.state !== 'running') return;
+  if (musicNext < ac.currentTime) musicNext = ac.currentTime + 0.05;
+  /* 0.3초 앞까지만 미리 예약해서, 빠르기를 바꾸면 곧바로 반영되게 합니다 */
+  while (musicNext < ac.currentTime + 0.3) {
+    const beat = 60 / musicBpm(musicUrgent) / 2;
+    const { freq, bass } = musicStep(musicI++);
+    note(ac, freq, musicNext, beat * 1.8, 'sine', 0.028);
+    if (bass) note(ac, bass, musicNext, beat * 7, 'triangle', 0.04);
+    if (musicUrgent && musicI % 2 === 0) note(ac, freq * 2, musicNext, beat * 0.6, 'sine', 0.012);
+    musicNext += beat;
+  }
+}
+function syncMusic() {
+  const should = musicWanted && musicOn && enabled;
+  if (should && !musicTimer) { musicNext = 0; musicTimer = setInterval(musicTick, 100); musicTick(); }
+  if (!should && musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+}
+/** 장중에 켜고, 그 밖에는 끕니다. urgent면 박자가 빨라집니다. 효과음을 끄면 배경음도 함께 멈춥니다. */
+export function setMusicScene(playing: boolean, urgent = false) { musicWanted = playing; musicUrgent = urgent; syncMusic(); }
+export function setMusic(on: boolean) {
+  musicOn = on;
+  try { localStorage.setItem(MUSIC_KEY, on ? 'on' : 'off'); } catch { /* 저장 불가 환경 */ }
+  musicListeners.forEach(f => f(on));
+  syncMusic();
+}
+export function useMusicSetting(): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(musicOn);
+  useEffect(() => { musicListeners.add(setOn); return () => { musicListeners.delete(setOn); }; }, []);
+  return [on, setMusic];
+}
+listeners.add(() => syncMusic());
 
 /* ---------- 숫자 카운트업 ---------- */
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;

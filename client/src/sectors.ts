@@ -1,6 +1,6 @@
 /* 종목 목록을 업종별로 묶고, 어떤 업종을 처음부터 펼쳐 둘지 정합니다.
    화면(React)과 떼어 두어 테스트할 수 있게 했습니다. */
-import { GROUPS, stockOf, type StockGroup } from '../../shared/rules';
+import { GROUPS, STOCKS, stockOf, type StockGroup } from '../../shared/rules';
 import type { RoomView, StockCode, StockView } from '../../shared/types';
 import { intradayBp } from './live';
 
@@ -40,4 +40,10 @@ export function defaultOpenGroups(view: RoomView): Set<StockGroup> {
     ...(view.portfolio?.orders.map(o => o.code) ?? [])
   ]);
   return new Set([...codes].filter(c => stockOf(c)).map(c => stockOf(c).group));
+}
+
+/** 업종 안에서 몇 번째 기업인지(0~3). 로고 테두리 모양을 고릅니다 */
+export function logoVariant(code: string): number {
+  const s = STOCKS.find(x => x.code === code);
+  return s ? STOCKS.filter(x => x.group === s.group).findIndex(x => x.code === code) : 0;
 }

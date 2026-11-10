@@ -514,3 +514,29 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 /* 테마 전환 버튼 */
 .logo-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .theme-btn { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--panel-2); color: var(--fg-3); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+
+/* 기업 로고 */
+.avatar svg { display: block; }
+/* 설정(도움말 안) */
+.settings { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: var(--panel-3); }
+.settings input[role=switch] { width: 44px; height: 26px; appearance: none; -webkit-appearance: none; border-radius: 13px; background: var(--chev); position: relative; flex: none; cursor: pointer; transition: background .15s; }
+.settings input[role=switch]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.settings input[role=switch]:checked { background: var(--led); }
+.settings input[role=switch]:checked::after { transform: translateX(18px); }
+/* 순위 변화: 직전 순위 자리에서 지금 자리로 미끄러집니다 */
+.rank-moves { display: grid; margin-top: 6px; }
+.rank-moves li { display: grid; grid-template-columns: 18px minmax(0, 1fr) 34px auto; gap: 10px; align-items: center; height: 38px; padding-inline: 8px; border-radius: 8px; animation: rank-slide .7s cubic-bezier(.2, .9, .3, 1) .35s both; }
+.rank-moves li.me { background: var(--led-tint); }
+.rank-moves .r { font-weight: 800; color: var(--faint); }
+.rank-moves b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-moves .mv { font-size: 12px; font-weight: 700; text-align: right; }
+.rank-moves .ret { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+@keyframes rank-slide { from { transform: translateY(var(--from, 0)); } to { transform: none; } }
+/* 폭죽 */
+.confetti { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+.confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; opacity: 0; animation: confetti-fall 2s cubic-bezier(.3, .6, .6, 1) both; }
+@keyframes confetti-fall { 0% { transform: translateY(0) rotate(0); opacity: 1; } 85% { opacity: 1; } 100% { transform: translateY(105vh) rotate(calc(var(--rot, 180deg) + 540deg)); opacity: 0; } }
+/* 장중 그래프 십자선 */
+.probe { margin: 0; font-size: 13px; min-height: 20px; }
+.probe-area { touch-action: pan-y; cursor: crosshair; }
+@media (prefers-reduced-motion: reduce) { .confetti { display: none; } .rank-moves li { animation: none; } }

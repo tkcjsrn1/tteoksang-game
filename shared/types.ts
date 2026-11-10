@@ -85,6 +85,8 @@ export interface LeaderRow {
   /** NPC의 주문 규칙 설명. 사람은 null */
   npcRule: string | null;
   value: number; returnPct: number; rank: number;
+  /** 직전 라운드가 끝났을 때의 순위(결과 화면의 순위 변화 표시용). 첫 라운드 전에는 rank와 같습니다 */
+  prevRank: number;
 }
 export interface Contribution { code: StockCode; name: string; qty: number; won: number }
 export interface RoundResult {
