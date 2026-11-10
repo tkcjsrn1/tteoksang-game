@@ -45,7 +45,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
       <dl className="kv">
         <dt>내 참가 코드</dt><dd>{view.you.label ?? '관전 중'}</dd>
         <dt>시작 자금</dt><dd className="num">{won(view.startCash)}</dd>
-        <dt>진행</dt><dd>{cfg.rounds}라운드 · 뉴스 {cfg.news}초, 주문 {cfg.trade}초, 결과 {cfg.recap}초</dd>
+        <dt>진행</dt><dd>{view.stocks.length}종목 · {view.totalRounds}라운드 · 뉴스 {cfg.news}초, 장 {view.tradeSeconds ?? cfg.trade}초, 결과 {cfg.recap}초</dd>
       </dl>
       <h2 className="h">입장 {view.humanCount}/{view.maxPlayers}명 + NPC 3명</h2>
       <ul className="people">{humans.map(p => <li key={p.playerId} className={p.connected ? '' : 'off'}>{p.label}{p.playerId === view.you.id ? ' (나)' : ''}{!p.connected ? ' · 접속 끊김' : ''}</li>)}</ul>
@@ -54,7 +54,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
         : <p className="hint">{view.mode === 'academic' ? '운영자가 시작하면 자동으로 넘어갑니다.' : '방장이 시작하면 자동으로 넘어갑니다.'}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <ul className="rules">
-        <li>뉴스를 보고, 주문을 예약하면, 마감 때 직전 종료가로 전량 체결됩니다.</li>
+        <li>시장가 주문은 현재 호가로 바로 체결됩니다. 지정가 주문은 가격 조건을 충족하면 체결됩니다.</li>
         <li>뉴스는 단서일 뿐입니다. 시장 기대와 실제 결과의 차이가 주가를 움직입니다.</li>
         <li>판을 끝내면 같은 멤버로 바로 다시 할 수 있습니다.</li>
       </ul>
@@ -140,7 +140,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send} />}
           {isPlayer && view.prediction && view.phase === 'trade' && <Prediction view={view} send={send} />}
           <div className="panel flush">
-            <div className="list-head"><span><TermLink id="sector">업종</TermLink>별 종목</span>{view.phase === 'trade' ? <span className="live-dot">실시간 시세 · 오늘 등락</span> : <span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span>}</div>
+            <div className="list-head"><span><TermLink id="sector">업종</TermLink>별 종목 {view.stocks.length}개</span>{view.phase === 'trade' ? <span className="live-dot">실시간 시세 · 오늘 등락</span> : <span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span>}</div>
             <SectorBoard stocks={view.stocks} live={view.phase === 'trade'} defaultOpen={defaultOpenGroups(view)} pinned={coach?.no === 2 && coach.target ? [coach.target] : []}
               renderRow={s => <StockRow key={s.code} s={s} view={view} hint={coach?.no === 2 && coach.target === s.code} onOpen={() => setDetail(s.code)} />} />
           </div>

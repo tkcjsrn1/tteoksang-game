@@ -33,7 +33,7 @@ export const TERMS: Term[] = [
   { id: 'stock', term: '주식', en: 'Stock', category: 'basic',
     short: '회사의 소유권을 잘게 나눈 조각',
     body: '주식 1주를 가지면 그 회사의 아주 작은 주인이 됩니다. 회사가 잘되면 주식의 가치가 오르고, 이익 일부를 배당으로 받기도 합니다.',
-    game: '게임 속 30개 기업은 모두 지어낸 가상 기업입니다. 한 판에는 그중 10개가 나옵니다.',
+    game: '게임 속 30개 기업은 모두 지어낸 가상 기업입니다. 혼자 연습과 친구 대전에서는 판을 시작할 때 10개, 20개, 30개 중 고를 수 있습니다.',
     match: ['주식'], related: ['share-price', 'market-cap', 'shareholder'] },
   { id: 'share-price', term: '주가', category: 'basic',
     short: '주식 1주가 거래되는 가격',

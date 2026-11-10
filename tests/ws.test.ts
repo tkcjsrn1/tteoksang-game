@@ -56,6 +56,42 @@ async function advance(room: GameRoom, watchers: Client[]) {
   await until(() => watchers.every(w => w.view?.round === room.s.round && w.view?.phase === room.s.phase && w.view?.status === room.s.status));
 }
 
+test('혼자 연습은 선택한 종목 수·라운드·장 시간을 적용하고 재대전에도 유지한다', async () => {
+  const settings = { stocks: 30, rounds: 3, trade: 45 };
+  const { code } = await create({ mode: 'solo', seed: 5, settings });
+  const room = hub.rooms.get(code)!;
+  const player = await new Client().connect();
+  try {
+    await player.hello(code);
+    assert.equal(player.view!.stocks.length, 30);
+    assert.equal(player.view!.totalRounds, 3);
+    await advance(room, [player]);
+    assert.equal(player.view!.phaseSeconds, 45);
+    const restored = new GameRoom(JSON.parse(JSON.stringify(room.s)));
+    assert.equal(restored.config.trade, 45);
+    assert.equal(restored.config.rounds, 3);
+    assert.equal(restored.stocks.length, 30);
+    while (room.s.status === 'playing') await advance(room, [player]);
+    assert.equal(room.s.round, 3);
+    player.send({ t: 'rematch' });
+    await until(() => !!player.view?.nextRoomCode);
+    const next = hub.rooms.get(player.view!.nextRoomCode!)!;
+    assert.deepEqual(next.s.settings, settings);
+    assert.equal(next.stocks.length, 30);
+  } finally {
+    player.close();
+  }
+});
+
+test('범위를 벗어난 게임 설정은 방을 만들기 전에 거절한다', async () => {
+  const count = hub.rooms.size;
+  for (const settings of [{ stocks: 31 }, { rounds: '5' }, { trade: 0 }, { unknown: 1 }, null]) {
+    const r = await fetch(`http://localhost:${port}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode: 'solo', settings }) });
+    assert.equal(r.status, 400);
+  }
+  assert.equal(hub.rooms.size, count);
+});
+
 test('정산 중인 방은 서버 시작 후 결과를 공개하고 다음 라운드로 진행한다', async () => {
   let now = 1_000_000;
   const room = GameRoom.create({ code: '111111', mode: 'solo', now, seed: 5 });

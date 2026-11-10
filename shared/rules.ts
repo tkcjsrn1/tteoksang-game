@@ -1,5 +1,5 @@
 /* 가격과 주문 규칙. 정수만 사용합니다. 100bp = 1%p */
-import type { EventImpact, GameMode, Holding, Order, PriceBreakdown, Side, StockCode } from './types';
+import type { EventImpact, GameMode, Holding, Order, PriceBreakdown, RoomSettings, Side, StockCode } from './types';
 
 export const DISCLAIMER = '게임용 가상 정보이며 투자 조언이 아닙니다';
 export const START_CASH = 10_000_000;
@@ -8,16 +8,20 @@ export const MARKET_MAX_BP = 50;
 export const STOCK_MAX_BP = 150;
 export const FEE_BP = 20;
 
-/* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 한 라운드를 2분 넘게 둡니다(2026-11 결정). */
+/* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 기본 라운드를 2분 넘게 둡니다(2026-11 결정). */
 export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; predictions: boolean; report: boolean; label: string }> = {
   friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 2, predictions: false, report: false, label: '친구 대전' },
   solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 2, predictions: false, report: false, label: '혼자 연습' },
   academic: { rounds: 10, news: 20, trade: 90, recap: 25, maxPlayers: 60, minToStart: 1, arcs: 4, cards: 5, predictions: true,  report: true,  label: '학술제 대전' }
 };
 
+export const ROOM_OPTIONS: Record<keyof RoomSettings, readonly number[]> = {
+  stocks: [10, 20, 30], rounds: [3, 5, 10], trade: [45, 60, 90]
+};
+
 /* 종목 30개 = 업종 6개 × 5종목. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
    같은 업종 종목은 대표 종목 뉴스에 linkBeta 비율만큼 함께 움직입니다(업종 동조화).
-   한 판에는 대표 종목 6개 + 같은 업종 종목 4개, 모두 10개가 나옵니다(server/src/plan.ts pickStocks).
+   한 판에는 대표 종목 6개와 방 설정으로 정한 수의 관련 종목이 나옵니다(server/src/plan.ts pickStocks).
    모든 기업은 지어낸 가상 기업입니다. */
 export type StockGroup = 'power' | 'storage' | 'cold' | 'bio' | 'stage' | 'water';
 export const GROUPS: Record<StockGroup, { label: string; leader: StockCode; color: string }> = {
