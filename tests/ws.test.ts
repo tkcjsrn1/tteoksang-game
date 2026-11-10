@@ -4,6 +4,7 @@ import { after, before, test } from 'node:test';
 import WebSocket from 'ws';
 import { Hub } from '../server/src/hub';
 import { GameRoom } from '../server/src/room';
+import { MemoryStore, type Store } from '../server/src/store';
 import type { ClientMsg, RoomView, ServerMsg, StockCode } from '../shared/types';
 
 let hub: Hub, port: number, clock = 1_000_000;
@@ -54,6 +55,87 @@ async function advance(room: GameRoom, watchers: Client[]) {
   await until(() => `${room.s.round}:${room.s.phase}:${room.s.status}` !== from && room.s.phase !== 'settling');
   await until(() => watchers.every(w => w.view?.round === room.s.round && w.view?.phase === room.s.phase && w.view?.status === room.s.status));
 }
+
+test('정산 중인 방은 서버 시작 후 결과를 공개하고 다음 라운드로 진행한다', async () => {
+  let now = 1_000_000;
+  const room = GameRoom.create({ code: '111111', mode: 'solo', now, seed: 5 });
+  const player = room.join(null, now).token;
+  room.start(now);
+  room.tick(room.s.phaseEndsAt!);
+  const orderAt = room.s.live!.startedAt;
+  assert.equal(room.placeOrder(player, 'buy', 'G01', 'buy', 10, orderAt).ok, true);
+  now = room.s.phaseEndsAt!;
+  assert.equal(room.tick(now), 'settled');
+  const cash = room.player(player)!.cash;
+  const store = new MemoryStore();
+  await store.saveRoom(room.s);
+  const restarted = new Hub({ store, now: () => now });
+  await restarted.listen(0);
+  try {
+    const restored = restarted.rooms.get(room.s.code)!;
+    await until(() => restored.s.phase === 'recap', 1000);
+    assert.deepEqual(restored.s.settled, [1]);
+    assert.equal(restored.player(player)!.cash, cash);
+    assert.equal(restored.player(player)!.holdings.G01?.qty, 10);
+    assert.equal(restored.view(player, 'player', now).lastResult?.round, 1);
+    now = restored.s.phaseEndsAt!;
+    await until(() => restored.s.round === 2);
+    assert.equal(restored.s.phase, 'news');
+  } finally {
+    await restarted.close();
+  }
+});
+
+test('정산은 이전 방 저장이 끝난 뒤 저장하고, 성공할 때까지 결과를 숨긴다', async () => {
+  let now = 1_000_000;
+  function signal() {
+    let resolve!: () => void;
+    const promise = new Promise<void>(done => { resolve = done; });
+    return { promise, resolve };
+  }
+  const saveStarted = signal();
+  const releaseSave = signal();
+  const releaseSettlement = signal();
+  let settlements = 0;
+  const memory = new MemoryStore();
+  const store: Store = memory;
+  const saveRoom = memory.saveRoom.bind(memory);
+  store.saveRoom = async state => {
+    if (state.phase !== 'trade') return saveRoom(state);
+    const snapshot = structuredClone(state);
+    saveStarted.resolve();
+    await releaseSave.promise;
+    await saveRoom(snapshot);
+  };
+  store.saveSettlement = async (_code, _round, state) => {
+    settlements++;
+    await releaseSettlement.promise;
+    await saveRoom(state);
+  };
+  const savingHub = new Hub({ store, now: () => now });
+  await savingHub.listen(0);
+  try {
+    const room = savingHub.createRoom('solo', { seed: 5 });
+    room.join(null, now);
+    room.start(now);
+    now = room.s.phaseEndsAt!;
+    room.tick(now);
+    await saveStarted.promise;
+    now = room.s.phaseEndsAt!;
+    await until(() => room.s.phase === 'settling');
+    assert.equal(settlements, 0, '진행 중인 이전 저장을 기다려야 함');
+    releaseSave.resolve();
+    await until(() => settlements === 1);
+    assert.equal(room.s.phase, 'settling');
+    releaseSettlement.resolve();
+    await until(() => room.s.phase === 'recap');
+    assert.deepEqual(memory.rooms.get(room.s.code)?.settled, [1]);
+  } finally {
+    releaseSave.resolve();
+    releaseSettlement.resolve();
+    await savingHub.close();
+  }
+});
 
 test('두 기기가 같은 방에서 뉴스 → 주문 → 체결 → 그래프 → 최종 순위까지 끝낸다', async () => {
   const { code } = await create({ mode: 'friend', seed: 11, forcedArcs: ['nuvakan', 'heatwave'], forced: { 'nu-1': 'pass', 'nu-2a': 'approved', 'nu-3a': 'short' } });

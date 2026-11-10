@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import pg from 'pg';
+import { Hub } from '../server/src/hub';
 import { GameRoom } from '../server/src/room';
 import { PostgresStore } from '../server/src/store';
 
@@ -37,15 +37,25 @@ test('방 상태 저장·복구, 정산과 주문 기록의 중복 방지', asyn
   await store.recordOrder('777777', pid, 'req-1', { qty: 10 });
   const loaded = await store.loadActive();
   const restored = new GameRoom(loaded.find(s => s.code === '777777')!);
-  assert.equal(restored.player(a)!.orders.G01!.qty, 10, '서버를 다시 켜도 주문 유지');
-  restored.tick(restored.s.phaseEndsAt!);
+  assert.equal(restored.player(a)!.holdings.G01?.qty, 10, '저장 후에도 시장가 체결을 유지');
+  assert.equal(restored.player(a)!.fills.length, 1);
+  const closeAt = restored.s.phaseEndsAt!;
+  assert.equal(restored.tick(closeAt), 'settled');
   await store.saveSettlement('777777', 1, restored.s);
-  await store.saveSettlement('777777', 1, restored.s);
-  restored.beginRecap(0);
-  assert.equal(restored.player(a)!.holdings.G01!.qty, 10);
-  const c = new pg.Client({ connectionString: url }); await c.connect();
-  assert.equal((await c.query(`SELECT count(*)::int n FROM settlements WHERE room_code='777777'`)).rows[0].n, 1);
-  assert.equal((await c.query(`SELECT count(*)::int n FROM order_events WHERE room_code='777777' AND request_id='req-1'`)).rows[0].n, 1);
-  await c.end();
-  await store.close();
+
+  const restarted = new Hub({ store, now: () => closeAt });
+  await restarted.listen(0);
+  try {
+    const resumed = restarted.rooms.get('777777')!;
+    const deadline = Date.now() + 3000;
+    while (resumed.s.phase === 'settling' && Date.now() < deadline) await new Promise(r => setTimeout(r, 10));
+    assert.equal(resumed.s.phase, 'recap', '저장된 정산 상태에서 결과 공개로 넘어감');
+    assert.deepEqual(resumed.s.settled, [1]);
+    assert.equal(resumed.player(a)!.holdings.G01?.qty, 10);
+    assert.equal(resumed.player(a)!.fills.length, 1);
+    assert.equal((await store.pool.query(`SELECT count(*)::int n FROM settlements WHERE room_code='777777'`)).rows[0].n, 1);
+    assert.equal((await store.pool.query(`SELECT count(*)::int n FROM order_events WHERE room_code='777777' AND request_id='req-1'`)).rows[0].n, 1);
+  } finally {
+    await restarted.close();
+  }
 });
