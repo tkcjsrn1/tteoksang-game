@@ -182,19 +182,20 @@ await step('비용 안내: 살 때는 수수료만, 팔 때는 거래세까지',
 });
 
 await step('시장가 매수: 바로 체결', async () => {
-  const go = page.locator('button.go');
-  await page.getByRole('button', { name: '25%', exact: true }).click();
+  const sheet = page.locator('.sheet'), go = sheet.locator('button.go');
+  await sheet.locator('.pcts').first().getByRole('button', { name: '25%', exact: true }).click();
   ok(await go.isEnabled(), '주문 버튼이 꺼져 있음');
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
-  const chart = page.locator('.live-chart');
+  /* 그래프 종류 버튼은 종목 창 위쪽에 있습니다(차트 안이 아님) */
+  const chart = page.locator('.live-chart'), kinds = page.getByRole('group', { name: '그래프 종류' });
   await chart.locator('.chart-fill').first().waitFor();
   await chart.locator('.chart-events summary').click();
   ok(/매수 .*주 · .*원/.test(await chart.locator('.chart-events ul').innerText()), '체결 가격과 수량이 표시되지 않음');
-  await chart.getByRole('button', { name: '10초봉' }).click();
+  await kinds.getByRole('button', { name: '10초봉' }).click();
   ok(await chart.locator('.chart-fill').first().isVisible(), '봉 차트에서 체결 표시가 사라짐');
-  await chart.getByRole('button', { name: '선(1초)' }).click();
+  await kinds.getByRole('button', { name: '1초' }).click();
 });
 
 await step('손절·익절 걸고 해제', async () => {
@@ -283,6 +284,10 @@ await step('대기실: 내 이름 바꾸기', async () => {
 });
 
 await step('용어 설명 창 열고 닫기', async () => {
+  /* 용어 사전에서 설명을 펼치면 관련 용어가 점선 버튼으로 나옵니다 */
+  await page.goto(base + '/#/glossary');
+  await page.getByPlaceholder(/용어 검색/).fill('슬리피지');
+  await page.locator('.term-row').first().click();
   await page.locator('button.gl-term').first().click();
   const sheet = page.locator('.term-sheet');
   await sheet.waitFor();
