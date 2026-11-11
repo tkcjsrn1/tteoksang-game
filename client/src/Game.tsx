@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { BOOK_SHOW, LABEL_MAX, dividendYieldBp, feeOf, taxOf, formatEok, fundOf, GROUPS, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, type QuoteBook } from '../../shared/rules';
 import { intradayBp } from './live';
 import { buildJournal, journalKey, parseNotes } from './journal';
-import type { ClientMsg, NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
+import type { CardView, ClientMsg, NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
 import { termById, termsIn } from '../../shared/glossary';
 import { navigate } from './App';
 import { coachStep, type CoachStep } from './coach';
@@ -328,12 +328,33 @@ function CurrentNews({ view, onOpen }: { view: RoomView; onOpen?: (code: StockCo
 }
 function Card({ view, send }: { view: RoomView; send: (m: ClientMsg) => void }) {
   const c = view.card!;
+  /* 고른 즉시 결과 창을 띄웁니다. 닫은 카드는 라운드가 바뀔 때까지 다시 뜨지 않습니다. */
+  const [closed, setClosed] = useState('');
+  const mine = c.answered ? c.options.find(o => o.key === c.answered) ?? null : null;
+  const key = `${view.round}:${c.id}`;
   return (
     <div className="card-box">
       <h3>{c.title}</h3><p><Rich text={c.body} /></p>
-      <div className="seg">{c.options.map(o => <button key={o.key} aria-pressed={c.answered === o.key} onClick={() => send({ t: 'card', choice: o.key })}>{o.key}. {o.label}</button>)}</div>
-      <p className="hint">{c.answered ? '판단을 저장했습니다. 마감 전까지 바꿀 수 있습니다. 주문은 주문 패널에서 따로 확정합니다.' : '응답은 판단 기록으로만 저장됩니다. 주문은 주문 패널에서 따로 확정합니다.'}</p>
+      <div className="seg">{c.options.map(o => <button key={o.key} aria-pressed={c.answered === o.key} disabled={!!c.answered} onClick={() => send({ t: 'card', choice: o.key })}>{o.key}. {o.label}</button>)}</div>
+      {mine && c.feedback
+        ? <p className="card-done">내 판단 <b>{mine.key}. {mine.label}</b></p>
+        : <p className="hint">한 번 고르면 바꿀 수 없고, 고르면 바로 결과가 나옵니다. 응답은 판단 기록으로만 저장되며 주문은 주문 패널에서 따로 확정합니다.</p>}
+      {mine && c.feedback && closed !== key && <CardResult card={c} mine={mine} onClose={() => setClosed(key)} />}
     </div>
+  );
+}
+/** 돌발 카드를 고른 뒤 바로 뜨는 결과 창. 어떤 판단이었는지와 그 이유를 알려 줍니다. */
+function CardResult({ card, mine, onClose }: { card: CardView; mine: { key: 'A' | 'B'; label: string }; onClose: () => void }) {
+  useEffect(() => { play('stamp'); buzz('trigger'); }, []);
+  return (
+    <Sheet title="판단 결과" onClose={onClose}>
+      <p className="news-meta"><span className="chip soft">{card.title}</span><span className="chip">{card.concept}</span></p>
+      <p className="card-pick">내 판단 <b>{mine.key}. {mine.label}</b></p>
+      <p className="card-feedback"><Rich text={card.feedback ?? ''} /></p>
+      <p className="hint">점수는 아니에요. 판단 기록은 판이 끝난 뒤 보고서에 모아 보여 드립니다.</p>
+      <button className="primary" onClick={onClose}>알겠어요</button>
+      <Disclaimer />
+    </Sheet>
   );
 }
 /** 내 평가액 구역. 관전자에게는 상위 순위만 보여 줍니다. */

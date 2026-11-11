@@ -177,6 +177,12 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .round-tag { color: var(--muted); font-size: 13px; font-weight: 700; padding: 12px var(--gutter-r) 0 var(--gutter-l); }
 .card-box { background: var(--panel); border: 2px solid var(--led); padding: 16px var(--gutter-r) 16px var(--gutter-l); display: flex; flex-direction: column; gap: 8px; }
 .card-box h3 { font-size: 16px; font-weight: 800; color: var(--fg); }
+.card-box .seg button:disabled { opacity: 1; }
+.card-box .seg button:disabled:not([aria-pressed="true"]) { opacity: .45; }
+.card-done { font-size: 13px; color: var(--muted); }
+.card-done b, .card-pick b { color: var(--fg); }
+.card-pick { font-size: 15px; font-weight: 700; }
+.card-feedback { font-size: 14px; line-height: 1.65; background: var(--panel-2); border-left: 3px solid var(--led); padding: 10px 12px; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
 .seg button { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 8px; min-width: 0; font-weight: 600; }
 .seg button[aria-pressed=true] { background: var(--led-soft); color: var(--led-2); border-color: var(--led); font-weight: 700; }
