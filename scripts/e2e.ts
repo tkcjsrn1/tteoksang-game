@@ -10,7 +10,9 @@ import { MODES } from '../shared/rules';
 import { Hub } from '../server/src/hub';
 
 /* 단계 시간을 줄여 한 라운드를 몇 초 안에 끝냅니다(서버 안에서만). */
-for (const m of Object.values(MODES)) { m.news = 2; m.trade = 25; m.recap = 30; }
+/* 주문 시간은 장중 단계(시세·호가·주문·손절·지정가)를 다 해 볼 만큼 줍니다.
+   장중 속보는 주문 시간의 절반쯤에 뜨므로, 그보다 길어야 속보까지 확인할 수 있습니다. */
+for (const m of Object.values(MODES)) { m.news = 2; m.trade = 70; m.recap = 30; }
 
 const OUT = path.resolve('e2e-output');
 const W = 390;
@@ -29,10 +31,15 @@ const ignorable = (t: string) => /fonts\.(googleapis|gstatic)\.com|ERR_NAME_NOT_
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
 page.on('console', m => { if (m.type() === 'error' && !ignorable(m.text())) errors.push(`console: ${m.text()}`); });
 
-/* 장중 속보 팝업은 화면을 덮습니다. 단계를 시작하기 전에 떠 있으면 닫습니다. */
+/* 장중 속보 알림은 떠 있는 동안 화면 위를 가립니다. 단계를 시작하기 전에 치우고,
+   무엇이 떴는지는 기록해 두었다가 '장중 속보' 단계에서 확인합니다. */
+let breakingSeen: string | null = null;
 async function closeBreaking() {
   const pop = page.locator('.breaking');
-  if (await pop.count()) { await pop.getByRole('button', { name: /닫기/ }).click().catch(() => {}); await pop.waitFor({ state: 'detached', timeout: 3_000 }).catch(() => {}); }
+  if (!(await pop.count())) return;
+  breakingSeen ??= await pop.innerText().catch(() => null);
+  await pop.getByRole('button', { name: /닫기/ }).click().catch(() => {});
+  await pop.waitFor({ state: 'detached', timeout: 3_000 }).catch(() => {});
 }
 async function step(name: string, f: () => Promise<void>) {
   const before = errors.length;
@@ -89,7 +96,7 @@ await step('홈과 첫 방문 안내', async () => {
   await settings.getByRole('button', { name: '닫기' }).click();
 });
 
-await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
+await step('혼자 연습: 3라운드·종목 30개', async () => {
   await page.getByText(/^게임 설정 ·/).click();
   await page.getByLabel('종목 수').selectOption('30');
   await page.getByLabel('라운드 수').selectOption('3');
@@ -148,19 +155,6 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   ok(await page.locator('.live-chart').count() === 0, '일봉을 골랐는데 장중 그래프가 남아 있음');
   await kinds.getByRole('button', { name: '1초' }).click();
   await page.locator('.live-chart').waitFor({ timeout: 5_000 });
-});
-
-await step('장중 속보: 팝업이 뜨고 닫힌다', async () => {
-  /* 속보는 주문 시간 중간에 뜹니다. 뜨면 팝업을 확인하고 닫습니다. */
-  const pop = page.locator('.breaking');
-  await pop.waitFor({ timeout: 25_000 }).catch(() => {});
-  if (await pop.count()) {
-    ok(/속보/.test(await pop.innerText()), '속보 표시 없음');
-    ok(await pop.locator('.breaking-stocks li').count() >= 1, '속보 대상 종목이 없음');
-    await pop.getByRole('button', { name: /닫기/ }).click();
-    await pop.waitFor({ state: 'detached', timeout: 5_000 });
-  }
-  if (!(await page.locator('.sheet').count())) await page.locator('.sectors button.row').first().click();
 });
 
 await step('호가창: 매도 5단계·매수 5단계, 가격을 누르면 지정가로', async () => {
@@ -227,6 +221,17 @@ await step('지정가 매도 예약과 취소', async () => {
   await page.getByRole('button', { name: '예약 취소' }).click();
   await page.getByText('예약을 취소했습니다').first().waitFor({ timeout: 5_000 });
   await page.keyboard.press('Escape');
+});
+
+await step('장중 속보: 알림이 뜨고 닫힌다', async () => {
+  /* 속보는 주문 시간 절반쯤에 뜹니다. 앞 단계에서 이미 지나갔으면 그때 기록해 둔 내용을 씁니다. */
+  if (!breakingSeen) {
+    await page.locator('.breaking').waitFor({ timeout: 45_000 }).catch(() => {});
+    await closeBreaking();
+  }
+  ok(breakingSeen, '주문 시간이 끝날 때까지 장중 속보 알림이 뜨지 않음');
+  ok(/속보/.test(breakingSeen ?? ''), '속보 표시 없음');
+  ok(/%/.test(breakingSeen ?? ''), '속보 대상 종목의 등락이 없음');
 });
 
 await step('발표 일정: 다음 라운드 예정 종목만 보인다', async () => {
