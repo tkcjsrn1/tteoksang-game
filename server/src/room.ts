@@ -475,6 +475,7 @@ export class GameRoom {
   answerCard(tokenValue: string, choice: 'A' | 'B', now: number) {
     const p = this.player(tokenValue);
     if (!p || !this.currentRound?.cardId || !this.tradeOpen(now) || (choice !== 'A' && choice !== 'B')) return false;
+    if (p.cards[this.s.round]) return false; /* 고른 즉시 결과를 보여 주므로 다시 고를 수 없습니다 */
     p.cards[this.s.round] = choice;
     return true;
   }
@@ -662,7 +663,7 @@ export class GameRoom {
     if (!id || !(this.s.phase === 'trade' || this.s.phase === 'recap') || !p) return null;
     const c = cardById.get(id)!, answered = p.cards[this.s.round] ?? null;
     return { id, title: c.title, body: c.body, concept: c.concept, options: c.options.map(o => ({ key: o.key, label: o.label })), answered,
-      feedback: this.s.phase === 'recap' && answered ? c.options.find(o => o.key === answered)!.feedback : null };
+      feedback: answered ? c.options.find(o => o.key === answered)!.feedback : null };
   }
   view(tokenValue: string | null, role: Role, now: number): RoomView {
     const p = role === 'player' ? this.player(tokenValue) : null, cfg = this.config;
