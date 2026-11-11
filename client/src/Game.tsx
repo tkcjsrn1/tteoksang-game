@@ -145,7 +145,10 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   useEffect(() => {
     if (!breakingPop) return;
     const t = setTimeout(() => setBreakingPop(null), 5000);
-    return () => clearTimeout(t);
+    /* 화면 아무 곳이나 건드리면 바로 닫습니다. 주문하려는데 알림이 가리고 있으면 안 되니까요. */
+    const close = () => setBreakingPop(null);
+    document.addEventListener('pointerdown', close);
+    return () => { clearTimeout(t); document.removeEventListener('pointerdown', close); };
   }, [breakingPop]);
   useEffect(() => { if (view.phase !== 'trade') setBreakingPop(null); }, [view.phase]);
   /* 체결 소리와 진동: 바로 체결, 지정가 체결, 손절·익절 자동 매도 모두 체결 기록이 늘어날 때 울립니다 */
@@ -674,7 +677,7 @@ function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView; card: 
             <b className={dir(bp)}>{arrow(bp)} {pctBp(bp)}</b>
           </button></li>;
         })}</ul>}
-        <p className="hint">속보가 뜨는 순간 가격이 먼저 반응했어요. 결과는 장 마감 때 공개됩니다.</p>
+        <p className="hint">속보가 뜨는 순간 가격이 먼저 반응했어요. 결과는 장 마감 때 공개됩니다. 아무 곳이나 누르면 닫혀요.</p>
         <button className="ghost" onClick={onClose}>닫기 (5초 뒤 자동)</button>
       </div>
     </div>
