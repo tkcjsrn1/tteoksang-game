@@ -52,6 +52,8 @@ async function step(name: string, f: () => Promise<void>) {
   } catch (e) {
     failed++;
     console.log(`  ✗ ${name}: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
+    const sheet = page.locator('.sheet');
+    console.log(`     상태: 종목창 ${await sheet.count()} · 수량버튼 ${await sheet.locator('.pcts').count()} · 주문버튼 ${JSON.stringify(await sheet.locator('button.go').allTextContents())} · VI ${await page.locator('.vi-note').count()} · 속보 ${await page.locator('.breaking').count()} · 단계 ${await page.locator('.topbar b, .topbar').first().innerText().catch(() => '?')}`);
     mkdirSync(OUT, { recursive: true });
     await page.screenshot({ path: path.join(OUT, `${name.replace(/[^\w가-힣]+/g, '_')}.png`), fullPage: true }).catch(() => {});
   }
