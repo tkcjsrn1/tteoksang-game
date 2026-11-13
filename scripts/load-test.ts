@@ -40,10 +40,11 @@ await until(() => rooms.every(r => r.s.phase === 'trade'));
 const end = room.s.phaseEndsAt!;
 clock = end - 1;   // 마감 1ms 전
 
-const codes = ['G01', 'G02', 'G03', 'G04', 'G05', 'G06'] as const;
+/* 한 판에 나오는 종목은 방마다 다르므로, 각자 자기 방의 종목에서 고릅니다 */
+const codeFor = (i: number) => roomOf(i).s.plan.stockCodes![i % 6];
 const t0 = performance.now();
 clients.forEach((c, i) => {
-  const msg = JSON.stringify({ t: 'order', requestId: `r-${i}`, code: codes[i % 6], side: 'buy', qty: 10 + i });
+  const msg = JSON.stringify({ t: 'order', requestId: `r-${i}`, code: codeFor(i), side: 'buy', qty: 10 + i });
   c.ws.send(msg); c.ws.send(msg); c.ws.send(msg);   // 같은 요청 3번
 });
 await until(() => clients.every(c => c.ackTotal >= 3));
@@ -52,7 +53,7 @@ const okCount = clients.filter((c, i) => c.acks.get(`r-${i}`)!.ok).length;
 console.log(`마감 직전 주문 ${okCount}/${PLAYERS} 접수, 응답 시간 중앙값 ${latencies[PLAYERS >> 1].toFixed(0)}ms, 최대 ${latencies[PLAYERS - 1].toFixed(0)}ms`);
 
 clock = end;   // 마감 시각 정각
-clients.forEach((c, i) => c.ws.send(JSON.stringify({ t: 'order', requestId: `late-${i}`, code: 'G06', side: 'buy', qty: 1 })));
+clients.forEach((c, i) => c.ws.send(JSON.stringify({ t: 'order', requestId: `late-${i}`, code: codeFor(i), side: 'buy', qty: 1 })));
 await until(() => clients.every((c, i) => c.acks.has(`late-${i}`)));
 const lateAccepted = clients.filter((c, i) => c.acks.get(`late-${i}`)!.ok).length;
 console.log(`마감 시각 주문 접수 ${lateAccepted}/${PLAYERS} (0이어야 함)`);
@@ -63,11 +64,13 @@ const round = room.s.round;
 let bad = 0;
 clients.forEach((c, i) => {
   const room = roomOf(i), p = room.player(c.token)!, f = p.fills.filter(x => x.round === round);
-  /* 시장가는 받은 순간의 장중 시세로 체결됩니다(이 크기는 슬리피지 없음). 그 시세는 이번 라운드 경로의 한 값이어야 합니다. */
-  const code = codes[i % 6], qty = 10 + i, price = f[0]?.price ?? 0, gross = price * qty;
-  const onPath = room.s.live!.paths[code].includes(price);
+  /* 시장가는 받은 순간의 장중 시세를 기준으로 체결됩니다. 기준 시세는 이번 라운드 경로의 한 값이어야 하고,
+     호가가 얇은 종목에 큰 수량을 내면 체결가가 기준보다 불리해집니다(슬리피지). 유리해지는 일은 없어야 합니다. */
+  const code = codeFor(i), qty = 10 + i, price = f[0]?.price ?? 0, gross = price * qty;
+  const ref = f[0]?.refPrice ?? 0;
+  const onPath = room.s.live!.paths[code].includes(ref);
   const expectedCash = 10_000_000 - gross - feeOf(gross);
-  if (f.length !== 1 || f[0].qty !== qty || f[0].refPrice !== price || !onPath || p.cash !== expectedCash || p.holdings[code]?.qty !== qty) { bad++; console.log('불일치', p.label, f, p.cash, expectedCash); }
+  if (f.length !== 1 || f[0].qty !== qty || price < ref || !onPath || p.cash !== expectedCash || p.holdings[code]?.qty !== qty) { bad++; console.log('불일치', p.label, f, p.cash, expectedCash); }
 });
 console.log(`체결 검증 불일치 ${bad}건, 정산 라운드 ${JSON.stringify(room.s.settled)}`);
 const again = room.settle(round, clock);

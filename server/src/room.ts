@@ -1,8 +1,7 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt } from 'node:crypto';
-import { checkOrder, computeClose, sumFlows, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
-import type { Investor } from '../../shared/rules';
+import { cleanLabel, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
@@ -100,6 +99,19 @@ export class GameRoom {
     this.fixHost();
     this.touch(now);
     return { token: p.token, role: 'player', label: p.label };
+  }
+  /** 참가자가 이름을 바꿉니다. 대기실에서만, 방 안에서 겹치지 않게. */
+  rename(tokenValue: string, raw: string, now: number): { ok: boolean; reason?: string; label?: string } {
+    const p = this.player(tokenValue);
+    if (!p || p.kind !== 'human') return { ok: false, reason: '참가자만 이름을 바꿀 수 있습니다' };
+    if (this.s.status !== 'lobby') return { ok: false, reason: '게임이 시작된 뒤에는 바꿀 수 없습니다' };
+    const label = cleanLabel(raw);
+    if (!label) return { ok: false, reason: `이름은 1~${LABEL_MAX}자로 적어 주세요` };
+    if (label === p.label) return { ok: true, label };
+    if (this.s.players.some(x => x !== p && x.label === label)) return { ok: false, reason: '이미 쓰고 있는 이름입니다' };
+    p.label = label;
+    this.touch(now);
+    return { ok: true, label };
   }
   private uniqueLabel() {
     for (;;) {
@@ -334,6 +346,7 @@ export class GameRoom {
     if (!stockOf(code) || !gameCodes(this.s.plan).includes(code)) return { ok: false, reason: '없는 종목입니다' };
     if (side !== 'buy' && side !== 'sell') return { ok: false, reason: '잘못된 주문입니다' };
     if (kind !== 'market' && kind !== 'limit') return { ok: false, reason: '잘못된 주문입니다' };
+    if (kind === 'limit' && this.config.level === 'easy') return { ok: false, reason: '쉬움 난이도에서는 시장가로만 주문할 수 있습니다' };
     const halt = this.haltLeft(code);
     if (halt) return { ok: false, reason: `변동성 완화장치(VI)로 거래가 멈췄습니다. ${halt}초 뒤에 다시 주문할 수 있어요` };
     const res = this.applyOrder(p, requestId, code, side, qty, now, kind, limit);
@@ -402,6 +415,7 @@ export class GameRoom {
     const price = this.markPrice(code);
     const valid = (v: number | null) => v === null || (Number.isSafeInteger(v) && v > 0 && v % 10 === 0);
     if (this.s.status !== 'playing') res = { ok: false, reason: '게임 중에만 설정할 수 있습니다' };
+    else if (this.config.level === 'easy') res = { ok: false, reason: '쉬움 난이도에서는 손절·익절을 쓰지 않습니다' };
     else if (!stockOf(code) || !gameCodes(this.s.plan).includes(code)) res = { ok: false, reason: '없는 종목입니다' };
     else if (!(p.holdings[code]?.qty)) res = { ok: false, reason: '가진 종목에만 걸 수 있습니다' };
     else if (!valid(stop) || !valid(take)) res = { ok: false, reason: '가격은 10원 단위로 입력해 주세요' };
@@ -463,6 +477,7 @@ export class GameRoom {
   answerCard(tokenValue: string, choice: 'A' | 'B', now: number) {
     const p = this.player(tokenValue);
     if (!p || !this.currentRound?.cardId || !this.tradeOpen(now) || (choice !== 'A' && choice !== 'B')) return false;
+    if (p.cards[this.s.round]) return false; /* 고른 즉시 결과를 보여 주므로 다시 고를 수 없습니다 */
     p.cards[this.s.round] = choice;
     return true;
   }
@@ -483,8 +498,6 @@ export class GameRoom {
     this.s.players.forEach(p => { p.orders = {}; });
     const preClose = Object.fromEntries(this.stocks.map(st => [st.code, this.markPrice(st.code)])) as Record<StockCode, number>;
     const roundFills = new Map(this.s.players.map(p => [p.id, p.fills.filter(f => f.round === round)]));
-    /* 투자자별 순매수용: 사람 참가자는 개인, NPC는 기관으로 묶습니다. */
-    const flowFills = this.s.players.flatMap(p => (roundFills.get(p.id) ?? []).map(f => ({ code: f.code, side: f.side, gross: f.gross, investor: (p.kind === 'human' ? 'retail' : 'institution') as Investor })));
     const headline: Partial<Record<StockCode, 1 | -1>> = {};
     const beatOf: Partial<Record<StockCode, boolean>> = {};
     plan.stages.forEach(st => {
@@ -537,9 +550,7 @@ export class GameRoom {
       let buyQty = 0, sellQty = 0;
       roundFills.forEach(fs => fs.forEach(f => { if (f.code === st.code) { if (f.side === 'buy') buyQty += f.qty; else sellQty += f.qty; } }));
       const ex = this.s.exDividendRound === round && fundOf(st.code).dps > 0 ? fundOf(st.code).dps : undefined;
-      /* 투자자별 순매수: 이번 라운드 실제 체결에서 바로 뽑습니다(사람=개인, NPC=기관, 호가창=외국인). */
-      const flows = sumFlows(flowFills.filter(f => f.code === st.code));
-      const b: PriceBreakdown = { ...c, high: Math.max(c.closePrice, ...path), low: Math.min(c.closePrice, ...path), preClose: preClose[st.code], volume: buyQty + sellQty, buyQty, sellQty, flows, ...(ex ? { exDividend: ex } : {}) };
+      const b: PriceBreakdown = { ...c, high: Math.max(c.closePrice, ...path), low: Math.min(c.closePrice, ...path), preClose: preClose[st.code], volume: buyQty + sellQty, buyQty, sellQty, ...(ex ? { exDividend: ex } : {}) };
       this.s.history[st.code].push(b);
       this.s.prices[st.code] = b.closePrice;
     });
@@ -654,7 +665,7 @@ export class GameRoom {
     if (!id || !(this.s.phase === 'trade' || this.s.phase === 'recap') || !p) return null;
     const c = cardById.get(id)!, answered = p.cards[this.s.round] ?? null;
     return { id, title: c.title, body: c.body, concept: c.concept, options: c.options.map(o => ({ key: o.key, label: o.label })), answered,
-      feedback: this.s.phase === 'recap' && answered ? c.options.find(o => o.key === answered)!.feedback : null };
+      feedback: answered ? c.options.find(o => o.key === answered)!.feedback : null };
   }
   view(tokenValue: string | null, role: Role, now: number): RoomView {
     const p = role === 'player' ? this.player(tokenValue) : null, cfg = this.config;
@@ -667,7 +678,7 @@ export class GameRoom {
     const value = p ? p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * priceOf(st.code), 0) : 0;
     return {
       code: this.s.code, mode: this.s.mode, status: this.s.status, phase: this.s.phase, round: this.s.round, totalRounds: cfg.rounds,
-      phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade,
+      phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade, level: cfg.level,
       you: { id: p?.id ?? null, label: p?.label ?? null, role, isHost: !!p && p.id === this.s.hostId },
       humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */

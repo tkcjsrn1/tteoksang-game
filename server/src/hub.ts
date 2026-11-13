@@ -5,7 +5,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
-import { MODES, ROOM_OPTIONS } from '../../shared/rules';
+import { isLevel, MODES, ROOM_OPTIONS } from '../../shared/rules';
 import type { ClientMsg, GameMode, Role, RoomSettings, ServerMsg, StockCode } from '../../shared/types';
 import type { ForcedOutcomes } from './plan';
 import { GameRoom } from './room';
@@ -246,6 +246,13 @@ export class Hub {
         this.broadcast(room);
         return;
       }
+      case 'rename': {
+        const res = room.rename(c.token ?? '', String(m.label ?? ''), now);
+        if (!res.ok) { this.send(c, { t: 'error', reason: res.reason ?? '이름을 바꾸지 못했습니다' }); return; }
+        this.dirty.add(room.s.code);
+        this.broadcast(room);
+        return;
+      }
       case 'leave':
         if (c.token) { room.leave(c.token, now); }
         c.room = null; c.token = null;
@@ -277,9 +284,12 @@ export class Hub {
           if (typeof p.mode === 'string' && Object.hasOwn(MODES, p.mode)) mode = p.mode;
           if (p.settings !== undefined) {
             const settings: unknown = p.settings;
+            const okSetting = ([key, value]: [string, unknown]) => key === 'level'
+              ? isLevel(value)
+              : Object.hasOwn(ROOM_OPTIONS, key) && typeof value === 'number'
+                && ROOM_OPTIONS[key as 'stocks' | 'rounds' | 'trade'].includes(value);
             if (!settings || typeof settings !== 'object' || Array.isArray(settings)
-              || Object.entries(settings).some(([key, value]) => !Object.hasOwn(ROOM_OPTIONS, key)
-                || typeof value !== 'number' || !ROOM_OPTIONS[key as keyof RoomSettings].includes(value))) {
+              || !Object.entries(settings).every(okSetting)) {
               return this.json(res, 400, { error: '선택할 수 없는 게임 설정입니다' });
             }
             extra.settings = settings as RoomSettings;

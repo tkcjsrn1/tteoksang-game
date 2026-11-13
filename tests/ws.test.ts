@@ -57,7 +57,7 @@ async function advance(room: GameRoom, watchers: Client[]) {
 }
 
 test('혼자 연습은 선택한 종목 수·라운드·장 시간을 적용하고 재대전에도 유지한다', async () => {
-  const settings = { stocks: 30, rounds: 3, trade: 45 };
+  const settings = { stocks: 30, rounds: 3, trade: 45, level: 'pro' as const };
   const { code } = await create({ mode: 'solo', seed: 5, settings });
   const room = hub.rooms.get(code)!;
   const player = await new Client().connect();
@@ -67,8 +67,10 @@ test('혼자 연습은 선택한 종목 수·라운드·장 시간을 적용하�
     assert.equal(player.view!.totalRounds, 3);
     await advance(room, [player]);
     assert.equal(player.view!.phaseSeconds, 45);
+    assert.equal(player.view!.level, 'pro');
     const restored = new GameRoom(JSON.parse(JSON.stringify(room.s)));
     assert.equal(restored.config.trade, 45);
+    assert.equal(restored.config.level, 'pro');
     assert.equal(restored.config.rounds, 3);
     assert.equal(restored.stocks.length, 30);
     while (room.s.status === 'playing') await advance(room, [player]);
@@ -85,7 +87,7 @@ test('혼자 연습은 선택한 종목 수·라운드·장 시간을 적용하�
 
 test('범위를 벗어난 게임 설정은 방을 만들기 전에 거절한다', async () => {
   const count = hub.rooms.size;
-  for (const settings of [{ stocks: 31 }, { rounds: '5' }, { trade: 0 }, { unknown: 1 }, null]) {
+  for (const settings of [{ stocks: 31 }, { rounds: '5' }, { trade: 0 }, { unknown: 1 }, { level: 'hard' }, { level: 1 }, null]) {
     const r = await fetch(`http://localhost:${port}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode: 'solo', settings }) });
     assert.equal(r.status, 400);
   }
@@ -94,7 +96,7 @@ test('범위를 벗어난 게임 설정은 방을 만들기 전에 거절한다'
 
 test('정산 중인 방은 서버 시작 후 결과를 공개하고 다음 라운드로 진행한다', async () => {
   let now = 1_000_000;
-  const room = GameRoom.create({ code: '111111', mode: 'solo', now, seed: 5 });
+  const room = GameRoom.create({ code: '111111', mode: 'solo', now, seed: 5, settings: { level: 'pro' } });
   const player = room.join(null, now).token;
   room.start(now);
   room.tick(room.s.phaseEndsAt!);
@@ -281,7 +283,7 @@ test('없는 방과 정적 경로 방어', async () => {
 });
 
 test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시세가 닿으면 체결된다', async () => {
-  const { code } = await create({ mode: 'friend', seed: 21 });
+  const { code } = await create({ mode: 'friend', seed: 21, settings: { level: 'pro' } });
   const a = await (await new Client().connect()).hello(code);
   const b = await (await new Client().connect()).hello(code);
   await until(() => a.view!.humanCount === 2);
@@ -291,13 +293,15 @@ test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시�
   await advance(room, [a, b]);
   assert.equal(a.view!.phase, 'trade');
   const live = room.s.live!;
-  const path = live.paths.G01;
+  /* 이번 판 종목은 시드마다 달라지므로 첫 종목을 씁니다 */
+  const code0 = room.s.plan.stockCodes![0];
+  const path = live.paths[code0];
   const open = path[0];
   /* 시세가 처음으로 시가보다 낮아지는 칸을 찾아 그 가격에 매수 예약 */
   const k = path.findIndex((p, i) => i > 0 && p < open);
   assert.ok(k > 0, '이 시드는 장중에 시가 아래로 내려감');
   const limit = path[k];
-  a.send({ t: 'order', requestId: 'lim', code: 'G01', side: 'buy', qty: 10, kind: 'limit', limit });
+  a.send({ t: 'order', requestId: 'lim', code: code0, side: 'buy', qty: 10, kind: 'limit', limit });
   await until(() => a.acks.has('lim'));
   assert.equal(a.acks.get('lim')!.ok, true);
   assert.equal(a.acks.get('lim')!.fill, null, '아직 체결 전');
@@ -307,9 +311,9 @@ test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시�
   clock = live.startedAt + k * 1000 + 10;
   await until(() => b.ticks.some(t => t.k >= k));
   const t = b.ticks.find(x => x.k === k)!;
-  assert.equal(t.prices.G01, path[k]);
-  await until(() => a.view!.portfolio!.holdings.some(h => h.code === 'G01'));
-  const f = room.player(a.token)!.fills.find(x => x.code === 'G01')!;
+  assert.equal(t.prices[code0], path[k]);
+  await until(() => a.view!.portfolio!.holdings.some(h => h.code === code0));
+  const f = room.player(a.token)!.fills.find(x => x.code === code0)!;
   assert.equal(f.price, limit);
   assert.equal(f.kind, 'limit');
   assert.equal(a.view!.portfolio!.orders.length, 0);

@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseTheme } from '../client/src/theme';
+import { parseTextSize } from '../client/src/text';
 
 test('저장한 테마가 있으면 그 값, 없거나 깨졌으면 기기 설정', () => {
   assert.equal(parseTheme('dark', false), 'dark');
@@ -9,4 +10,11 @@ test('저장한 테마가 있으면 그 값, 없거나 깨졌으면 기기 설�
   assert.equal(parseTheme(null, true), 'dark');
   assert.equal(parseTheme(null, false), 'light');
   assert.equal(parseTheme('purple', false), 'light');
+});
+
+test('글자 크기: 저장한 값이 large일 때만 크게, 나머지는 보통', () => {
+  assert.equal(parseTextSize('large'), 'large');
+  assert.equal(parseTextSize('normal'), 'normal');
+  assert.equal(parseTextSize(null), 'normal');
+  assert.equal(parseTextSize('huge'), 'normal');
 });

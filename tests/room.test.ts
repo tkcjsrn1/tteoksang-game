@@ -7,7 +7,7 @@ import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
 function setup(opts: Partial<Parameters<typeof GameRoom.create>[0]> = {}) {
-  const room = GameRoom.create({ code: '123456', mode: 'friend', now: T0, seed: 7, ...opts });
+  const room = GameRoom.create({ code: '123456', mode: 'friend', now: T0, seed: 7, settings: { level: 'pro' }, ...opts });
   const a = room.join(null, T0).token, b = room.join(null, T0 + 1).token;
   return { room, a, b };
 }
@@ -391,7 +391,7 @@ test('행동 리포트: 기록이 부족하면 안내 문구, 충분하면 계�
   assert.equal(room.canStart(idle), false, '방장만 시작');
   assert.equal(room.canStart(a), true);
   room.start(T0);
-  const codes: StockCode[] = ['G01', 'G02', 'G03'];
+  const codes: StockCode[] = room.s.plan.stockCodes!.slice(0, 3);
   let i = 0;
   while (room.s.status === 'playing') {
     if (room.s.phase === 'trade') {

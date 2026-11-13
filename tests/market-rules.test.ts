@@ -1,8 +1,8 @@
-/* 실제 시장 규칙에서 가져온 세 가지: VI(변동성 완화장치), 투자자별 순매수, 발표 일정 예고 */
+/* 실제 시장 규칙에서 가져온 것들: VI(변동성 완화장치), 발표 일정 예고, 난이도(쉬움·실전) */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
-import { INVESTORS, sumFlows, VI_BP, VI_SECONDS, viDirection } from '../shared/rules';
+import { cleanSettings, VI_BP, VI_SECONDS, viDirection } from '../shared/rules';
 import { stageById } from '../server/src/content';
 import type { StockCode } from '../shared/types';
 
@@ -10,7 +10,7 @@ const stageTargets = (room: GameRoom, stageId: string): StockCode[] => stageById
 
 const T0 = 3_000_000;
 function trading(seed = 7) {
-  const room = GameRoom.create({ code: '424242', mode: 'friend', now: T0, seed });
+  const room = GameRoom.create({ code: '424242', mode: 'friend', now: T0, seed, settings: { level: 'pro' } });
   const a = room.join(null, T0).token; room.join(null, T0 + 1);
   room.start(T0);
   while (room.s.phase !== 'trade') room.tick(room.s.phaseEndsAt!);
@@ -76,41 +76,6 @@ test('VI는 한 라운드에 종목마다 한 번만 걸린다', () => {
   assert.deepEqual(room.s.live!.halts!.G01, first, '두 번째는 걸리지 않음');
 });
 
-test('투자자별 순매수: 체결에서 바로 뽑고, 셋을 더하면 0', () => {
-  const f = sumFlows([
-    { investor: 'retail', side: 'buy', gross: 1_000_000 },
-    { investor: 'retail', side: 'sell', gross: 400_000 },
-    { investor: 'institution', side: 'buy', gross: 250_000 }
-  ]);
-  assert.equal(f.retail, 600_000, '사람 참가자가 산 금액 − 판 금액');
-  assert.equal(f.institution, 250_000, 'NPC');
-  assert.equal(f.foreign, -850_000, '호가창이 그만큼 받아 줌');
-  assert.equal(f.foreign + f.institution + f.retail, 0);
-  assert.deepEqual(sumFlows([]), { foreign: 0, institution: 0, retail: 0 }, '거래가 없으면 모두 0');
-});
-
-test('투자자별 순매수는 내가 실제로 산 금액과 일치한다', () => {
-  const { room, a, t } = trading(5);
-  const buy = room.placeOrder(a, 'f1', 'G01', 'buy', 40, t);
-  assert.equal(buy.ok, true);
-  const myWon = buy.fill!.price * buy.fill!.qty;
-  /* 정산 전에는 내려보내지 않습니다 */
-  assert.ok(room.view(a, 'player', t).stocks.every(s => (s.history[s.history.length - 1]?.flows) === undefined));
-  const end = room.s.phaseEndsAt!;
-  room.tick(end); room.beginRecap(end);
-  const stocks = room.view(a, 'player', end).stocks;
-  const g01 = stocks.find(s => s.code === 'G01')!.history.at(-1)!.flows!;
-  assert.equal(g01.retail, myWon, '내가 산 금액이 개인 순매수에 그대로 잡힘');
-  for (const s of stocks) {
-    const f = s.history.at(-1)!.flows!;
-    assert.equal(f.foreign + f.institution + f.retail, 0, s.code);
-    assert.ok(INVESTORS.every(k => Number.isSafeInteger(f[k])));
-  }
-  /* 아무도 거래하지 않은 종목은 모두 0 */
-  const quiet = stocks.find(s => (s.history.at(-1)!.volume ?? 0) === 0);
-  if (quiet) assert.deepEqual(quiet.history.at(-1)!.flows, { foreign: 0, institution: 0, retail: 0 });
-});
-
 test('발표 일정: 다음 라운드 종목만 알려 주고 헤드라인·결과는 담지 않는다', () => {
   const { room, a } = trading(3);
   const v = room.view(a, 'player', T0);
@@ -132,4 +97,43 @@ test('발표 일정: 다음 라운드 종목만 알려 주고 헤드라인·결�
   /* 마지막 라운드에는 예정이 없습니다 */
   while (room.s.status === 'playing') { const now = room.s.phaseEndsAt!; if (room.tick(now) === 'settled') room.beginRecap(now); }
   assert.deepEqual(room.view(a, 'player', T0).schedule, []);
+});
+
+test('쉬움 난이도: 시장가만 받고 지정가·손절·익절은 거절한다', () => {
+  const room = GameRoom.create({ code: '919191', mode: 'friend', now: T0, seed: 7, settings: { level: 'easy' } });
+  const a = room.join(null, T0).token; room.join(null, T0 + 1);
+  room.start(T0);
+  while (room.s.phase !== 'trade') room.tick(room.s.phaseEndsAt!);
+  const now = room.s.live!.startedAt;
+  const code = room.stocks[0].code;
+  assert.equal(room.view(a, 'player', now).level, 'easy');
+  const buy = room.placeOrder(a, 'r1', code, 'buy', 10, now);
+  assert.equal(buy.ok, true, buy.reason);
+  const limit = room.placeOrder(a, 'r2', code, 'buy', 1, now, 'limit', room.s.prices[code]);
+  assert.equal(limit.ok, false);
+  assert.match(limit.reason!, /시장가/);
+  const stop = room.setStop(a, 'r3', code, room.s.prices[code] - 1000, null, now);
+  assert.equal(stop.ok, false);
+  assert.match(stop.reason!, /쉬움/);
+});
+
+test('실전 난이도: 지정가와 손절을 쓸 수 있다', () => {
+  const room = GameRoom.create({ code: '929292', mode: 'friend', now: T0, seed: 7, settings: { level: 'pro' } });
+  const a = room.join(null, T0).token; room.join(null, T0 + 1);
+  room.start(T0);
+  while (room.s.phase !== 'trade') room.tick(room.s.phaseEndsAt!);
+  const now = room.s.live!.startedAt;
+  const code = room.stocks[0].code;
+  assert.equal(room.view(a, 'player', now).level, 'pro');
+  assert.equal(room.placeOrder(a, 'p1', code, 'buy', 10, now).ok, true);
+  const limit = room.placeOrder(a, 'p2', code, 'buy', 1, now, 'limit', room.s.prices[code]);
+  assert.equal(limit.ok, true, limit.reason);
+  assert.equal(room.setStop(a, 'p3', code, Math.floor((room.markPrice(code) - 1000) / 10) * 10, null, now).ok, true);
+});
+
+test('기기에 저장한 설정: 난이도는 easy·pro만 받는다', () => {
+  assert.deepEqual(cleanSettings('{"level":"easy"}'), { level: 'easy' });
+  assert.deepEqual(cleanSettings('{"level":"pro","stocks":20}'), { stocks: 20, level: 'pro' });
+  assert.deepEqual(cleanSettings('{"level":"hard"}'), {});
+  assert.deepEqual(cleanSettings('{"level":1}'), {});
 });

@@ -78,10 +78,11 @@ test('주문 요청 기록은 라운드당 상한이 있고, 지난 라운드 �
   const step = () => { const now = room.s.phaseEndsAt!; if (room.tick(now) === 'settled') room.beginRecap(now); };
   while (room.s.phase !== 'trade') step();
   const end = room.s.phaseEndsAt! - 1;
-  for (let i = 0; i < MAX_REQUESTS_PER_ROUND; i++) room.placeOrder(a, `r${i}`, 'G01', 'buy', 1, end);
-  assert.deepEqual(room.placeOrder(a, 'over', 'G01', 'buy', 1, end), { ok: false, reason: '이번 라운드 요청이 너무 많습니다' });
+  const code = room.s.plan.stockCodes![0];
+  for (let i = 0; i < MAX_REQUESTS_PER_ROUND; i++) room.placeOrder(a, `r${i}`, code, 'buy', 1, end);
+  assert.deepEqual(room.placeOrder(a, 'over', code, 'buy', 1, end), { ok: false, reason: '이번 라운드 요청이 너무 많습니다' });
   /* 이미 처리한 요청의 재전송은 상한과 상관없이 같은 결과를 돌려준다 */
-  assert.equal(room.placeOrder(a, 'r0', 'G01', 'buy', 1, end).duplicate, true);
+  assert.equal(room.placeOrder(a, 'r0', code, 'buy', 1, end).duplicate, true);
   const p = room.player(a)!;
   /* 두 라운드 뒤에는 첫 라운드 기록이 사라진다 */
   for (let r = 0; r < 2; r++) { step(); while (room.s.phase !== 'trade') step(); }
