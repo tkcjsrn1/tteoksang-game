@@ -1,7 +1,7 @@
-/* 장중 10초봉·이동평균 계산과 판이 끝난 뒤 매매일지를 확인합니다. */
+/* 장중 10초봉 계산과 판이 끝난 뒤 매매일지를 확인합니다. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bucketCandles, movingAverage } from '../client/src/live';
+import { bucketCandles } from '../client/src/live';
 import { buildJournal, journalKey, parseNotes } from '../client/src/journal';
 import { GameRoom } from '../server/src/room';
 
@@ -15,12 +15,6 @@ test('10초봉: 앞 봉의 종가가 다음 봉의 시가, 고가·저가는 구
   for (let i = 1; i < c.length; i++) assert.equal(c[i].open, c[i - 1].close);
   assert.deepEqual(bucketCandles([100], 10), []);
   assert.deepEqual(bucketCandles([100, 105], 10), [{ i: 0, open: 100, high: 105, low: 100, close: 105 }]);
-});
-
-test('이동평균: n개가 모이기 전은 비우고, 이후는 최근 n개 평균(정수)', () => {
-  assert.deepEqual(movingAverage([10, 20, 30, 40], 2), [null, 15, 25, 35]);
-  assert.deepEqual(movingAverage([10, 11], 3), [null, null]);
-  assert.deepEqual(movingAverage([10, 11, 11], 3), [null, null, 11]);
 });
 
 test('매매일지: 내 체결마다 라운드 뉴스와 그 라운드 종가 비교가 붙는다', () => {

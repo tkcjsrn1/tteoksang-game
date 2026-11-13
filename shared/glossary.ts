@@ -520,7 +520,7 @@ export const TERMS: Term[] = [
   { id: 'moving-average', term: '이동평균선', en: 'Moving average', category: 'chart',
     short: '최근 N일 종가의 평균을 이어 그린 선',
     body: '5일선은 최근 5일 종가 평균입니다. 하루하루의 잡음을 줄여 흐름을 보여 주지만, 이미 지난 가격의 평균이라 늦게 반응합니다.',
-    game: '장중 그래프에는 최근 20초(20틱) 시세 평균을 이은 선을 그립니다. 10초봉은 10초 동안의 시가·고가·저가·종가를 봉 하나로 묶은 것입니다.',
+    game: '장중 1초 그래프에는 이동평균선을 그리지 않습니다. 일봉(라운드 하나가 하루)과 차트 연습실에서 5일 이동평균선을 볼 수 있습니다.',
     match: ['이동평균선', '이동평균', '5일선'], related: ['candle'] },
   { id: 'trading-journal', term: '매매일지', en: 'Trading journal', category: 'asset',
     short: '내 거래와 그때의 이유를 적어 두는 기록',

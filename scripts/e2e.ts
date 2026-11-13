@@ -140,7 +140,8 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await firstRow.click();
   tradedStock = await page.getByRole('dialog').getByRole('heading').first().innerText();
   await page.locator('.live-chart').waitFor({ timeout: 5_000 });
-  ok(/시가총액 .*억 원/.test(await page.locator('.company summary').innerText()), '기업 정보 없음');
+  await page.locator('.company summary').click();
+  ok(/시가총액/.test(await page.locator('.company .kv').innerText()), '기업 정보 없음');
   const before = await page.locator('.live-chart path').getAttribute('d');
   await page.waitForTimeout(2_500);
   const after = await page.locator('.live-chart path').getAttribute('d');

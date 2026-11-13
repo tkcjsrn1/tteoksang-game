@@ -3,7 +3,7 @@ import { DISCLAIMER, formatPct, GROUPS, STOCKS } from '../../shared/rules';
 import type { PriceBreakdown, Side, StockView } from '../../shared/types';
 import { Rich, TermLink } from './glossary/GlossaryContext';
 import { replayAt, replayPath, replayTicks, useReplay } from './fx';
-import { bucketCandles, movingAverage, probeIndex } from './live';
+import { bucketCandles, probeIndex } from './live';
 import { logoVariant } from './sectors';
 import { useTheme } from './theme';
 
@@ -219,9 +219,10 @@ export function CandleReplay({ b, name, ticks }: { b: PriceBreakdown; name: stri
   );
 }
 
-/** 이번 라운드 장중 시세 그래프. 선(1초)과 10초봉을 고를 수 있고, 20초 이동평균선을 함께 그립니다.
-    결과 시간에는 마지막에 결과 공개로 움직인 몫을 점선으로 이어 줍니다. */
-const MA_SECONDS = 20, CANDLE_SECONDS = 10;
+/** 이번 라운드 장중 시세 그래프. 선(1초)과 10초봉을 고를 수 있습니다.
+    결과 시간에는 마지막에 결과 공개로 움직인 몫을 점선으로 이어 줍니다.
+    이동평균선은 초보자에게 읽을 것만 늘렸고 1초 시세에서는 뜻이 약해 뺐습니다(2026-11 결정). 일봉과 차트 연습실에만 둡니다. */
+const CANDLE_SECONDS = 10;
 export function LiveChart({ stock, steps, closing, breaking, fills, mode }: {
   stock: StockView; steps: number; closing: PriceBreakdown | null;
   breaking: { tick: number; headline: string } | null;
@@ -249,8 +250,6 @@ export function LiveChart({ stock, steps, closing, breaking, fills, mode }: {
   const last = ticks[ticks.length - 1];
   const col = last > ticks[0] ? 'var(--up)' : last < ticks[0] ? 'var(--down)' : 'var(--faint)';
   const path = (pts: [number, number][]) => pts.map(([k, v], i) => `${i ? 'L' : 'M'}${x(k).toFixed(1)},${y(v).toFixed(1)}`).join('');
-  const ma = movingAverage(ticks, MA_SECONDS);
-  const maPts = ma.map((v, k) => [k, v] as [number, number | null]).filter((p): p is [number, number] => p[1] !== null);
   const candles = mode === 'candle' ? bucketCandles(ticks, CANDLE_SECONDS) : [];
   const cw = Math.max(2, (x(CANDLE_SECONDS) - x(0)) * 0.6);
   /* 십자선: 그래프를 누르거나 끌면 그 시각의 가격을 보여 줍니다 */
@@ -277,7 +276,6 @@ export function LiveChart({ stock, steps, closing, breaking, fills, mode }: {
           return <g key={c.i}><line x1={cx} x2={cx} y1={y(c.high)} y2={y(c.low)} stroke={cc} strokeWidth="1.2" />
             <rect x={cx - cw / 2} y={y(Math.max(c.open, c.close))} width={cw} height={Math.max(1.5, Math.abs(y(c.open) - y(c.close)))} fill={cc} rx="1" /></g>;
         })}
-        {maPts.length > 1 && <path d={path(maPts)} fill="none" stroke="var(--gold)" strokeWidth="1.4" opacity=".9" />}
         {mode === 'line' && <circle cx={x(ticks.length - 1)} cy={y(last)} r="3" fill={col} />}
         {shownBreaking && <g className="chart-breaking">
           <title>{shownBreaking.headline}</title>
@@ -306,7 +304,7 @@ export function LiveChart({ stock, steps, closing, breaking, fills, mode }: {
         <text x={L} y={H - 4} fontSize="10" fill="var(--muted)">장 시작</text>
         <text x={x(n)} y={H - 4} fontSize="10" textAnchor="end" fill="var(--muted)">장 마감</text>
       </svg>
-      <figcaption className="chart-note">이번 라운드 시세 · <span className="legend ma" aria-hidden="true" /> {MA_SECONDS}초 <TermLink id="moving-average">이동평균선</TermLink>{end !== null ? ' · 장 마감 오른쪽 점선은 결과 공개 뒤 움직인 몫' : ''}
+      <figcaption className="chart-note">이번 라운드 시세{end !== null ? ' · 장 마감 오른쪽 점선은 결과 공개 뒤 움직인 몫' : ''}
         {shownBreaking && ' · 금색 세로선은 속보'}{shownFills.length > 0 && ' · ▲ 내 매수, ▼ 내 매도'}
         {events.length > 0 && <details className="chart-events">
           <summary>속보와 내 체결 {events.length}건</summary>
