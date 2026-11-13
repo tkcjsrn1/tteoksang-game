@@ -6,7 +6,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
-import { MODES } from '../shared/rules';
+import { MODES, START_CASH } from '../shared/rules';
 import { Hub } from '../server/src/hub';
 
 /* 단계 시간을 줄여 한 라운드를 몇 초 안에 끝냅니다(서버 안에서만). */
@@ -252,6 +252,19 @@ await step('발표 일정: 다음 라운드 예정 종목만 보인다', async (
 
 await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   await page.locator('.replay').first().waitFor({ timeout: 40_000 });
+  const code = new URL(page.url()).hash.split('/').at(-1)!;
+  const room = hub.rooms.get(code)!;
+  const result = room.humans[0].results.at(-1)!;
+  const cumulative = result.valueAfter - START_CASH;
+  const totalText = `${result.valueAfter.toLocaleString('ko-KR')}원`;
+  const signed = (value: number) => `${value < 0 ? '−' : value > 0 ? '+' : ''}${Math.abs(value).toLocaleString('ko-KR')}원`;
+  const recap = page.locator('.recap-top');
+  const total = recap.locator('.delta-big');
+  ok((await recap.locator('.wallet-label').innerText()).startsWith('내 전체 평가액'), '평가액 제목이 전체 기준을 표시하지 않음');
+  await page.waitForFunction(expected => document.querySelector('.recap-top .delta-big')?.textContent === expected, totalText);
+  ok(await total.getAttribute('aria-label') === totalText, '정산된 전체 평가액이 표시되지 않음');
+  ok(await recap.getByText(`누적 손익 ${signed(cumulative)}`, { exact: false }).count() === 1, '누적 손익이 시작금 기준으로 표시되지 않음');
+  ok(await recap.getByText(`이번 라운드 변화 ${signed(result.delta)}`).count() === 1, '이번 라운드 변화가 별도로 표시되지 않음');
   const bars = await page.locator('.bar-row .bar i').evaluateAll(els => els.map(e => {
     const r = e.getBoundingClientRect(), pr = e.parentElement!.getBoundingClientRect();
     return { pos: getComputedStyle(e).position, inside: r.left >= pr.left - 1 && r.right <= pr.right + 1, w: r.width };

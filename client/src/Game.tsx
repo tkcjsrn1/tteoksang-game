@@ -831,21 +831,24 @@ function lessonLink(view: RoomView, code?: StockCode) {
   const q = new URLSearchParams({ name: stock.name, summary: b?.summary ?? '', base: String(b?.basePrice ?? ''), close: String(b?.closePrice ?? ''), reason: b?.events[0]?.reason ?? '시장·종목 변동' });
   return `/lessons/news?${q.toString()}`;
 }
-/** 라운드 결과: 내 변화 → 기대 vs 실제 → 왜 움직였나(막대) → 종목별 결과 */
+/** 라운드 결과: 전체 평가액과 손익 → 기대 vs 실제 → 왜 움직였나(막대) → 종목별 결과 */
 function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => void }) {
   const r = view.lastResult;
   const now = view.news[view.news.length - 1];
   const movers = view.stocks.slice().sort((a, b) => Math.abs(b.lastChangeBp ?? 0) - Math.abs(a.lastChangeBp ?? 0));
-  const delta = useCountUp(r?.delta ?? 0, 900);
+  const value = useCountUp(r?.valueAfter ?? 0, 900, r?.valueBefore ?? 0);
+  const cumulative = (r?.valueAfter ?? view.startCash) - view.startCash;
   /* 폭죽: 내가 가진 종목이 상한가를 쳤거나, 이번 라운드에 1위로 올라섰을 때 */
   const held = new Set(view.portfolio?.holdings.map(h => h.code) ?? []);
   const fire = view.stocks.some(s => held.has(s.code) && s.history[s.history.length - 1]?.round === view.round && s.history[s.history.length - 1]?.limit === 'upper')
     || (!!r && r.rankAfter === 1 && r.rankBefore > 1);
   return (<>
     {r && <div className="panel recap-top">
-      <p className="wallet-label">내 평가액 변화 {r.rankBefore !== r.rankAfter && <span className={`pill pop ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
-      <p className={`delta-big ${dir(r.delta)}`} aria-label={signedWon(r.delta)}>{signedWon(delta)}</p>
-      <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료·세금 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 ${won(r.slippage)}(체결가에 포함)` : ''}</p>
+      <p className="wallet-label">내 전체 평가액 {r.rankBefore !== r.rankAfter && <span className={`pill pop ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
+      <p className="delta-big" aria-label={won(r.valueAfter)}>{won(value)}</p>
+      <p className="wallet-change">누적 손익 <span className={dir(cumulative)}>{signedWon(cumulative)} ({pct(cumulative / view.startCash * 100)})</span></p>
+      <p className="hint">이번 라운드 변화 <b className={dir(r.delta)}>{signedWon(r.delta)}</b></p>
+      <p className="hint">{r.best ? `이번 라운드 주요 종목 · ${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료·세금 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 ${won(r.slippage)}(체결가에 포함)` : ''}</p>
     </div>}
     {fire && <Confetti key={view.round} />}
     {view.leaderboard.length > 1 && <div className="panel">
