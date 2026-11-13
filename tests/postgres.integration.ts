@@ -59,3 +59,21 @@ test('방 상태 저장·복구, 정산과 주문 기록의 중복 방지', asyn
     await restarted.close();
   }
 });
+
+test('오래된 방 기록은 불러오지 않고 지운다', async () => {
+  const store = new PostgresStore(url);
+  await store.init();
+  const room = GameRoom.create({ code: '888888', mode: 'solo', now: 1000, seed: 9 });
+  room.join(null, 1000);
+  room.start(1000);
+  await store.saveRoom(room.s);
+  /* 저장 시각을 이틀 전으로 돌려 둡니다 */
+  await store.pool.query(`UPDATE rooms SET updated_at = now() - interval '2 days' WHERE code='888888'`);
+  const day = 24 * 60 * 60 * 1000;
+  const since = Date.now() - day;
+  assert.equal((await store.loadActive(since)).some(s => s.code === '888888'), false, '오래된 방을 불러오면 안 됩니다');
+  assert.equal((await store.loadActive()).some(s => s.code === '888888'), true, '기준을 안 주면 전부 불러옵니다');
+  assert.ok(await store.sweep(since) >= 1);
+  assert.equal((await store.pool.query(`SELECT count(*)::int n FROM rooms WHERE code='888888'`)).rows[0].n, 0, '지워져야 합니다');
+  await store.close();
+});

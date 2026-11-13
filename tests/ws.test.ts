@@ -321,3 +321,24 @@ test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시�
   assert.deepEqual(Object.keys(t).sort(), ['k', 'prices', 'round', 't']);
   [a, b].forEach(c => c.close());
 });
+
+test('오래 손대지 않은 방은 다시 켤 때 불러오지 않고 지운다', async () => {
+  const store = new MemoryStore();
+  const day = 24 * 60 * 60 * 1000;
+  const now = 10 * day;
+  /* 방금 멈춘 방 하나와, 이틀 전에 멈춘 방 하나 */
+  const fresh = GameRoom.create({ code: '555555', mode: 'solo', now: now - 1000, seed: 1 });
+  fresh.join(null, now - 1000); fresh.start(now - 1000);
+  const old = GameRoom.create({ code: '666666', mode: 'solo', now: now - 2 * day, seed: 2 });
+  old.join(null, now - 2 * day); old.start(now - 2 * day);
+  await store.saveRoom(fresh.s);
+  await store.saveRoom(old.s);
+  const hub = new Hub({ store, now: () => now });
+  await hub.listen(0);
+  try {
+    assert.ok(hub.rooms.has('555555'), '최근 방은 이어서 할 수 있어야 합니다');
+    assert.equal(hub.rooms.has('666666'), false, '오래된 방을 메모리로 올리면 안 됩니다');
+    await until(() => !store.rooms.has('666666'), 2000);
+    assert.ok(store.rooms.has('555555'), '최근 방 기록을 지우면 안 됩니다');
+  } finally { await hub.close(); }
+});

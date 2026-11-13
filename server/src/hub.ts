@@ -21,6 +21,10 @@ const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js
    index.html의 %PUBLIC_URL%을 그 값으로 바꿔서 내보냅니다. 비워 두면 /og.png 같은 상대 주소가 됩니다. */
 const PUBLIC_URL = (process.env.PUBLIC_URL ?? '').replace(/\/+$/, '');
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
+/* 저장소에 남은 방 기록을 지우는 기준과 주기. 다시 켤 때는 이 안에 손댄 방만 불러옵니다.
+   이게 없으면 끝내지 않고 나간 방이 계속 쌓여, 다시 켤 때마다 전부 메모리로 올라옵니다. */
+const ROOM_KEEP_MS = 24 * 60 * 60 * 1000;
+const SWEEP_EVERY_MS = 60 * 60 * 1000;
 /* 남용 방지. 게임 시계가 아니라 실제 시간(Date.now)으로 셉니다. */
 export const MSG_LIMIT_PER_SEC = 30;       // 연결 하나가 1초에 보낼 수 있는 메시지 수
 export const MAX_ROOMS = 1000;             // 서버 전체 방 수 상한
@@ -53,7 +57,8 @@ export class Hub {
   async listen(port = this.opts.port ?? 8787): Promise<number> {
     await this.store.init();
     /* 없어진 모드(예전 학술제 방)로 저장된 방은 건너뜁니다. */
-    for (const s of await this.store.loadActive()) if (MODES[s.mode]) this.rooms.set(s.code, new GameRoom(s));
+    for (const s of await this.store.loadActive(this.now() - ROOM_KEEP_MS)) if (MODES[s.mode]) this.rooms.set(s.code, new GameRoom(s));
+    void this.sweep();
     await new Promise<void>(r => this.server.listen(port, r));
     this.timer = setInterval(() => this.loop(), 100);
     return (this.server.address() as { port: number }).port;
@@ -113,6 +118,16 @@ export class Hub {
       else if (now - room.s.updatedAt > ROOM_TTL_MS) this.rooms.delete(room.s.code);
     }
     if (now - this.lastFlush > 1000) { this.lastFlush = now; void this.flush(); }
+    if (Date.now() - this.lastSweep > SWEEP_EVERY_MS) void this.sweep();
+  }
+  /** 오래된 방 기록을 지웁니다. 실패해도 게임은 그대로 돌아갑니다. */
+  private lastSweep = Date.now();
+  private async sweep() {
+    this.lastSweep = Date.now();
+    try {
+      const n = await this.store.sweep(this.now() - ROOM_KEEP_MS);
+      if (n > 0) console.log(`오래된 방 기록 ${n}개를 지웠습니다`);
+    } catch (e) { console.error('오래된 방 기록 정리 실패(무시합니다)', e instanceof Error ? e.message : e); }
   }
   /** 정산을 저장한 뒤에만 결과를 공개합니다. 저장이 실패하면 재시도하고, 그동안 화면은 체결 확인 중입니다. */
   private async afterSettle(room: GameRoom) {
