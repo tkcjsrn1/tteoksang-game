@@ -329,6 +329,33 @@ function CurrentNews({ view, onOpen }: { view: RoomView; onOpen?: (code: StockCo
       action={stock && onOpen && <button className="ghost blue" onClick={() => onOpen(stock.code)}>{stock.name} 종목 보기</button>} />;
   })}</div>;
 }
+/** 내 투자 행동 리포트. 관찰이 모자라 계산하지 못한 지표는 카드로 늘어놓지 않고 한 줄로 줄입니다. */
+function BehaviorReport({ metrics }: { metrics: NonNullable<RoomView['report']>['metrics'] }) {
+  if (metrics.length === 0) return null;
+  const shown = metrics.filter(m => m.available), missing = metrics.filter(m => !m.available);
+  const names = missing.map(m => m.title).join(' · ');
+  if (shown.length === 0) return (
+    <section className="sec">
+      <h2 className="h">내 투자 행동 리포트</h2>
+      <p className="hint">이번 판은 거래가 적어서 계산할 것이 없었어요. 사고파는 횟수가 늘면 {names}을 숫자로 보여 드립니다.</p>
+    </section>
+  );
+  return (
+    <section className="sec">
+      <h2 className="h">내 투자 행동 리포트</h2>
+      <p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p>
+      <div className="metrics">{shown.map(m => (
+        <div className="metric" key={m.key}>
+          <h3>{m.title}</h3>
+          <p className="metric-val">{m.value}</p>
+          <p>{m.text}</p>
+          <details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details>
+        </div>
+      ))}</div>
+      {missing.length > 0 && <p className="hint">{names}은 거래가 더 쌓이면 나와요.</p>}
+    </section>
+  );
+}
 function Card({ view, send }: { view: RoomView; send: (m: ClientMsg) => void }) {
   const c = view.card!;
   /* 고른 즉시 결과 창을 띄웁니다. 닫은 카드는 라운드가 바뀔 때까지 다시 뜨지 않습니다. */
@@ -916,7 +943,7 @@ function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) => void
       </section>
       {rep && <TradeJournal view={view} fees={rep.fees} fallback={rep.majorTrades} />}
       {rep && rep.judgments.length > 0 && <section className="sec"><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></section>}
-      {rep && rep.metrics.length > 0 && <section className="sec"><h2 className="h">내 투자 행동 리포트</h2><p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p><div className="metrics">{rep.metrics.map(m => <div className="metric" key={m.key}><h3>{m.title}</h3><p className={m.available ? 'metric-val' : 'hint'}>{m.value}</p>{m.available && <p>{m.text}</p>}<details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details></div>)}</div></section>}
+      {rep && <BehaviorReport metrics={rep.metrics} />}
       <GameTerms view={view} />
       <section className="sec tight">
         <div className="list-head"><span>종목 그래프 다시 보기</span><span>처음 대비</span></div>
