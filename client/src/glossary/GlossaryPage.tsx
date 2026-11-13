@@ -28,7 +28,7 @@ function Dictionary({ focus }: { focus: string | null }) {
       <button className="link back" onClick={() => navigate('/')}>← 처음으로</button>
       <p className="course">처음 듣는 말이 나오면 눌러 보세요</p>
       <h1 className="h1">주식 용어 사전</h1>
-      <div className="progress" aria-label={`열어 본 용어 ${learned}개, 전체 ${TERMS.length}개`}>
+      <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={TERMS.length} aria-valuenow={learned} aria-label={`열어 본 용어 ${learned}개, 전체 ${TERMS.length}개`}>
         <i style={{ width: `${learned / TERMS.length * 100}%` }} />
       </div>
       <p className="hint">열어 본 용어 {learned}/{TERMS.length}개 · 게임 화면에서 밑줄 친 낱말을 눌러도 여기에 기록됩니다.</p>

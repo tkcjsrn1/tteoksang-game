@@ -30,9 +30,10 @@ export function Lessons({ lessonId, review }: { lessonId: string | null; review:
       <p className="course">시간 제한 없음 · 수업당 1~2분</p>
       <h1 className="h1">차트 연습실</h1>
       <p className="lede">예시를 보고, 직접 눌러 보고, 근거를 확인합니다. 모든 기업과 데이터는 가상입니다.</p>
+      {/* 버튼에 aria-label을 따로 두면 화면에 보이는 글자와 달라져 음성 제어로 못 누릅니다. 보이는 글자가 그대로 이름이 되게 둡니다. */}
       <div className="board">{LESSONS.map(l => (
-        <button key={l.id} className="row lesson-row" aria-label={`수업 ${l.no}. ${l.title}`} disabled={!l.ready} onClick={() => navigate(`/lessons/${l.id}`)}>
-          <span className="avatar lesson-no" aria-hidden="true">{l.no}</span>
+        <button key={l.id} className="row lesson-row" disabled={!l.ready} onClick={() => navigate(`/lessons/${l.id}`)}>
+          <span className="avatar lesson-no">{l.no}</span>
           <span className="row-main"><b>{l.title}</b><small>{l.goal}</small></span>
           <span className="row-price"><small>{l.ready ? '시작' : '준비 중'}</small></span>
         </button>

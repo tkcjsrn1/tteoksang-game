@@ -24,7 +24,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     <div className="onb-wrap" role="dialog" aria-modal="true" aria-label="게임 방법">
       <div className="onb">
         <div className="onb-top">
-          <span className="onb-dots" aria-label={`${i + 1}/${SLIDES.length}`}>{SLIDES.map((_, k) => <i key={k} className={k === i ? 'on' : ''} />)}</span>
+          <span className="onb-dots" role="img" aria-label={`${i + 1}번째 슬라이드, 전체 ${SLIDES.length}장`}>{SLIDES.map((_, k) => <i key={k} className={k === i ? 'on' : ''} />)}</span>
           <button className="link" onClick={finish}>건너뛰기</button>
         </div>
         <div className="onb-art" aria-hidden="true">{i === 0 ? <ArtNews /> : i === 1 ? <ArtOrder /> : <ArtResult />}</div>

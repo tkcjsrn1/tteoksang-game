@@ -694,6 +694,7 @@ export class GameRoom {
       lastResult: p && !inSettling ? p.results[p.results.length - 1] ?? null : null,
       dividend: this.dividendView(),
       report: p && this.s.status === 'finished' ? buildReport(this, p) : null,
+      arcIds: this.s.status === 'finished' ? this.s.plan.arcIds : undefined,
       nextRoomCode: this.s.nextRoomCode
     };
   }
