@@ -58,7 +58,7 @@ export const GROUPS: Record<StockGroup, { label: string; leader: StockCode; colo
   bio:     { label: '배양 소재',    leader: 'G04', color: '#1F9D5C' },
   stage:   { label: '체험형 공연',  leader: 'G05', color: '#E8557A' },
   water:   { label: '물 재이용',    leader: 'G06', color: '#3B8DD9' },
-  /* 아래 네 업종은 아직 뉴스(사건)가 없습니다. 시장·종목 변동으로만 움직입니다. */
+  /* 아래 네 업종도 2026-11부터 사건(아크)이 붙었습니다. */
   space:   { label: '위성 통신',    leader: 'G31', color: '#5B7FFF' },
   farm:    { label: '스마트 농업',  leader: 'G36', color: '#6FA82B' },
   care:    { label: '돌봄 로봇',    leader: 'G41', color: '#D9743B' },
@@ -198,8 +198,8 @@ export function cleanLabel(raw: unknown): string | null {
 
 /** 뉴스(사건)의 주인공이 되는 대장주. 한 판에 늘 들어갑니다.
     뉴스가 없는 업종(위성 통신·스마트 농업·돌봄 로봇·금속 재활용)의 대장주는 여기 넣지 않습니다. */
-export const NEWS_GROUPS: StockGroup[] = ['power', 'storage', 'cold', 'bio', 'stage', 'water'];
-export const LEADERS: StockCode[] = NEWS_GROUPS.map(g => GROUPS[g].leader);
+/** 사건(아크)이 붙어 있는 업종. 2026-11부터 10개 업종 모두에 사건이 있습니다. */
+export const NEWS_GROUPS: StockGroup[] = ['power', 'storage', 'cold', 'bio', 'stage', 'water', 'space', 'farm', 'care', 'recycle'];
 /** 예전 저장 데이터(종목 6개 시절)를 복구할 때 쓰는 기본 종목 */
 export const LEGACY_CODES: StockCode[] = ['G01', 'G02', 'G03', 'G04', 'G05', 'G06'];
 export const stockOf = (code: StockCode) => STOCKS.find(s => s.code === code)!;

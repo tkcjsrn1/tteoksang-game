@@ -293,13 +293,15 @@ test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시�
   await advance(room, [a, b]);
   assert.equal(a.view!.phase, 'trade');
   const live = room.s.live!;
-  const path = live.paths.G01;
+  /* 이번 판 종목은 시드마다 달라지므로 첫 종목을 씁니다 */
+  const code0 = room.s.plan.stockCodes![0];
+  const path = live.paths[code0];
   const open = path[0];
   /* 시세가 처음으로 시가보다 낮아지는 칸을 찾아 그 가격에 매수 예약 */
   const k = path.findIndex((p, i) => i > 0 && p < open);
   assert.ok(k > 0, '이 시드는 장중에 시가 아래로 내려감');
   const limit = path[k];
-  a.send({ t: 'order', requestId: 'lim', code: 'G01', side: 'buy', qty: 10, kind: 'limit', limit });
+  a.send({ t: 'order', requestId: 'lim', code: code0, side: 'buy', qty: 10, kind: 'limit', limit });
   await until(() => a.acks.has('lim'));
   assert.equal(a.acks.get('lim')!.ok, true);
   assert.equal(a.acks.get('lim')!.fill, null, '아직 체결 전');
@@ -309,9 +311,9 @@ test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시�
   clock = live.startedAt + k * 1000 + 10;
   await until(() => b.ticks.some(t => t.k >= k));
   const t = b.ticks.find(x => x.k === k)!;
-  assert.equal(t.prices.G01, path[k]);
-  await until(() => a.view!.portfolio!.holdings.some(h => h.code === 'G01'));
-  const f = room.player(a.token)!.fills.find(x => x.code === 'G01')!;
+  assert.equal(t.prices[code0], path[k]);
+  await until(() => a.view!.portfolio!.holdings.some(h => h.code === code0));
+  const f = room.player(a.token)!.fills.find(x => x.code === code0)!;
   assert.equal(f.price, limit);
   assert.equal(f.kind, 'limit');
   assert.equal(a.view!.portfolio!.orders.length, 0);

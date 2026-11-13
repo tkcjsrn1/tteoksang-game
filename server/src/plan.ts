@@ -1,5 +1,5 @@
 /* 시드로 게임 전체 시나리오를 미리 확정합니다. 같은 시드와 설정이면 같은 결말과 변동이 나옵니다. */
-import { GROUPS, LEADERS, MARKET_MAX_BP, MODES,  stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
+import { GROUPS, MARKET_MAX_BP, MODES,  stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { GameMode, RoomSettings, StockCode } from '../../shared/types';
 import { ARCS, CARDS, type Arc, type Outcome, type Stage } from './content';
 
@@ -13,11 +13,14 @@ export interface GamePlan { arcIds: string[]; rounds: RoundPlan[]; /** 이번 �
 /* 한 판에 나오는 종목 수 기본값은 shared/rules.ts STOCKS_PER_GAME */
 export { STOCKS_PER_GAME };
 
-/** 대표 종목 6개는 항상 넣고(뉴스의 주인공), 이번 판 뉴스가 다루는 업종의 같은 업종 종목을 한 개씩 먼저 고른 뒤
-    나머지를 무작위로 채웁니다. 업종 동조화를 화면에서 바로 볼 수 있게 하려는 순서입니다. */
+/** 이번 판 사건이 다루거나 결과로 움직이는 종목은 반드시 넣고, 그 업종의 같은 업종 종목을 한 개씩 먼저 고른 뒤
+    나머지를 무작위로 채웁니다. 업종 동조화를 화면에서 바로 볼 수 있게 하려는 순서입니다.
+    (업종 10개에 모두 사건이 생긴 뒤로, 대장주 전부가 아니라 이번 판 사건의 종목만 넣습니다.) */
 export function pickStocks(arcs: Arc[], rnd: () => number, count = STOCKS_PER_GAME): StockCode[] {
-  const peerCount = count - LEADERS.length;
-  const peers = STOCKS.filter(s => !LEADERS.includes(s.code));
+  const must = [...new Set(arcs.flatMap(a => a.stages.flatMap(st =>
+    [...st.targets, ...st.outcomes.flatMap(o => o.impacts.map(i => i.code))])))];
+  const peerCount = Math.max(0, count - must.length);
+  const peers = STOCKS.filter(s => !must.includes(s.code));
   /* 뉴스 카드에 크게 나오는 종목(targets[0])의 업종을 먼저, 함께 영향받는 종목의 업종을 다음으로 채웁니다. */
   const groupsOf = (codes: StockCode[]) => [...new Set(codes.map(c => stockOf(c).group))];
   const primary = groupsOf(arcs.flatMap(a => a.stages.map(st => st.targets[0])));
@@ -30,7 +33,7 @@ export function pickStocks(arcs: Arc[], rnd: () => number, count = STOCKS_PER_GA
   /* 남은 자리는 전체 종목에서 무작위로 채웁니다. 뉴스가 없는 업종도 섞여 나옵니다(실제 시장처럼). */
   for (const p of shuffled(peers, rnd)) if (picked.length < peerCount && !picked.includes(p.code)) picked.push(p.code);
   const order = (c: StockCode) => Object.keys(GROUPS).indexOf(stockOf(c).group) * 100 + Number(c.slice(1));
-  return [...LEADERS, ...picked].sort((a, b) => order(a) - order(b));
+  return [...must, ...picked].sort((a, b) => order(a) - order(b));
 }
 /** 테스트에서 특정 결말을 강제할 때 씁니다. { 'nu-3a': 'short' } 처럼 단계별로 지정합니다. */
 export type ForcedOutcomes = Record<string, string>;

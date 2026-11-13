@@ -37,9 +37,11 @@ test('설정 검증: 가진 종목만, 손절가는 시세보다 낮게, 익절�
 test('장중에 손절가·익절가에 닿으면 가진 수량 전부를 그 순간 시장가로 판다', () => {
   let stopHit = 0, takeHit = 0;
   for (let seed = 1; seed <= 40; seed++) {
-    for (const [code, kind] of [['G03', 'stop'], ['G06', 'take']] as [StockCode, 'stop' | 'take'][]) {
+    for (const [slot, kind] of [[0, 'stop'], [1, 'take']] as [number, 'stop' | 'take'][]) {
       const { room, a, t } = trading(seed);
       const live = room.s.live!;
+      /* 이번 판 종목은 시드마다 달라지므로 자리로 고릅니다 */
+      const code: StockCode = room.s.plan.stockCodes![slot];
       const path = live.paths[code];
       const open = path[0];
       const k = path.findIndex((p, i) => i > 0 && (kind === 'stop' ? p <= open - 30 : p >= open + 30));

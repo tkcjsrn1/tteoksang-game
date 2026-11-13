@@ -53,10 +53,16 @@ test('매매일지: 종목과 관련된 속보만 연결하고 관련 뉴스가 
   assert.notEqual(live.breakAt, null);
   const at = live.startedAt + live.breakAt! * 1000;
   room.tick(at);
-  assert.equal(room.placeOrder(token, 'related', 'G02', 'buy', 5, at).ok, true);
-  assert.equal(room.placeOrder(token, 'unrelated', 'G05', 'buy', 5, at).ok, true);
+  /* 이번 라운드 뉴스가 다루는 종목 하나와 다루지 않는 종목 하나를 삽니다 */
+  const before = room.view(token, 'player', at);
+  const news = before.news.find(r => r.round === 1)!.cards;
+  const related = news[0].card.targets[0];
+  const covered = news.flatMap(c => c.card.targets);
+  const unrelated = before.stocks.find(s => !covered.includes(s.code))!.code;
+  assert.equal(room.placeOrder(token, 'related', related, 'buy', 5, at).ok, true);
+  assert.equal(room.placeOrder(token, 'unrelated', unrelated, 'buy', 5, at).ok, true);
   const entries = buildJournal(room.view(token, 'player', at));
-  assert.deepEqual(entries.map(e => e.headline), ['중앙은행 금리 결정 회의 시작', null]);
+  assert.deepEqual(entries.map(e => e.headline), [news[0].card.headline, null]);
 });
 
 test('매매일지 메모: 깨진 저장값은 비우고, 200자로 자른다', () => {
