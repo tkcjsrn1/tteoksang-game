@@ -72,8 +72,10 @@ export function TermLink({ id, children }: { id: string; children?: ReactNode })
   const { open } = useGlossary();
   const t = termById.get(id);
   if (!t) return <>{children}</>;
+  /* 읽어 주는 이름은 화면에 보이는 글자로 시작해야 음성 제어로 누를 수 있습니다 */
+  const visible = typeof children === 'string' ? children : t.term;
   return (
-    <button type="button" className="gl-term" aria-label={`${t.term} 뜻 보기`}
+    <button type="button" className="gl-term" aria-label={`${visible} 뜻 보기`}
       onClick={e => { e.stopPropagation(); open(id); }}>{children ?? t.term}</button>
   );
 }

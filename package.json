@@ -22,17 +22,17 @@
     "e2e": "tsx scripts/e2e.ts"
   },
   "dependencies": {
-    "@capacitor/android": "7.4.3",
-    "@capacitor/core": "7.4.3",
     "pg": "8.13.1",
     "qrcode": "1.5.4",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "tsx": "4.19.2",
+    "tsx": "4.23.15",
     "ws": "8.21.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "7.4.3",
+    "@capacitor/android": "7.6.10",
+    "@capacitor/cli": "7.6.10",
+    "@capacitor/core": "7.6.10",
     "@types/node": "22.10.2",
     "@types/pg": "8.11.10",
     "@types/qrcode": "1.5.5",

@@ -337,7 +337,6 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await page.getByLabel('난이도').selectOption('easy');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.locator('.sectors').waitFor();
-  await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
   const off = page.getByRole('button', { name: '안내 끄기' });
   if (await off.count()) await off.click();
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
@@ -346,6 +345,13 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   /* 쉬움 난이도: 주문 방식·호가창·슬리피지·손절은 화면에 없어야 합니다 */
   const easy = page.getByRole('dialog').first();
   await easy.locator('#order-qty').waitFor();
+  /* 관심종목은 이 판에 나온 종목으로 확인합니다. 판마다 종목 구성이 달라서
+     앞 판에서 담아 둔 종목이 이번 판에 없을 수 있습니다. */
+  const pickedName = await easy.getByRole('heading').first().innerText();
+  /* 관심종목은 켜고 끄는 버튼이라, 앞 판에서 이미 담아 둔 종목이면 누르면 빠집니다 */
+  const fav = easy.getByRole('button', { name: '관심종목', exact: true });
+  if (await fav.getAttribute('aria-pressed') !== 'true') await fav.click();
+  ok(await fav.getAttribute('aria-pressed') === 'true', '관심종목으로 담기지 않음');
   ok(await easy.getByRole('group', { name: '주문 방식' }).count() === 0, '쉬움인데 주문 방식(지정가) 버튼이 보임');
   ok(await easy.locator('table[aria-label="호가창"]').count() === 0, '쉬움인데 호가창이 보임');
   ok(!/슬리피지/.test(await easy.innerText()), '쉬움인데 슬리피지가 보임');
@@ -354,6 +360,7 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
   ok(await easy.getByText('손절·익절 자동 주문').count() === 0, '쉬움인데 가진 종목에 손절·익절이 보임');
   await page.keyboard.press('Escape');
+  await page.getByRole('region', { name: '관심종목' }).getByText(pickedName, { exact: true }).waitFor({ timeout: 10_000 });
   const j = page.locator('.journal');
   await j.waitFor({ timeout: 40_000 });
   ok(await j.locator('.journal-item').count() >= 1, '매매일지에 거래가 없음');
