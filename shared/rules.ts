@@ -1,5 +1,5 @@
 /* 가격과 주문 규칙. 정수만 사용합니다. 100bp = 1%p */
-import type { EventImpact, GameMode, Holding, Order, PriceBreakdown, RoomSettings, Side, StockCode } from './types';
+import type { EventImpact, GameMode, Holding, Level, Order, PriceBreakdown, RoomSettings, Side, StockCode } from './types';
 
 export const DISCLAIMER = '게임용 가상 정보이며 투자 조언이 아닙니다';
 export const START_CASH = 10_000_000;
@@ -12,15 +12,23 @@ export const FEE_BP = 10;
 export const TAX_BP = 20;
 
 /* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 한 라운드를 2분 넘게 둡니다(2026-11 결정). */
-export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; label: string }> = {
-  friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 3, label: '친구 대전' },
-  solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 3, label: '혼자 연습' }
+export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; level: Level; label: string }> = {
+  friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 3, level: 'easy', label: '친구 대전' },
+  solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 3, level: 'easy', label: '혼자 연습' }
 };
 
 /* 방을 만들 때 고를 수 있는 값. 고르지 않으면 MODES와 STOCKS_PER_GAME 기본값을 씁니다. */
-export const ROOM_OPTIONS: Record<keyof RoomSettings, readonly number[]> = {
+export const ROOM_OPTIONS: Record<'stocks' | 'rounds' | 'trade', readonly number[]> = {
   stocks: [10, 20, 30, 50], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120]
 };
+/* 난이도. 쉬움은 시장가만 쓰고 어려운 장치를 감춥니다. 사건·속보·VI처럼 재미를 주는 부분은 그대로입니다. */
+export const LEVELS: readonly Level[] = ['easy', 'pro'];
+export const LEVEL_LABEL: Record<Level, string> = { easy: '쉬움', pro: '실전' };
+export const LEVEL_NOTE: Record<Level, string> = {
+  easy: '시장가로만 사고팝니다. 호가창·지정가·손절·익절은 숨깁니다',
+  pro: '호가창·지정가·손절·익절까지 모두 씁니다'
+};
+export const isLevel = (v: unknown): v is Level => v === 'easy' || v === 'pro';
 /** 한 판에 나오는 종목 수 기본값 */
 export const STOCKS_PER_GAME = 10;
 /** 기기에 저장해 둔 설정 문자열을 읽습니다. 깨졌거나 고를 수 없는 값은 버립니다. */
@@ -31,8 +39,10 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
   const out: RoomSettings = {};
   for (const [key, choices] of Object.entries(ROOM_OPTIONS)) {
     const v = (raw as Record<string, unknown>)[key];
-    if (typeof v === 'number' && choices.includes(v)) out[key as keyof RoomSettings] = v;
+    if (typeof v === 'number' && choices.includes(v)) out[key as 'stocks' | 'rounds' | 'trade'] = v;
   }
+  const level = (raw as Record<string, unknown>).level;
+  if (isLevel(level)) out.level = level;
   return out;
 }
 
