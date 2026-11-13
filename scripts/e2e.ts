@@ -10,7 +10,9 @@ import { MODES } from '../shared/rules';
 import { Hub } from '../server/src/hub';
 
 /* 단계 시간을 줄여 한 라운드를 몇 초 안에 끝냅니다(서버 안에서만). */
-for (const m of Object.values(MODES)) { m.news = 2; m.trade = 25; m.recap = 30; }
+/* 주문 시간은 장중 단계(시세·호가·주문·손절·지정가)를 다 해 볼 만큼 줍니다.
+   장중 속보는 주문 시간의 절반쯤에 뜨므로, 그보다 길어야 속보까지 확인할 수 있습니다. */
+for (const m of Object.values(MODES)) { m.news = 2; m.trade = 70; m.recap = 30; }
 
 const OUT = path.resolve('e2e-output');
 const W = 390;
@@ -29,16 +31,29 @@ const ignorable = (t: string) => /fonts\.(googleapis|gstatic)\.com|ERR_NAME_NOT_
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
 page.on('console', m => { if (m.type() === 'error' && !ignorable(m.text())) errors.push(`console: ${m.text()}`); });
 
+/* 장중 속보 알림은 떠 있는 동안 화면 위를 가립니다. 단계를 시작하기 전에 치우고,
+   무엇이 떴는지는 기록해 두었다가 '장중 속보' 단계에서 확인합니다. */
+let breakingSeen: string | null = null;
+async function closeBreaking() {
+  const pop = page.locator('.breaking');
+  if (!(await pop.count())) return;
+  breakingSeen ??= await pop.innerText().catch(() => null);
+  await pop.getByRole('button', { name: /닫기/ }).click().catch(() => {});
+  await pop.waitFor({ state: 'detached', timeout: 3_000 }).catch(() => {});
+}
 async function step(name: string, f: () => Promise<void>) {
   const before = errors.length;
   try {
+    await closeBreaking();
     await f();
     await noHorizontalScroll(page, name);
     if (errors.length > before) throw new Error(errors.slice(before).join(' | '));
     console.log(`  ✓ ${name}`);
   } catch (e) {
     failed++;
-    console.log(`  ✗ ${name}: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
+    console.log(`  ✗ ${name}: ${e instanceof Error ? e.message.split('\n').slice(0, 8).join(' / ') : String(e)}`);
+    const sheet = page.locator('.sheet');
+    console.log(`     상태: 종목창 ${await sheet.count()} · 수량버튼 ${await sheet.locator('.pcts').count()} · 주문버튼 ${JSON.stringify(await sheet.locator('button.go').allTextContents())} · VI ${await page.locator('.vi-note').count()} · 속보 ${await page.locator('.breaking').count()} · 단계 ${await page.locator('.topbar b, .topbar').first().innerText().catch(() => '?')}`);
     mkdirSync(OUT, { recursive: true });
     await page.screenshot({ path: path.join(OUT, `${name.replace(/[^\w가-힣]+/g, '_')}.png`), fullPage: true }).catch(() => {});
   }
@@ -55,6 +70,7 @@ await step('홈과 첫 방문 안내', async () => {
   await page.getByRole('dialog', { name: '게임 방법' }).waitFor();
   await page.getByRole('button', { name: '건너뛰기' }).click();
   await page.getByRole('button', { name: '혼자 연습 시작' }).waitFor();
+  ok(await page.getByRole('button', { name: /튜토리얼로 시작/ }).count() === 1, '튜토리얼 시작 버튼 없음');
   ok(await page.getByText('투자 조언이 아닙니다').count(), '면책 문구 없음');
   await page.setViewportSize({ width: 1024, height: 844 });
   const desktopHome = await page.locator('main.home').boundingBox();
@@ -82,8 +98,10 @@ await step('홈과 첫 방문 안내', async () => {
   await settings.getByRole('button', { name: '닫기' }).click();
 });
 
-await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
+await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async () => {
   await page.getByText(/^게임 설정 ·/).click();
+  /* 호가창·지정가·손절은 실전 난이도에서만 나옵니다 */
+  await page.getByLabel('난이도').selectOption('pro');
   await page.getByLabel('종목 수').selectOption('30');
   await page.getByLabel('라운드 수').selectOption('3');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
@@ -94,7 +112,6 @@ await step('혼자 연습: 3라운드·업종별 종목 30개', async () => {
   await settings.waitFor();
   await page.keyboard.press('Escape');
   await settings.waitFor({ state: 'hidden' });
-  ok(/1,000\.00/.test(await page.locator('.index-strip').innerText()), '떡상 지수가 1,000.00으로 시작하지 않음');
   const news = page.locator('main .news').first();
   const newsBox = await news.boundingBox();
   const balanceBox = await page.locator('main .wallet-label').first().boundingBox();
@@ -125,7 +142,8 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await firstRow.click();
   tradedStock = await page.getByRole('dialog').getByRole('heading').first().innerText();
   await page.locator('.live-chart').waitFor({ timeout: 5_000 });
-  ok(/시가총액 .*억 원/.test(await page.locator('.company summary').innerText()), '기업 정보 없음');
+  await page.locator('.company summary').click();
+  ok(/시가총액/.test(await page.locator('.company .kv').innerText()), '기업 정보 없음');
   const before = await page.locator('.live-chart path').getAttribute('d');
   await page.waitForTimeout(2_500);
   const after = await page.locator('.live-chart path').getAttribute('d');
@@ -134,9 +152,14 @@ await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.locator('.live-chart svg.probe-area').click({ position: { x: 20, y: 60 } });
   ok(/\d초 · [\d,]+원/.test(await page.locator('.live-chart .probe').innerText()), '십자선 가격 표시 없음');
   /* 10초봉으로 바꾸면 봉(rect)이 그려지고, 다시 선으로 돌립니다 */
-  await page.locator('.live-chart').getByRole('button', { name: '10초봉' }).click();
+  const kinds = page.getByRole('group', { name: '그래프 종류' });
+  await kinds.getByRole('button', { name: '10초봉' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.live-chart svg rect').length >= 1, null, { timeout: 12_000 });
-  await page.locator('.live-chart').getByRole('button', { name: '선(1초)' }).click();
+  await kinds.getByRole('button', { name: '일봉' }).click();
+  await page.locator('.sheet .replay, .sheet .chart-fig svg').first().waitFor({ timeout: 5_000 });
+  ok(await page.locator('.live-chart').count() === 0, '일봉을 골랐는데 장중 그래프가 남아 있음');
+  await kinds.getByRole('button', { name: '1초' }).click();
+  await page.locator('.live-chart').waitFor({ timeout: 5_000 });
 });
 
 await step('호가창: 매도 5단계·매수 5단계, 가격을 누르면 지정가로', async () => {
@@ -162,19 +185,20 @@ await step('비용 안내: 살 때는 수수료만, 팔 때는 거래세까지',
 });
 
 await step('시장가 매수: 바로 체결', async () => {
-  const go = page.locator('button.go');
-  await page.getByRole('button', { name: '25%', exact: true }).click();
+  const sheet = page.locator('.sheet'), go = sheet.locator('button.go');
+  await sheet.locator('.pcts').first().getByRole('button', { name: '25%', exact: true }).click();
   ok(await go.isEnabled(), '주문 버튼이 꺼져 있음');
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
-  const chart = page.locator('.live-chart');
+  /* 그래프 종류 버튼은 종목 창 위쪽에 있습니다(차트 안이 아님) */
+  const chart = page.locator('.live-chart'), kinds = page.getByRole('group', { name: '그래프 종류' });
   await chart.locator('.chart-fill').first().waitFor();
   await chart.locator('.chart-events summary').click();
   ok(/매수 .*주 · .*원/.test(await chart.locator('.chart-events ul').innerText()), '체결 가격과 수량이 표시되지 않음');
-  await chart.getByRole('button', { name: '10초봉' }).click();
+  await kinds.getByRole('button', { name: '10초봉' }).click();
   ok(await chart.locator('.chart-fill').first().isVisible(), '봉 차트에서 체결 표시가 사라짐');
-  await chart.getByRole('button', { name: '선(1초)' }).click();
+  await kinds.getByRole('button', { name: '1초' }).click();
 });
 
 await step('손절·익절 걸고 해제', async () => {
@@ -203,6 +227,17 @@ await step('지정가 매도 예약과 취소', async () => {
   await page.getByRole('button', { name: '예약 취소' }).click();
   await page.getByText('예약을 취소했습니다').first().waitFor({ timeout: 5_000 });
   await page.keyboard.press('Escape');
+});
+
+await step('장중 속보: 알림이 뜨고 닫힌다', async () => {
+  /* 속보는 주문 시간 절반쯤에 뜹니다. 앞 단계에서 이미 지나갔으면 그때 기록해 둔 내용을 씁니다. */
+  if (!breakingSeen) {
+    await page.locator('.breaking').waitFor({ timeout: 45_000 }).catch(() => {});
+    await closeBreaking();
+  }
+  ok(breakingSeen, '주문 시간이 끝날 때까지 장중 속보 알림이 뜨지 않음');
+  ok(/속보/.test(breakingSeen ?? ''), '속보 표시 없음');
+  ok(/%/.test(breakingSeen ?? ''), '속보 대상 종목의 등락이 없음');
 });
 
 await step('발표 일정: 다음 라운드 예정 종목만 보인다', async () => {
@@ -239,7 +274,23 @@ await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   await filledStock.getByRole('button', { name: '닫기' }).click();
 });
 
+await step('대기실: 내 이름 바꾸기', async () => {
+  const res = await page.request.post(`${base}/api/rooms`, { data: { mode: 'friend' } });
+  const { code } = await res.json() as { code: string };
+  await page.goto(`${base}/#/room/${code}`);
+  await page.getByRole('button', { name: '이름 바꾸기' }).click();
+  const input = page.getByLabel('내 이름');
+  await input.fill('정혁');
+  await page.getByRole('button', { name: '저장' }).click();
+  await page.getByText('정혁', { exact: true }).first().waitFor({ timeout: 5_000 });
+  ok((await page.locator('.people').innerText()).includes('정혁'), '참가자 목록에 바뀐 이름이 없음');
+});
+
 await step('용어 설명 창 열고 닫기', async () => {
+  /* 용어 사전에서 설명을 펼치면 관련 용어가 점선 버튼으로 나옵니다 */
+  await page.goto(base + '/#/glossary');
+  await page.getByPlaceholder(/용어 검색/).fill('슬리피지');
+  await page.locator('.term-row').first().click();
   await page.locator('button.gl-term').first().click();
   const sheet = page.locator('.term-sheet');
   await sheet.waitFor();
@@ -282,6 +333,8 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   /* 2라운드짜리 짧은 판을 새로 시작합니다(이후에 만드는 방부터 적용) */
   Object.assign(MODES.solo, { rounds: 2, news: 1, trade: 6, recap: 2 });
   await page.goto(base + '/');
+  await page.getByText(/^게임 설정 ·/).click();
+  await page.getByLabel('난이도').selectOption('easy');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.locator('.sectors').waitFor();
   await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
@@ -290,10 +343,16 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
   await page.getByRole('button', { name: '모두 펼치기' }).click().catch(() => {});
   await page.locator('.sectors button.row').first().click();
-  await page.getByRole('button', { name: '시장가 · 바로 체결' }).click().catch(() => {});
+  /* 쉬움 난이도: 주문 방식·호가창·슬리피지·손절은 화면에 없어야 합니다 */
+  const easy = page.getByRole('dialog').first();
+  await easy.locator('#order-qty').waitFor();
+  ok(await easy.getByRole('group', { name: '주문 방식' }).count() === 0, '쉬움인데 주문 방식(지정가) 버튼이 보임');
+  ok(await easy.locator('table[aria-label="호가창"]').count() === 0, '쉬움인데 호가창이 보임');
+  ok(!/슬리피지/.test(await easy.innerText()), '쉬움인데 슬리피지가 보임');
   await page.getByRole('button', { name: '25%', exact: true }).click();
   await page.locator('button.go').click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  ok(await easy.getByText('손절·익절 자동 주문').count() === 0, '쉬움인데 가진 종목에 손절·익절이 보임');
   await page.keyboard.press('Escape');
   const j = page.locator('.journal');
   await j.waitFor({ timeout: 40_000 });

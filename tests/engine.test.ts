@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aggregate, buildCandle, movingAverage } from '../shared/candles';
-import { chargeOf, checkOrder, computeClose, feeOf, GROUPS, LEADERS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, taxOf } from '../shared/rules';
+import { chargeOf, checkOrder, computeClose, feeOf, GROUPS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, taxOf } from '../shared/rules';
 import { ARCS, CARDS } from '../server/src/content';
 import { buildPlan, STOCKS_PER_GAME } from '../server/src/plan';
 import { pickDiversified } from '../server/src/npc';
@@ -188,10 +188,10 @@ test('모드별 라운드 구성과 변동 범위', () => {
     assert.ok(p.rounds.every(r => Math.abs(r.marketBp) <= 50 && (Object.entries(r.stockBp) as [`G${number}`, number][]).every(([c, x]) => Math.abs(x) <= stockOf(c).maxMoveBp)));
   }
 });
-test('종목 풀 30개, 업종 6개 × 5종목, 판마다 10종목', () => {
-  assert.equal(STOCKS.length, 30);
-  assert.equal(new Set(STOCKS.map(s => s.code)).size, 30);
-  assert.equal(new Set(STOCKS.map(s => s.name)).size, 30);
+test('종목 풀 50개, 업종 10개 × 5종목, 판마다 기본 10종목', () => {
+  assert.equal(STOCKS.length, 50);
+  assert.equal(new Set(STOCKS.map(s => s.code)).size, 50);
+  assert.equal(new Set(STOCKS.map(s => s.name)).size, 50);
   for (const [g, def] of Object.entries(GROUPS)) {
     const members = STOCKS.filter(s => s.group === g);
     assert.equal(members.length, 5, g);
@@ -205,17 +205,16 @@ test('종목 풀 30개, 업종 6개 × 5종목, 판마다 10종목', () => {
     for (const code of codes) seen.add(code);
     assert.equal(codes.length, STOCKS_PER_GAME);
     assert.equal(new Set(codes).size, STOCKS_PER_GAME);
-    /* 뉴스 대상(대장주)은 항상 나옵니다 */
-    assert.ok(LEADERS.every(c => codes.includes(c)), `${seed}`);
-    const targets = ARCS.filter(a => p.arcIds.includes(a.id)).flatMap(a => a.stages.flatMap(st => st.targets));
-    assert.ok(targets.every(c => codes.includes(c)));
-    /* 뉴스가 난 업종부터 동반 종목을 채웁니다(빈자리 4개 한도) */
-    const featured = new Set(targets.map(c => stockOf(c).group));
-    const withPeer = [...featured].filter(g => codes.some(x => x !== GROUPS[g].leader && stockOf(x).group === g));
-    assert.equal(withPeer.length, Math.min(featured.size, STOCKS_PER_GAME - LEADERS.length), `${seed}`);
-    /* 뉴스 카드의 주인공(targets[0]) 업종이 4개 이하이면 모두 동반 종목이 있습니다 */
-    const primary = new Set(ARCS.filter(a => p.arcIds.includes(a.id)).flatMap(a => a.stages.map(st => stockOf(st.targets[0]).group)));
-    if (primary.size <= STOCKS_PER_GAME - LEADERS.length) for (const g of primary) assert.ok(withPeer.includes(g), `${seed} ${g}`);
+    /* 이번 판 사건이 다루거나 결과로 움직이는 종목은 반드시 나옵니다 */
+    const arcs = ARCS.filter(a => p.arcIds.includes(a.id));
+    const targets = arcs.flatMap(a => a.stages.flatMap(st => st.targets));
+    const moved = arcs.flatMap(a => a.stages.flatMap(st => st.outcomes.flatMap(o => o.impacts.map(i => i.code))));
+    assert.ok([...targets, ...moved].every(c => codes.includes(c)), `${seed}`);
+    /* 뉴스 카드의 주인공(targets[0]) 업종에는 같은 업종 종목이 함께 나옵니다 */
+    const must = new Set([...targets, ...moved]);
+    const primary = new Set(arcs.flatMap(a => a.stages.map(st => stockOf(st.targets[0]).group)));
+    const withPeer = [...primary].filter(g => codes.some(x => !must.has(x) && stockOf(x).group === g));
+    assert.equal(withPeer.length, Math.min(primary.size, STOCKS_PER_GAME - must.size), `${seed}`);
     /* 이번 판 종목에만 개별 변동을 정합니다 */
     assert.ok(p.rounds.every(r => Object.keys(r.stockBp).every(c => codes.includes(c as `G${number}`))));
   }
@@ -230,9 +229,10 @@ test('10라운드 방은 선택한 20종목을 사용하고 모든 라운드에 
 });
 test('분산형 NPC는 업종마다 변동이 가장 작은 종목을 하나씩 고른다', () => {
   const codes = buildPlan(7, 'friend').stockCodes!;
+  const groups = new Set(codes.map(c => stockOf(c).group));
   const picked = pickDiversified(codes);
-  assert.equal(picked.length, 6);
-  assert.equal(new Set(picked.map(c => stockOf(c).group)).size, 6);
+  assert.equal(picked.length, groups.size, '업종마다 하나씩');
+  assert.equal(new Set(picked.map(c => stockOf(c).group)).size, groups.size);
   for (const c of picked) assert.ok(codes.filter(x => stockOf(x).group === stockOf(c).group).every(x => stockOf(x).maxMoveBp >= stockOf(c).maxMoveBp));
 });
 test('재대전은 직전에 하지 않은 사건을 우선 고른다', () => {
@@ -260,7 +260,7 @@ test('수업 2: 1분봉을 5분봉으로 묶어도 가격과 거래량이 맞다
 });
 
 test('기업 정보: 시가총액·PER·배당수익률·지수 계산', async () => {
-  const { marketCapWon, perOf, dividendYieldBp, indexValue, formatEok, FUNDAMENTALS } = await import('../shared/rules');
+  const { marketCapWon, perOf, dividendYieldBp, formatEok, FUNDAMENTALS } = await import('../shared/rules');
   assert.equal(Object.keys(FUNDAMENTALS).length, STOCKS.length);
   assert.equal(marketCapWon('G01', 12400), 12400 * 40_000_000);
   assert.equal(formatEok(marketCapWon('G01', 12400)), '4,960억 원');
@@ -270,10 +270,4 @@ test('기업 정보: 시가총액·PER·배당수익률·지수 계산', async (
   assert.equal(dividendYieldBp('G06', 10200), 343);
   /* 시작 가격 기준 PER은 3~60배 안(적자 제외) */
   for (const st of STOCKS) { const p = perOf(st.code, st.start); if (p !== null) assert.ok(p >= 3 && p <= 60, `${st.code} ${p}`); }
-  /* 지수: 시작 1000, 모든 종목 10% 오르면 1100, 큰 회사 영향이 더 큼 */
-  const base = [{ code: 'G01' as const, price: 12400, startPrice: 12400 }, { code: 'G11' as const, price: 6100, startPrice: 6100 }];
-  assert.equal(indexValue(base), 1000);
-  assert.ok(Math.abs(indexValue(base.map(s => ({ ...s, price: s.startPrice * 1.1 }))) - 1100) < 1e-9);
-  const bigUp = indexValue([{ ...base[0], price: 13640 }, base[1]]), smallUp = indexValue([base[0], { ...base[1], price: 6710 }]);
-  assert.ok(bigUp > smallUp);
 });

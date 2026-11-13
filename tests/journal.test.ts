@@ -1,7 +1,7 @@
-/* 장중 10초봉·이동평균 계산과 판이 끝난 뒤 매매일지를 확인합니다. */
+/* 장중 10초봉 계산과 판이 끝난 뒤 매매일지를 확인합니다. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bucketCandles, movingAverage } from '../client/src/live';
+import { bucketCandles } from '../client/src/live';
 import { buildJournal, journalKey, parseNotes } from '../client/src/journal';
 import { GameRoom } from '../server/src/room';
 
@@ -15,12 +15,6 @@ test('10초봉: 앞 봉의 종가가 다음 봉의 시가, 고가·저가는 구
   for (let i = 1; i < c.length; i++) assert.equal(c[i].open, c[i - 1].close);
   assert.deepEqual(bucketCandles([100], 10), []);
   assert.deepEqual(bucketCandles([100, 105], 10), [{ i: 0, open: 100, high: 105, low: 100, close: 105 }]);
-});
-
-test('이동평균: n개가 모이기 전은 비우고, 이후는 최근 n개 평균(정수)', () => {
-  assert.deepEqual(movingAverage([10, 20, 30, 40], 2), [null, 15, 25, 35]);
-  assert.deepEqual(movingAverage([10, 11], 3), [null, null]);
-  assert.deepEqual(movingAverage([10, 11, 11], 3), [null, null, 11]);
 });
 
 test('매매일지: 내 체결마다 라운드 뉴스와 그 라운드 종가 비교가 붙는다', () => {
@@ -59,10 +53,16 @@ test('매매일지: 종목과 관련된 속보만 연결하고 관련 뉴스가 
   assert.notEqual(live.breakAt, null);
   const at = live.startedAt + live.breakAt! * 1000;
   room.tick(at);
-  assert.equal(room.placeOrder(token, 'related', 'G02', 'buy', 5, at).ok, true);
-  assert.equal(room.placeOrder(token, 'unrelated', 'G05', 'buy', 5, at).ok, true);
+  /* 이번 라운드 뉴스가 다루는 종목 하나와 다루지 않는 종목 하나를 삽니다 */
+  const before = room.view(token, 'player', at);
+  const news = before.news.find(r => r.round === 1)!.cards;
+  const related = news[0].card.targets[0];
+  const covered = news.flatMap(c => c.card.targets);
+  const unrelated = before.stocks.find(s => !covered.includes(s.code))!.code;
+  assert.equal(room.placeOrder(token, 'related', related, 'buy', 5, at).ok, true);
+  assert.equal(room.placeOrder(token, 'unrelated', unrelated, 'buy', 5, at).ok, true);
   const entries = buildJournal(room.view(token, 'player', at));
-  assert.deepEqual(entries.map(e => e.headline), ['중앙은행 금리 결정 회의 시작', null]);
+  assert.deepEqual(entries.map(e => e.headline), [news[0].card.headline, null]);
 });
 
 test('매매일지 메모: 깨진 저장값은 비우고, 200자로 자른다', () => {

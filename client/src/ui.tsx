@@ -1,9 +1,9 @@
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { DISCLAIMER, formatFlow, formatPct, GROUPS, INVESTOR_LABEL, INVESTORS, STOCKS } from '../../shared/rules';
+import { DISCLAIMER, formatPct, GROUPS, STOCKS } from '../../shared/rules';
 import type { PriceBreakdown, Side, StockView } from '../../shared/types';
 import { Rich, TermLink } from './glossary/GlossaryContext';
 import { replayAt, replayPath, replayTicks, useReplay } from './fx';
-import { bucketCandles, movingAverage, probeIndex } from './live';
+import { bucketCandles, probeIndex } from './live';
 import { logoVariant } from './sectors';
 import { useTheme } from './theme';
 
@@ -53,7 +53,11 @@ const GLYPH: Record<string, string> = {
   cold: 'M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5',
   bio: 'M5 19C5 10 10 5 19 5c0 9-5 14-14 14zM5 19l8-8',
   stage: 'M9 18V6l10-2v12M9 18a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM19 16a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z',
-  water: 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z'
+  water: 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z',
+  space: 'M12 3a9 9 0 1 1-9 9M12 3v4M12 12l5-5M3 12h4',
+  farm: 'M12 21V9M12 9c0-3 2-5 5-5 0 3-2 5-5 5zM12 13c0-3-2-5-5-5 0 3 2 5 5 5z',
+  care: 'M12 20s-7-4.5-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.5-7 9-7 9z',
+  recycle: 'M7 7l-3 5 3 2M17 7l3 5-3 2M9 19h6M12 4l3 5h-6z'
 };
 export function StockAvatar({ code, name }: { code: string; name: string }) {
   const s = STOCKS.find(x => x.code === code);
@@ -102,10 +106,6 @@ export function BreakdownPanel({ b }: { b: PriceBreakdown }) {
         {b.preClose !== undefined && <><dt>장 마감 직전 시세</dt><dd className="num">{won(b.preClose)}</dd>
           <dt>결과 공개로 움직인 몫</dt><dd className={`num ${dir(b.closePrice - b.preClose)}`}>{signedWon(b.closePrice - b.preClose)} ({pctBp(Math.round((b.closePrice - b.preClose) * 10000 / b.preClose))})</dd></>}
         {b.volume !== undefined && <><dt><TermLink id="volume">거래량</TermLink></dt><dd className="num">{b.volume.toLocaleString('ko-KR')}주{b.volume > 0 ? ` (매수 ${(b.buyQty ?? 0).toLocaleString('ko-KR')} · 매도 ${(b.sellQty ?? 0).toLocaleString('ko-KR')})` : ''}</dd></>}
-        {b.flows && <><dt className="flows-dt"><TermLink id="net-flow">투자자별 순매수</TermLink></dt><dd className="flows">{INVESTORS.map(k => {
-          const v = b.flows![k];
-          return <span key={k} className={dir(v)}>{INVESTOR_LABEL[k]} {formatFlow(v)}</span>;
-        })}</dd></>}
         <dt>실제 <TermLink id="change-rate">등락률</TermLink></dt><dd className={`num ${dir(b.changeBp)}`}>{arrow(b.changeBp)} {pctBp(b.changeBp)}</dd>
       </dl>
       <h4>변동 근거</h4>
@@ -180,7 +180,7 @@ export function PriceChart({ stock, totalRounds, selected, onSelect, live = fals
       </svg>
       <figcaption className="chart-note">
         <span className="legend up" aria-hidden="true" /> 오름 <span className="legend down" aria-hidden="true" /> 내림 ·{' '}
-        <TermLink id="candle">봉</TermLink> 하나가 라운드 하나예요. 점선 봉은 지금 만들어지는 중이에요. 아래 막대는 <TermLink id="volume">거래량</TermLink>. 봉을 누르면 이유가 나와요.
+        <TermLink id="candle">봉</TermLink> 하나가 라운드 하나(하루)예요. 점선 봉은 지금 만들어지는 중이에요. 아래 막대는 <TermLink id="volume">거래량</TermLink>. 봉을 누르면 이유가 나와요.
       </figcaption>
     </figure>
   );
@@ -219,16 +219,16 @@ export function CandleReplay({ b, name, ticks }: { b: PriceBreakdown; name: stri
   );
 }
 
-/** 이번 라운드 장중 시세 그래프. 선(1초)과 10초봉을 고를 수 있고, 20초 이동평균선을 함께 그립니다.
-    결과 시간에는 마지막에 결과 공개로 움직인 몫을 점선으로 이어 줍니다. */
-const MA_SECONDS = 20, CANDLE_SECONDS = 10;
-export function LiveChart({ stock, steps, closing, breaking, fills }: {
+/** 이번 라운드 장중 시세 그래프. 선(1초)과 10초봉을 고를 수 있습니다.
+    결과 시간에는 마지막에 결과 공개로 움직인 몫을 점선으로 이어 줍니다.
+    이동평균선은 초보자에게 읽을 것만 늘렸고 1초 시세에서는 뜻이 약해 뺐습니다(2026-11 결정). 일봉과 차트 연습실에만 둡니다. */
+const CANDLE_SECONDS = 10;
+export function LiveChart({ stock, steps, closing, breaking, fills, mode }: {
   stock: StockView; steps: number; closing: PriceBreakdown | null;
   breaking: { tick: number; headline: string } | null;
   fills: { tick: number; side: Side; qty: number; price: number }[];
+  mode: 'line' | 'candle';
 }) {
-  const [mode, setMode] = useState<'line' | 'candle'>(() => { try { return (localStorage.getItem('tteoksang:livemode') as 'line' | 'candle') ?? 'line'; } catch { return 'line'; } });
-  const pick = (m: 'line' | 'candle') => { setMode(m); try { localStorage.setItem('tteoksang:livemode', m); } catch { /* 저장 못 해도 됨 */ } };
   const ticks = stock.ticks ?? [];
   const shownBreaking = breaking && breaking.tick < ticks.length ? breaking : null;
   const shownFills = fills.filter(f => f.tick < ticks.length).map(f => ({
@@ -250,8 +250,6 @@ export function LiveChart({ stock, steps, closing, breaking, fills }: {
   const last = ticks[ticks.length - 1];
   const col = last > ticks[0] ? 'var(--up)' : last < ticks[0] ? 'var(--down)' : 'var(--faint)';
   const path = (pts: [number, number][]) => pts.map(([k, v], i) => `${i ? 'L' : 'M'}${x(k).toFixed(1)},${y(v).toFixed(1)}`).join('');
-  const ma = movingAverage(ticks, MA_SECONDS);
-  const maPts = ma.map((v, k) => [k, v] as [number, number | null]).filter((p): p is [number, number] => p[1] !== null);
   const candles = mode === 'candle' ? bucketCandles(ticks, CANDLE_SECONDS) : [];
   const cw = Math.max(2, (x(CANDLE_SECONDS) - x(0)) * 0.6);
   /* 십자선: 그래프를 누르거나 끌면 그 시각의 가격을 보여 줍니다 */
@@ -265,10 +263,6 @@ export function LiveChart({ stock, steps, closing, breaking, fills }: {
   const pk = probe !== null ? Math.min(probe, ticks.length - 1) : null;
   return (
     <figure className="chart-fig live-chart">
-      <div className="seg mini" role="group" aria-label="장중 그래프 모양">
-        <button aria-pressed={mode === 'line'} onClick={() => pick('line')}>선(1초)</button>
-        <button aria-pressed={mode === 'candle'} onClick={() => pick('candle')}>10초봉</button>
-      </div>
       <p className="probe num" aria-live="off">{pk !== null
         ? <>{pk}초 · <b>{ticks[pk].toLocaleString('ko-KR')}원</b> <span className={ticks[pk] > ticks[0] ? 'up' : ticks[pk] < ticks[0] ? 'down' : 'flat'}>{formatPct(Math.round((ticks[pk] - ticks[0]) * 10000 / ticks[0]), 2)}</span></>
         : <span className="hint">그래프를 누르거나 끌면 그 시각의 가격이 나와요</span>}</p>
@@ -282,7 +276,6 @@ export function LiveChart({ stock, steps, closing, breaking, fills }: {
           return <g key={c.i}><line x1={cx} x2={cx} y1={y(c.high)} y2={y(c.low)} stroke={cc} strokeWidth="1.2" />
             <rect x={cx - cw / 2} y={y(Math.max(c.open, c.close))} width={cw} height={Math.max(1.5, Math.abs(y(c.open) - y(c.close)))} fill={cc} rx="1" /></g>;
         })}
-        {maPts.length > 1 && <path d={path(maPts)} fill="none" stroke="var(--gold)" strokeWidth="1.4" opacity=".9" />}
         {mode === 'line' && <circle cx={x(ticks.length - 1)} cy={y(last)} r="3" fill={col} />}
         {shownBreaking && <g className="chart-breaking">
           <title>{shownBreaking.headline}</title>
@@ -311,7 +304,7 @@ export function LiveChart({ stock, steps, closing, breaking, fills }: {
         <text x={L} y={H - 4} fontSize="10" fill="var(--muted)">장 시작</text>
         <text x={x(n)} y={H - 4} fontSize="10" textAnchor="end" fill="var(--muted)">장 마감</text>
       </svg>
-      <figcaption className="chart-note">이번 라운드 시세 · <span className="legend ma" aria-hidden="true" /> {MA_SECONDS}초 <TermLink id="moving-average">이동평균선</TermLink>{end !== null ? ' · 장 마감 오른쪽 점선은 결과 공개 뒤 움직인 몫' : ''}
+      <figcaption className="chart-note">이번 라운드 시세{end !== null ? ' · 장 마감 오른쪽 점선은 결과 공개 뒤 움직인 몫' : ''}
         {shownBreaking && ' · 금색 세로선은 속보'}{shownFills.length > 0 && ' · ▲ 내 매수, ▼ 내 매도'}
         {events.length > 0 && <details className="chart-events">
           <summary>속보와 내 체결 {events.length}건</summary>

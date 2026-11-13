@@ -1,7 +1,8 @@
-/* 이 기기 설정: 화면 밝기, 효과음, 배경음, 음량, 진동. 모두 이 기기에만 저장합니다. */
+/* 이 기기 설정: 화면 밝기, 글자 크기, 효과음, 배경음, 음량, 진동. 모두 이 기기에만 저장합니다. */
 import { useId, useRef, useState } from 'react';
 import { masterVolume, setMasterVolume, useHapticSetting, useMusicSetting, useSoundSetting } from './fx';
 import { useTheme } from './theme';
+import { useTextSize } from './text';
 
 export function SettingsButton() {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -12,6 +13,7 @@ export function SettingsButton() {
   const [haptic, setHaptic] = useHapticSetting();
   const [volume, setVolume] = useState(masterVolume);
   const [theme, setTheme] = useTheme();
+  const [text, setTextSize] = useTextSize();
   const canBuzz = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 
   return <>
@@ -29,6 +31,10 @@ export function SettingsButton() {
       <label className="settings-row">
         다크 모드
         <input type="checkbox" checked={theme === 'dark'} onChange={e => setTheme(e.target.checked ? 'dark' : 'light')} />
+      </label>
+      <label className="settings-row">
+        글자 크게
+        <input type="checkbox" checked={text === 'large'} onChange={e => setTextSize(e.target.checked ? 'large' : 'normal')} />
       </label>
       <label className="settings-row">
         효과음(체결, 종소리, 속보)

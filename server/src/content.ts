@@ -459,6 +459,90 @@ export const ARCS: Arc[] = [
         { id: 'lease', weight: 65, beat: true, actual: '차량을 빌려 쓰는 리스 계약 체결', gap: '걱정보다 한 번에 드는 비용이 작음', label: '리스로 교체 비용 분산', impacts: [{ code: 'G03', bp: 500, reason: '비용을 여러 해로 나눠 냄' }] },
         { id: 'buy', weight: 35, beat: false, actual: '차량 200대 일시 구매', gap: '걱정대로 큰 비용', label: '차량 일시 구매', impacts: [{ code: 'G03', bp: -500, reason: '내년 이익이 크게 줄어듦' }] }
       ] }
+  ] },
+  { id: 'orbit', title: '위성 발사 사건', stages: [
+    { id: 'sp-1', step: 1, targets: ['G31'], signal: { G31: 1 }, clueDir: -1, concept: '일정이 잡혔다는 소식과 일정대로 됐다는 소식은 다릅니다.',
+      headline: '레오링크, 통신 위성 6기 추가 발사 일정 공개', facts: '발사체 업체와 계약을 마치고 발사장을 예약했습니다.', expectation: '시장은 6기 모두 이번 분기에 올라간다고 봅니다.', remaining: '발사장 날씨와 발사체 점검 결과', clue: '발사장 지역에 2주 연속 강풍 예보가 나왔습니다.',
+      outcomes: [
+        { id: 'on-time', weight: 35, beat: true, actual: '6기 모두 예정대로 발사', gap: '기대대로 일정 유지', label: '발사 일정 준수', impacts: [{ code: 'G31', bp: 520, reason: '서비스 지역이 넓어지는 시점이 확정됨' }, { code: 'G35', bp: 180, reason: '발사 지상 설비 가동 증가' }] },
+        { id: 'postponed', weight: 65, beat: false, actual: '강풍으로 발사 2주 연기', gap: '기대한 분기 안 발사가 불확실해짐', label: '발사 연기', impacts: [{ code: 'G31', bp: -600, reason: '서비스 시작이 밀려 매출 인식도 늦어짐' }, { code: 'G35', bp: -200, reason: '발사장 일정이 비게 됨' }] }
+      ] },
+    { id: 'sp-2', step: 2, targets: ['G31', 'G32'], signal: { G31: -1 }, clueDir: 1, concept: '나쁜 소식도 크기를 확인하면 공포가 줄어들 수 있습니다.',
+      headline: '레오링크 위성 2기, 궤도 안착 신호 지연', facts: '올라간 위성 2기의 교신 확인이 늦어지고 있습니다.', expectation: '시장은 위성을 잃는 상황까지 걱정합니다.', remaining: '지상국이 신호를 잡는지 여부', clue: '지상국 운영사가 “예비 안테나로 신호를 잡았다”고 밝혔습니다.',
+      outcomes: [
+        { id: 'sp-recovered', weight: 70, beat: true, actual: '2기 모두 교신 정상 확인', gap: '걱정보다 좋은 결과', label: '교신 정상', impacts: [{ code: 'G31', bp: 600, reason: '위성 손실 걱정이 걷힘' }, { code: 'G32', bp: 160, reason: '예비 안테나 수요가 확인됨' }] },
+        { id: 'sp-lost', weight: 30, beat: false, actual: '위성 1기 통신 두절', gap: '걱정이 현실이 됨', label: '위성 1기 상실', impacts: [{ code: 'G31', bp: -700, reason: '위성 한 기를 다시 올려야 함' }, { code: 'G32', bp: -120, reason: '지상국 운용 물량 감소' }] }
+      ] },
+    { id: 'sp-3', step: 3, targets: ['G31'], signal: { G31: 1 }, clueDir: 1, concept: '계약이 확정돼도 규모가 기대와 다르면 주가는 다르게 움직입니다.',
+      headline: '레오링크, 선박용 통신 요금제 공급 계약 공시 예정', facts: '계약 체결은 확정됐고 적용 선박 수만 남았습니다.', expectation: '시장 기대치는 4천 척입니다.', remaining: '실제 계약 척수', clue: '항만 공사 자료에 올해 장비를 다는 선박이 5천 척으로 적혀 있습니다.',
+      outcomes: [
+        { id: 'sp-big', weight: 55, beat: true, actual: '계약 5천 척', gap: '기대보다 1천 척 많음', label: '기대를 넘은 계약', impacts: [{ code: 'G31', bp: 620, reason: '기대 4천 척을 25% 넘김' }, { code: 'G33', bp: 220, reason: '선박용 안테나 수요 증가' }] },
+        { id: 'sp-meet', weight: 20, beat: true, actual: '계약 4천 척', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G31', bp: 120, reason: '이미 주가에 반영된 규모' }] },
+        { id: 'sp-short', weight: 25, beat: false, actual: '계약 2천5백 척', gap: '기대 4천 척보다 1천5백 척 적음', label: '기대에 못 미친 계약', impacts: [{ code: 'G31', bp: -520, reason: '계약은 땄지만 기대의 60%대에 그침' }, { code: 'G33', bp: -150, reason: '안테나 주문도 함께 줄어듦' }] }
+      ] }
+  ] },
+  { id: 'vertifarm', title: '수직농장 전기요금 사건', stages: [
+    { id: 'fa-1', step: 1, targets: ['G36'], signal: { G36: 1 }, clueDir: -1, concept: '계약을 맺었다는 사실보다 기간과 단가가 중요할 때가 있습니다.',
+      headline: '그로벤 수직농장, 대형 급식업체와 공급 협의', facts: '시범 납품을 마치고 본계약을 협의하고 있습니다.', expectation: '시장은 1년짜리 계약이 바로 맺어진다고 봅니다.', remaining: '계약 기간과 단가', clue: '급식업체가 “올해는 분기 단위로만 계약한다”는 방침을 공지했습니다.',
+      outcomes: [
+        { id: 'fa-yearly', weight: 35, beat: true, actual: '1년 공급 계약 체결', gap: '기대대로 장기 계약', label: '1년 계약 체결', impacts: [{ code: 'G36', bp: 560, reason: '매출이 1년치로 묶임' }] },
+        { id: 'fa-quarterly', weight: 65, beat: false, actual: '분기 단위 계약으로 체결', gap: '기대한 1년이 아니라 3개월', label: '분기 계약에 그침', impacts: [{ code: 'G36', bp: -600, reason: '분기마다 다시 협상해야 해 매출이 불안정해짐' }, { code: 'G40', bp: -150, reason: '수확 자동화 투자도 미뤄짐' }] }
+      ] },
+    { id: 'fa-2', step: 2, targets: ['G36', 'G38'], signal: { G36: -1 }, clueDir: 1, concept: '같은 비용 뉴스도 미리 대비한 회사에는 덜 아픕니다.',
+      headline: '전기요금 인상에 실내 농장 비용 부담 우려', facts: '수직농장은 조명과 공조에 쓰는 전기가 원가의 큰 몫입니다.', expectation: '시장은 마진이 크게 줄 것으로 봅니다.', remaining: '조명을 바꿔 아낀 전기 사용량', clue: '회사가 지난 분기 보고서에서 조명을 바꿔 전력 사용을 18% 줄였다고 밝혔습니다.',
+      outcomes: [
+        { id: 'fa-offset', weight: 70, beat: true, actual: '전력 절감으로 마진 방어', gap: '걱정보다 작은 타격', label: '비용 부담 방어', impacts: [{ code: 'G36', bp: 600, reason: '이미 줄여 둔 전력 사용으로 인상분을 흡수' }, { code: 'G38', bp: 280, reason: '절전 조명 교체 수요가 확인됨' }] },
+        { id: 'fa-hit', weight: 30, beat: false, actual: '마진 큰 폭 감소', gap: '걱정이 현실이 됨', label: '마진 감소', impacts: [{ code: 'G36', bp: -700, reason: '전기요금이 그대로 원가에 더해짐' }, { code: 'G38', bp: -150, reason: '농장들이 설비 투자를 미룸' }] }
+      ] },
+    { id: 'fa-3', step: 3, targets: ['G36'], signal: { G36: 1 }, clueDir: 1, concept: '가동률은 공장을 가진 회사의 이익을 크게 좌우합니다.',
+      headline: '그로벤, 새 농장 2곳 가동률 공개 예정', facts: '두 곳 모두 이번 달에 문을 열었습니다.', expectation: '시장 기대치는 가동률 70%입니다.', remaining: '실제 가동률', clue: '구인 공고에 3교대 인력을 모두 채웠다는 내용이 올라왔습니다.',
+      outcomes: [
+        { id: 'fa-high', weight: 55, beat: true, actual: '가동률 85%', gap: '기대보다 15%p 높음', label: '기대를 넘은 가동률', impacts: [{ code: 'G36', bp: 600, reason: '고정비를 넘기고 남는 몫이 커짐' }, { code: 'G37', bp: 180, reason: '양액 제어 장비 추가 발주' }] },
+        { id: 'fa-meet', weight: 20, beat: true, actual: '가동률 70%', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G36', bp: 100, reason: '이미 주가에 반영된 수준' }] },
+        { id: 'fa-low', weight: 25, beat: false, actual: '가동률 45%', gap: '기대 70%보다 25%p 낮음', label: '기대에 못 미친 가동률', impacts: [{ code: 'G36', bp: -520, reason: '고정비를 채우지 못해 적자 폭이 커짐' }] }
+      ] }
+  ] },
+  { id: 'carebot', title: '돌봄 로봇 시범사업 사건', stages: [
+    { id: 'ca-1', step: 1, targets: ['G41'], signal: { G41: 1 }, clueDir: -1, concept: '시범사업과 본사업은 돈이 들어오는 시점이 다릅니다.',
+      headline: '케어민 보행보조, 요양시설 시범사업 대상 선정', facts: '전국 시설 20곳에 장비를 넣기로 했습니다.', expectation: '시장은 시범사업이 곧 본사업으로 이어진다고 봅니다.', remaining: '본사업 예산이 잡히는 시점', clue: '예산안 설명자료에 본사업은 내후년부터로 적혀 있습니다.',
+      outcomes: [
+        { id: 'ca-soon', weight: 35, beat: true, actual: '내년 본사업 예산 편성', gap: '기대보다 빠른 일정', label: '본사업 조기 편성', impacts: [{ code: 'G41', bp: 540, reason: '매출이 잡히는 시점이 앞당겨짐' }, { code: 'G45', bp: 160, reason: '돌봄 연계 수요도 함께 늘어남' }] },
+        { id: 'ca-later', weight: 65, beat: false, actual: '본사업은 내후년으로', gap: '기대보다 1년 늦음', label: '본사업 지연', impacts: [{ code: 'G41', bp: -580, reason: '시범사업 물량만으로는 적자를 메우기 어려움' }] }
+      ] },
+    { id: 'ca-2', step: 2, targets: ['G41', 'G43'], signal: { G41: -1 }, clueDir: 1, concept: '같은 점검 지적도 범위를 확인해야 크기를 알 수 있습니다.',
+      headline: '케어민 로봇 안전 점검 지적, 납품 일시 중단', facts: '점검에서 잠금장치 부품 한 가지가 지적됐습니다.', expectation: '시장은 이미 나간 물량까지 거둬들일까 걱정합니다.', remaining: '지적 사항의 범위', clue: '점검 기관이 “해당 부품만 바꾸면 된다”고 확인했습니다.',
+      outcomes: [
+        { id: 'ca-minor', weight: 70, beat: true, actual: '부품 교체로 납품 재개', gap: '걱정보다 가벼운 조치', label: '부품 교체로 마무리', impacts: [{ code: 'G41', bp: 620, reason: '전량 회수 걱정이 걷힘' }, { code: 'G43', bp: 140, reason: '안전 점검용 측정 장비 수요 증가' }] },
+        { id: 'ca-recall', weight: 30, beat: false, actual: '나간 물량 전량 회수', gap: '걱정이 현실이 됨', label: '전량 회수', impacts: [{ code: 'G41', bp: -720, reason: '회수 비용과 신뢰 손상' }, { code: 'G43', bp: -200, reason: '같은 시설 납품 일정이 함께 밀림' }] }
+      ] },
+    { id: 'ca-3', step: 3, targets: ['G41'], signal: { G41: 1 }, clueDir: 1, concept: '협력사가 준비한 물량은 계약 규모를 먼저 알려 주는 선행 지표입니다.',
+      headline: '케어민, 재활병원 공급 계약 규모 공시 예정', facts: '계약 체결은 확정됐고 공급 대수만 남았습니다.', expectation: '시장 기대치는 300대입니다.', remaining: '실제 공급 대수', clue: '부품 협력사의 출하 계획이 400대 분량으로 잡혔습니다.',
+      outcomes: [
+        { id: 'ca-over', weight: 55, beat: true, actual: '공급 400대', gap: '기대보다 100대 많음', label: '기대를 넘은 공급', impacts: [{ code: 'G41', bp: 580, reason: '기대 300대를 33% 넘김' }, { code: 'G44', bp: 200, reason: '재활 기기도 함께 들어감' }] },
+        { id: 'ca-meet', weight: 20, beat: true, actual: '공급 300대', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G41', bp: 110, reason: '이미 주가에 반영된 규모' }] },
+        { id: 'ca-under', weight: 25, beat: false, actual: '공급 150대', gap: '기대 300대의 절반', label: '기대에 못 미친 공급', impacts: [{ code: 'G41', bp: -500, reason: '병원 예산 사정으로 물량이 줄어듦' }] }
+      ] }
+  ] },
+  { id: 'remetal', title: '폐금속 가격 사건', stages: [
+    { id: 're-1', step: 1, targets: ['G46', 'G50'], signal: { G46: 1 }, clueDir: -1, concept: '설비를 늘려도 파는 값이 내리면 이익은 늘지 않습니다.',
+      headline: '리메탈 정련, 폐배터리 처리 설비 증설 발표', facts: '내년까지 처리량을 두 배로 늘린다고 밝혔습니다.', expectation: '시장은 늘린 설비가 바로 꽉 찬다고 봅니다.', remaining: '회수한 금속을 파는 가격', clue: '금속 시황표에 회수 금속 가격이 석 달째 내리막으로 나옵니다.',
+      outcomes: [
+        { id: 're-firm', weight: 35, beat: true, actual: '금속 가격 반등, 증설분 조기 가동', gap: '기대대로 물량과 값이 함께 늘어남', label: '증설 효과 조기 반영', impacts: [{ code: 'G46', bp: 520, reason: '처리량과 파는 값이 함께 올라감' }, { code: 'G50', bp: 280, reason: '폐배터리 회수 물량 증가' }] },
+        { id: 're-weak', weight: 65, beat: false, actual: '금속 가격 약세 지속', gap: '물량은 늘어도 값이 받쳐 주지 않음', label: '금속 가격 약세', impacts: [{ code: 'G46', bp: -600, reason: '설비 투자비는 나갔는데 파는 값이 내림' }, { code: 'G50', bp: -300, reason: '회수 단가도 함께 내림' }] }
+      ] },
+    { id: 're-2', step: 2, targets: ['G46'], signal: { G46: -1 }, clueDir: 1, concept: '멈춘 기간이 얼마나 되는지가 손실의 크기를 정합니다.',
+      headline: '리메탈 공장 가동 중단, 정련로 설비 사고', facts: '정련로 한 기가 멈춰 섰습니다.', expectation: '시장은 이번 분기 내내 멈춘다고 봅니다.', remaining: '수리에 걸리는 기간', clue: '설비 제작사가 교체 부품 재고를 가지고 있다고 알렸습니다.',
+      outcomes: [
+        { id: 're-quick', weight: 70, beat: true, actual: '2주 만에 가동 재개', gap: '걱정보다 훨씬 짧음', label: '빠른 수리', impacts: [{ code: 'G46', bp: 580, reason: '분기 생산 차질이 작게 끝남' }, { code: 'G47', bp: 150, reason: '교체 설비 발주 증가' }] },
+        { id: 're-long', weight: 30, beat: false, actual: '분기 내내 가동 중단', gap: '걱정이 현실이 됨', label: '장기 가동 중단', impacts: [{ code: 'G46', bp: -700, reason: '고정비는 그대로 나가는데 생산이 멈춤' }] }
+      ] },
+    { id: 're-3', step: 3, targets: ['G46', 'G49'], signal: { G46: 1 }, clueDir: 1, concept: '장기 계약은 매출을 오래 고정해 주어 가치가 다릅니다.',
+      headline: '리메탈, 회수 금속 장기 공급 계약 공시 예정', facts: '계약 체결은 확정됐고 기간과 물량만 남았습니다.', expectation: '시장 기대치는 2년 계약입니다.', remaining: '계약 기간', clue: '상대 회사 사업보고서에 5년치 원료 확보 계획이 적혀 있습니다.',
+      outcomes: [
+        { id: 're-long5', weight: 55, beat: true, actual: '5년 장기 공급 계약', gap: '기대보다 3년 긺', label: '기대를 넘은 장기 계약', impacts: [{ code: 'G46', bp: 600, reason: '매출이 5년치로 묶임' }, { code: 'G49', bp: 200, reason: '희귀 합금 회수 물량도 함께 늘어남' }] },
+        { id: 're-meet2', weight: 20, beat: true, actual: '2년 공급 계약', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G46', bp: 120, reason: '이미 주가에 반영된 기간' }] },
+        { id: 're-short1', weight: 25, beat: false, actual: '1년 공급 계약', gap: '기대 2년의 절반', label: '기대에 못 미친 계약', impacts: [{ code: 'G46', bp: -520, reason: '내년에 다시 협상해야 함' }] }
+      ] }
   ] }
 ];
 
@@ -493,7 +577,52 @@ export const CARDS: ChoiceCard[] = [
     { key: 'B', label: '회사를 먼저 살펴본다', feedback: '배당은 이익의 일부를 나눠 받는 것입니다. 배당 한 번보다 회사가 꾸준히 벌 수 있는지가 중요합니다.' } ] },
   { id: 'themesms', title: '“테마주 정보” 문자가 왔습니다', body: '“가상 공연 대장주! 내일 상한가 확실. 지금 매수하세요.” 모르는 번호입니다.', concept: '테마주', condition: '주문 시간 중 공개', options: [
     { key: 'A', label: '이름이라도 검색해서 산다', feedback: '이런 문자는 먼저 사 둔 사람이 비싸게 팔 상대를 찾는 수단일 수 있습니다. “확실”이라는 말이 붙으면 더 의심하세요.' },
-    { key: 'B', label: '무시하고 사업 내용을 확인한다', feedback: '테마와 실제 매출이 연결되는지 사업보고서에서 확인하는 습관이 테마주 급락을 피하게 해 줍니다.' } ] }
+    { key: 'B', label: '무시하고 사업 내용을 확인한다', feedback: '테마와 실제 매출이 연결되는지 사업보고서에서 확인하는 습관이 테마주 급락을 피하게 해 줍니다.' } ] },
+  { id: 'ipo', title: '공모주 청약 안내가 떴습니다', body: '“상장 첫날 두 배 간다더라.” 회사가 무엇을 파는지는 아직 못 봤습니다.', concept: '공모주 청약', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '일단 청약부터 넣는다', feedback: '공모주는 상장 첫날 공모가보다 크게 오르기도 하고 밑으로 내려가기도 합니다. 첫날 가격만 보고 넣으면 내려갈 때 버틸 근거가 없습니다.' },
+    { key: 'B', label: '무엇을 파는 회사인지 먼저 본다', feedback: '공모가가 어떻게 정해졌는지, 무엇으로 돈을 버는지 확인하면 상장 첫날 가격에 덜 흔들립니다.' } ] },
+  { id: 'rights', title: '가진 종목이 유상증자를 공시했습니다', body: '회사가 새 주식을 발행해 돈을 모으겠다고 합니다. 규모가 꽤 큽니다.', concept: '지분 희석', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '돈이 들어오니 좋은 소식이다', feedback: '돈은 들어오지만 주식 수가 늘어 1주의 몫이 줄어듭니다. 이것이 지분 희석입니다. 그래서 대규모 유상증자 발표에 주가가 내리는 일이 많습니다.' },
+    { key: 'B', label: '모은 돈을 어디에 쓰는지 본다', feedback: '좋은 판단입니다. 빚을 갚는 데 쓰는지 공장을 짓는 데 쓰는지에 따라 평가가 달라집니다. 공시의 자금 사용 목적을 보세요.' } ] },
+  { id: 'bonus', title: '“주식이 두 배가 됩니다” 소식입니다', body: '가진 종목이 무상증자를 한다고 합니다. 수량이 두 배로 늘어난다고 적혀 있습니다.', concept: '무상증자', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '공짜로 두 배니 더 산다', feedback: '수량이 두 배가 되면 기준가가 절반으로 내려갑니다. 내 주식 전체의 값은 그대로이고 회사에 새 돈이 들어오지도 않습니다.' },
+    { key: 'B', label: '내 자산이 늘어나는지 계산해 본다', feedback: '좋은 판단입니다. 피자를 더 잘게 자른 것과 같습니다. 발표 자체가 호재로 읽혀 주가가 움직일 수는 있지만, 회사 가치가 커진 것은 아닙니다.' } ] },
+  { id: 'split', title: '주가가 갑자기 5분의 1이 됐습니다', body: '놀라서 봤더니 액면분할이 있었습니다. 수량은 5배로 늘어 있습니다.', concept: '액면분할', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '싸졌으니 지금 더 산다', feedback: '주가가 낮아진 만큼 수량이 늘어 시가총액은 그대로입니다. 싸진 것이 아니라 잘게 쪼개진 것입니다.' },
+    { key: 'B', label: '시가총액이 그대로인지 확인한다', feedback: '좋은 판단입니다. 숫자가 작아 보여 사기 쉬워지는 효과는 있지만, 회사의 값은 바뀌지 않았습니다.' } ] },
+  { id: 'short', title: '“공매도로 쉽게 번다”는 글을 봤습니다', body: '주식을 빌려서 먼저 팔고 내려가면 싸게 사서 갚는다고 합니다.', concept: '공매도', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '나도 해 보고 싶다', feedback: '예상이 틀려 주가가 오르면 비싸게 사서 갚아야 합니다. 주가가 오르는 데는 한계가 없어 손실이 원금보다 커질 수 있습니다.' },
+    { key: 'B', label: '손실이 어디까지 커지는지 먼저 본다', feedback: '좋은 판단입니다. 사서 가진 주식은 최악이 0원이지만, 빌려서 판 쪽은 손실 한도가 없습니다.' } ] },
+  { id: 'limitup', title: '상한가에 올라간 종목이 보입니다', body: '오늘 30% 올라 더 오르지 못하고 멈춰 있습니다. 매수 주문만 쌓여 있습니다.', concept: '상한가·하한가', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '내일도 오를 것 같아 지금 걸어 둔다', feedback: '상한가에 쌓인 주문은 내일 가격을 보장하지 않습니다. 다음 날 하한가로 돌아서면 팔 상대가 없어 빠져나오기 어렵습니다.' },
+    { key: 'B', label: '왜 올랐는지 공시를 찾아본다', feedback: '좋은 판단입니다. 실적이나 공시로 설명되는 상승과 소문만으로 오른 상승은 다음 날이 다릅니다.' } ] },
+  { id: 'settle', title: '팔았는데 돈이 안 보입니다', body: '오늘 주식을 팔았는데 출금 가능 금액이 그대로입니다.', concept: '결제일(T+2)', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '사고가 난 것 같아 다시 팔아 본다', feedback: '팔린 것은 맞습니다. 주식 거래는 체결 뒤 결제까지 영업일이 더 필요해 대금이 바로 출금되지 않습니다. 다시 팔면 없는 수량을 팔게 됩니다.' },
+    { key: 'B', label: '결제일을 확인한다', feedback: '좋은 판단입니다. 체결일과 결제일은 다릅니다. 돈이 필요한 날이 정해져 있다면 결제일을 거꾸로 세어 팔아야 합니다.' } ] },
+  { id: 'halt', title: '단톡방에 거래정지 소문이 돌았습니다', body: '“내가 가진 종목이 내일 거래정지된다더라.” 출처는 캡처 한 장입니다.', concept: '거래정지', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '무서워서 지금 다 판다', feedback: '거래정지는 거래소가 공시로 알립니다. 캡처 한 장에 팔면 소문이 사실이 아닐 때 수수료만 내고 끝납니다.' },
+    { key: 'B', label: '공시로 사실인지 확인한다', feedback: '좋은 판단입니다. 공식 공시를 먼저 보면 찌라시와 사실을 나눌 수 있습니다. 사실이라면 정지 사유와 기간이 함께 적혀 있습니다.' } ] },
+  { id: 'audit', title: '감사의견 이야기가 나왔습니다', body: '가진 종목의 회계 감사에서 “의견거절”이 나올 수 있다는 기사가 떴습니다.', concept: '감사의견', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '회계는 내 일이 아니니 넘긴다', feedback: '의견거절은 숫자를 믿기 어렵다는 뜻이고, 거래정지나 상장폐지 심사로 이어질 수 있습니다. 가장 무거운 신호입니다.' },
+    { key: 'B', label: '어떤 의견이 나왔는지 확인한다', feedback: '좋은 판단입니다. 적정과 한정, 의견거절은 무게가 전혀 다릅니다. 사업보고서에서 확인할 수 있습니다.' } ] },
+  { id: 'vote', title: '주주총회 안내문이 왔습니다', body: '가진 종목에서 의결권을 행사하라는 안내가 왔습니다. 안건은 임원 선임과 배당입니다.', concept: '의결권', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '한 주뿐이라 버린다', feedback: '보통주는 1주에 1표이고, 주주는 회사의 주인입니다. 표를 쓰지 않아도 손해는 없지만, 안건을 읽어 보는 것만으로 회사를 알게 됩니다.' },
+    { key: 'B', label: '안건을 읽고 의사를 밝힌다', feedback: '좋은 판단입니다. 배당을 얼마로 정하는지, 누구를 임원으로 뽑는지가 안건에 적혀 있습니다.' } ] },
+  { id: 'divtax', title: '배당금이 생각보다 적게 들어왔습니다', body: '공시된 주당 배당금으로 계산한 금액보다 적습니다.', concept: '배당소득세', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '회사가 덜 줬다고 항의한다', feedback: '배당금은 배당소득세를 뗀 뒤 계좌에 들어옵니다. 회사가 덜 준 것이 아닙니다.' },
+    { key: 'B', label: '세금을 뗀 금액인지 확인한다', feedback: '좋은 판단입니다. 받을 돈을 계산할 때는 세금을 뺀 뒤를 봐야 합니다. 세율과 기준은 바뀔 수 있어 그때 확인해야 합니다.' } ] },
+  { id: 'guarantee', title: '“원금 보장 투자” 광고를 봤습니다', body: '“예금보다 안전하고 수익률은 높습니다. 원금을 보장합니다.”', concept: '예금자보호', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '안전하다니 넣어 본다', feedback: '예금은 한도까지 보호되지만 주식과 펀드는 예금자보호 대상이 아닙니다. 투자에서 원금을 보장한다는 말은 지킬 수 없는 약속입니다.' },
+    { key: 'B', label: '보장이 가능한지 의심한다', feedback: '좋은 판단입니다. 등록된 금융회사인지, 무엇에 투자하는지 확인해야 합니다. 보장과 고수익을 함께 말하는 곳은 특히 위험합니다.' } ] },
+  { id: 'rate', title: '기준금리 인상 뉴스가 나왔습니다', body: '“금리가 더 오를 수 있다”는 기사입니다. 내가 가진 종목은 적자이고 미래 성장을 기대받는 회사입니다.', concept: '기준금리', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '금리는 주식과 상관없다', feedback: '금리가 오르면 빌린 돈의 이자 부담이 커지고, 먼 미래의 이익을 더 많이 깎아 평가합니다. 성장주가 더 흔들리는 이유입니다.' },
+    { key: 'B', label: '내 종목에 어떻게 닿는지 본다', feedback: '좋은 판단입니다. 같은 금리 뉴스가 빚이 많은 회사에는 비용이고, 이자로 돈을 버는 회사에는 기회일 수 있습니다.' } ] },
+  { id: 'churn', title: '수수료 무료 이벤트가 왔습니다', body: '“이번 달 수수료 무료! 마음껏 거래하세요.”', concept: '증권거래세', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '공짜니까 많이 사고팔아 본다', feedback: '수수료가 없어도 팔 때는 증권거래세가 붙고, 자주 사고팔면 슬리피지까지 쌓입니다. 비용이 0이 되는 것은 아닙니다.' },
+    { key: 'B', label: '거래 횟수를 늘릴 이유는 아니라고 본다', feedback: '좋은 판단입니다. 거래가 잦아지면 판단할 시간이 줄고 비용만 늘어나기 쉽습니다.' } ] },
+  { id: 'check', title: '오늘 계좌를 쉰 번 열었습니다', body: '시세가 조금 움직일 때마다 확인하다가 일에 집중하지 못했습니다.', concept: '과잉 반응', condition: '주문 시간 중 공개', options: [
+    { key: 'A', label: '자주 봐야 빨리 대응한다', feedback: '짧은 움직임은 대부분 잡음입니다. 자주 볼수록 작은 등락에 과잉 반응해 필요 없는 거래를 하게 됩니다.' },
+    { key: 'B', label: '확인하는 시간을 정해 둔다', feedback: '좋은 판단입니다. 언제 확인하고 어떤 일이 생기면 움직일지 미리 정해 두면 감정에 끌려가지 않습니다.' } ] }
 ];
 
 export const stageById = new Map(ARCS.flatMap(a => a.stages.map(s => [s.id, s] as const)));

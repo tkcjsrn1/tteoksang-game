@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { navigate } from './App';
 import { createRoom, roomInfo, store } from './net';
 import { TERMS } from '../../shared/glossary';
-import { cleanSettings, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
+import { cleanSettings, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { RoomSettings } from '../../shared/types';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
@@ -20,6 +20,7 @@ function todayTerm() {
 export function Home() {
   const [joining, setJoining] = useState(false);
   const [howTo, setHowTo] = useState(needsOnboarding);
+  const [tutorial, setTutorial] = useState(false);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,9 +34,12 @@ export function Home() {
   };
   const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, settings); navigate(`/room/${r.code}`); });
   const stocks = settings.stocks ?? STOCKS_PER_GAME, rounds = settings.rounds ?? MODES.solo.rounds, trade = settings.trade ?? MODES.solo.trade;
+  const level = settings.level ?? MODES.solo.level;
   const minutes = Math.max(1, Math.round(rounds * (MODES.solo.news + trade + MODES.solo.recap) / 60));
   const pick = (o: RoomSettings) => { const next = { ...settings, ...o }; setSettings(next); store.set('settings', JSON.stringify(next)); };
   const join = () => run(async () => { await roomInfo(code); navigate(`/room/${code}`); });
+  /* 튜토리얼: 게임 방법 카드를 처음부터 보여 주고, 혼자 연습 첫 라운드에 단계 안내를 다시 켭니다. */
+  const startTutorial = () => { store.del('tutorial'); setTutorial(true); setHowTo(true); };
   const t = todayTerm();
   const links = [
     { to: '/glossary', mark: '가', cls: 'blue', title: '용어 사전', sub: `${TERMS.length}개 · 퀴즈로 복습`, badge: `${seen.size}/${TERMS.length}` },
@@ -53,8 +57,13 @@ export function Home() {
         <p className="lede">가상 기업과 가상 자금 1,000만 원으로 하는 주식 게임</p>
         <div className="home-actions">
           <details className="game-opts">
-            <summary>게임 설정 · {stocks}종목 · {rounds}라운드 · 장 {trade}초 <small className="hint">(한 판 약 {minutes}분)</small></summary>
+            <summary>게임 설정 · {LEVEL_LABEL[level]} · {stocks}종목 · {rounds}라운드 · 장 {trade}초 <small className="hint">(한 판 약 {minutes}분)</small></summary>
             <div className="room-settings" role="group" aria-label="혼자 연습과 친구 대전 설정">
+              <label>난이도
+                <select value={level} onChange={e => pick({ level: e.target.value as typeof level })}>
+                  {LEVELS.map(l => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}
+                </select>
+              </label>
               <label>종목 수
                 <select value={stocks} onChange={e => pick({ stocks: Number(e.target.value) })}>
                   {ROOM_OPTIONS.stocks.map(n => <option key={n} value={n}>{n}개</option>)}
@@ -71,9 +80,11 @@ export function Home() {
                 </select>
               </label>
             </div>
-            <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다. 처음이라면 10종목·5라운드를 권합니다.</p>
+            <p className="hint">{LEVEL_LABEL[level]}: {LEVEL_NOTE[level]}. 뉴스·속보·돌발 사건은 두 난이도에서 똑같이 나와요.</p>
+            <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다. 처음이라면 쉬움·10종목·5라운드를 권합니다.</p>
           </details>
           <button className="cta" disabled={busy} onClick={() => make('solo')}>혼자 연습 시작</button>
+          <button className="ghost" disabled={busy} onClick={startTutorial}>처음이라면 · 튜토리얼로 시작</button>
           <div className="btn-row">
             <button className="ghost" disabled={busy} onClick={() => make('friend')}>친구 방 만들기</button>
             <button className="ghost" disabled={busy} aria-expanded={joining} onClick={() => setJoining(!joining)}>코드로 참가</button>
@@ -110,7 +121,7 @@ export function Home() {
 
       <button className="link" style={{ alignSelf: 'center' }} onClick={() => setHowTo(true)}>게임 방법 다시 보기</button>
       <Disclaimer />
-      {howTo && <Onboarding onDone={() => setHowTo(false)} />}
+      {howTo && <Onboarding onDone={() => { setHowTo(false); if (tutorial) { setTutorial(false); make('solo'); } }} />}
     </main>
   );
 }
