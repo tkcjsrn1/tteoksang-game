@@ -1,7 +1,7 @@
 import os from 'node:os';
 /* 방 목록, WebSocket 연결, 타이머를 묶는 서버 본체. HTTP 서버와 분리해 통합 테스트에서 그대로 띄웁니다. */
 import { randomInt } from 'node:crypto';
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -16,7 +16,10 @@ export interface HubOptions { store?: Store; staticDir?: string; port?: number; 
   /** 리버스 프록시 뒤에서 X-Forwarded-For의 첫 주소를 접속 주소로 씁니다. 프록시가 없을 때 켜면 주소를 속일 수 있습니다. */
   trustProxy?: boolean }
 
-const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ico': 'image/x-icon' };
+const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
+/* 링크 미리보기(og:image·og:url)는 전체 주소여야 합니다. 배포할 때 PUBLIC_URL에 https://내주소 를 넣으면
+   index.html의 %PUBLIC_URL%을 그 값으로 바꿔서 내보냅니다. 비워 두면 /og.png 같은 상대 주소가 됩니다. */
+const PUBLIC_URL = (process.env.PUBLIC_URL ?? '').replace(/\/+$/, '');
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 /* 남용 방지. 게임 시계가 아니라 실제 시간(Date.now)으로 셉니다. */
 export const MSG_LIMIT_PER_SEC = 30;       // 연결 하나가 1초에 보낼 수 있는 메시지 수
@@ -333,7 +336,13 @@ export class Hub {
     const safe = path.normalize(decoded).replace(/^([.\\/])+/, '');
     let file = path.join(root, safe);
     if (!file.startsWith(path.resolve(root)) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(root, 'index.html');
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': file.endsWith('.html') ? 'no-store' : 'public, max-age=3600' });
+    if (file.endsWith('.html')) {
+      const html = readFileSync(file, 'utf8').replaceAll('%PUBLIC_URL%', PUBLIC_URL);
+      res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-store' });
+      res.end(html);
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'public, max-age=3600' });
     createReadStream(file).pipe(res);
   }
 }

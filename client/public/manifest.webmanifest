@@ -1,0 +1,17 @@
+{
+  "name": "떡상개론",
+  "short_name": "떡상개론",
+  "description": "가상 기업과 가상 자금으로 뉴스를 읽고 사고파는 주식 게임",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#3182F6",
+  "icons": [
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
