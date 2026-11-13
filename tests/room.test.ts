@@ -7,7 +7,7 @@ import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
 function setup(opts: Partial<Parameters<typeof GameRoom.create>[0]> = {}) {
-  const room = GameRoom.create({ code: '123456', mode: 'friend', now: T0, seed: 7, ...opts });
+  const room = GameRoom.create({ code: '123456', mode: 'friend', now: T0, seed: 7, settings: { level: 'pro' }, ...opts });
   const a = room.join(null, T0).token, b = room.join(null, T0 + 1).token;
   return { room, a, b };
 }

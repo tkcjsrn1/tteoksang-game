@@ -98,8 +98,10 @@ await step('홈과 첫 방문 안내', async () => {
   await settings.getByRole('button', { name: '닫기' }).click();
 });
 
-await step('혼자 연습: 3라운드·종목 30개', async () => {
+await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async () => {
   await page.getByText(/^게임 설정 ·/).click();
+  /* 호가창·지정가·손절은 실전 난이도에서만 나옵니다 */
+  await page.getByLabel('난이도').selectOption('pro');
   await page.getByLabel('종목 수').selectOption('30');
   await page.getByLabel('라운드 수').selectOption('3');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
@@ -331,6 +333,8 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   /* 2라운드짜리 짧은 판을 새로 시작합니다(이후에 만드는 방부터 적용) */
   Object.assign(MODES.solo, { rounds: 2, news: 1, trade: 6, recap: 2 });
   await page.goto(base + '/');
+  await page.getByText(/^게임 설정 ·/).click();
+  await page.getByLabel('난이도').selectOption('easy');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.locator('.sectors').waitFor();
   await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
@@ -339,10 +343,16 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
   await page.getByRole('button', { name: '모두 펼치기' }).click().catch(() => {});
   await page.locator('.sectors button.row').first().click();
-  await page.getByRole('button', { name: '시장가 · 바로 체결' }).click().catch(() => {});
+  /* 쉬움 난이도: 주문 방식·호가창·슬리피지·손절은 화면에 없어야 합니다 */
+  const easy = page.getByRole('dialog').first();
+  await easy.locator('#order-qty').waitFor();
+  ok(await easy.getByRole('group', { name: '주문 방식' }).count() === 0, '쉬움인데 주문 방식(지정가) 버튼이 보임');
+  ok(await easy.locator('table[aria-label="호가창"]').count() === 0, '쉬움인데 호가창이 보임');
+  ok(!/슬리피지/.test(await easy.innerText()), '쉬움인데 슬리피지가 보임');
   await page.getByRole('button', { name: '25%', exact: true }).click();
   await page.locator('button.go').click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  ok(await easy.getByText('손절·익절 자동 주문').count() === 0, '쉬움인데 가진 종목에 손절·익절이 보임');
   await page.keyboard.press('Escape');
   const j = page.locator('.journal');
   await j.waitFor({ timeout: 40_000 });

@@ -6,7 +6,8 @@ import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
 function trading(seed = 7, opts: Partial<Parameters<typeof GameRoom.create>[0]> = {}) {
-  const room = GameRoom.create({ code: '424242', mode: 'friend', now: T0, seed, ...opts });
+  /* 손절·익절은 실전 난이도 기능입니다 */
+  const room = GameRoom.create({ code: '424242', mode: 'friend', now: T0, seed, settings: { level: 'pro' }, ...opts });
   const a = room.join(null, T0).token; room.join(null, T0 + 1);
   room.start(T0);
   while (room.s.phase !== 'trade') room.tick(room.s.phaseEndsAt!);

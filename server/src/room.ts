@@ -346,6 +346,7 @@ export class GameRoom {
     if (!stockOf(code) || !gameCodes(this.s.plan).includes(code)) return { ok: false, reason: '없는 종목입니다' };
     if (side !== 'buy' && side !== 'sell') return { ok: false, reason: '잘못된 주문입니다' };
     if (kind !== 'market' && kind !== 'limit') return { ok: false, reason: '잘못된 주문입니다' };
+    if (kind === 'limit' && this.config.level === 'easy') return { ok: false, reason: '쉬움 난이도에서는 시장가로만 주문할 수 있습니다' };
     const halt = this.haltLeft(code);
     if (halt) return { ok: false, reason: `변동성 완화장치(VI)로 거래가 멈췄습니다. ${halt}초 뒤에 다시 주문할 수 있어요` };
     const res = this.applyOrder(p, requestId, code, side, qty, now, kind, limit);
@@ -414,6 +415,7 @@ export class GameRoom {
     const price = this.markPrice(code);
     const valid = (v: number | null) => v === null || (Number.isSafeInteger(v) && v > 0 && v % 10 === 0);
     if (this.s.status !== 'playing') res = { ok: false, reason: '게임 중에만 설정할 수 있습니다' };
+    else if (this.config.level === 'easy') res = { ok: false, reason: '쉬움 난이도에서는 손절·익절을 쓰지 않습니다' };
     else if (!stockOf(code) || !gameCodes(this.s.plan).includes(code)) res = { ok: false, reason: '없는 종목입니다' };
     else if (!(p.holdings[code]?.qty)) res = { ok: false, reason: '가진 종목에만 걸 수 있습니다' };
     else if (!valid(stop) || !valid(take)) res = { ok: false, reason: '가격은 10원 단위로 입력해 주세요' };
@@ -676,7 +678,7 @@ export class GameRoom {
     const value = p ? p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * priceOf(st.code), 0) : 0;
     return {
       code: this.s.code, mode: this.s.mode, status: this.s.status, phase: this.s.phase, round: this.s.round, totalRounds: cfg.rounds,
-      phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade,
+      phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade, level: cfg.level,
       you: { id: p?.id ?? null, label: p?.label ?? null, role, isHost: !!p && p.id === this.s.hostId },
       humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */

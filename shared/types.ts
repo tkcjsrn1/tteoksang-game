@@ -2,7 +2,9 @@
 /** 종목 코드 G01~G30. 목록과 업종은 shared/rules.ts STOCKS */
 export type StockCode = `G${number}`;
 export type GameMode = 'friend' | 'solo';
-export interface RoomSettings { stocks?: number; rounds?: number; trade?: number }
+/** 난이도. easy(쉬움)는 시장가만 쓰고 호가창·지정가·손절·익절·슬리피지 숫자를 감춥니다. pro(실전)는 전부 보여 줍니다. */
+export type Level = 'easy' | 'pro';
+export interface RoomSettings { stocks?: number; rounds?: number; trade?: number; level?: Level }
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 export type Side = 'buy' | 'sell';
@@ -126,6 +128,8 @@ export interface RoomView {
   code: string; mode: GameMode; status: RoomStatus; phase: Phase | null;
   round: number; totalRounds: number;
   phaseEndsAt: number | null; phaseSeconds: number; serverNow: number; tradeSeconds?: number;
+  /** 난이도. 쉬움(easy)에서는 호가창·지정가·손절·익절·슬리피지 숫자를 감춥니다. */
+  level: Level;
   you: { id: string | null; label: string | null; role: Role; isHost: boolean };
   humanCount: number; maxPlayers: number; minToStart: number; startCash: number;
   leaderboard: LeaderRow[];
