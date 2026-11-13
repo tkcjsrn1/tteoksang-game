@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aggregate, buildCandle, movingAverage } from '../shared/candles';
-import { chargeOf, checkOrder, computeClose, feeOf, GROUPS, LEADERS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, taxOf } from '../shared/rules';
+import { chargeOf, checkOrder, computeClose, feeOf, GROUPS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, taxOf } from '../shared/rules';
 import { ARCS, CARDS } from '../server/src/content';
 import { buildPlan, STOCKS_PER_GAME } from '../server/src/plan';
 import { pickDiversified } from '../server/src/npc';
@@ -205,17 +205,16 @@ test('종목 풀 50개, 업종 10개 × 5종목, 판마다 기본 10종목', () 
     for (const code of codes) seen.add(code);
     assert.equal(codes.length, STOCKS_PER_GAME);
     assert.equal(new Set(codes).size, STOCKS_PER_GAME);
-    /* 뉴스 대상(대장주)은 항상 나옵니다 */
-    assert.ok(LEADERS.every(c => codes.includes(c)), `${seed}`);
-    const targets = ARCS.filter(a => p.arcIds.includes(a.id)).flatMap(a => a.stages.flatMap(st => st.targets));
-    assert.ok(targets.every(c => codes.includes(c)));
-    /* 뉴스가 난 업종부터 동반 종목을 채웁니다(빈자리 4개 한도) */
-    const featured = new Set(targets.map(c => stockOf(c).group));
-    const withPeer = [...featured].filter(g => codes.some(x => x !== GROUPS[g].leader && stockOf(x).group === g));
-    assert.equal(withPeer.length, Math.min(featured.size, STOCKS_PER_GAME - LEADERS.length), `${seed}`);
-    /* 뉴스 카드의 주인공(targets[0]) 업종이 4개 이하이면 모두 동반 종목이 있습니다 */
-    const primary = new Set(ARCS.filter(a => p.arcIds.includes(a.id)).flatMap(a => a.stages.map(st => stockOf(st.targets[0]).group)));
-    if (primary.size <= STOCKS_PER_GAME - LEADERS.length) for (const g of primary) assert.ok(withPeer.includes(g), `${seed} ${g}`);
+    /* 이번 판 사건이 다루거나 결과로 움직이는 종목은 반드시 나옵니다 */
+    const arcs = ARCS.filter(a => p.arcIds.includes(a.id));
+    const targets = arcs.flatMap(a => a.stages.flatMap(st => st.targets));
+    const moved = arcs.flatMap(a => a.stages.flatMap(st => st.outcomes.flatMap(o => o.impacts.map(i => i.code))));
+    assert.ok([...targets, ...moved].every(c => codes.includes(c)), `${seed}`);
+    /* 뉴스 카드의 주인공(targets[0]) 업종에는 같은 업종 종목이 함께 나옵니다 */
+    const must = new Set([...targets, ...moved]);
+    const primary = new Set(arcs.flatMap(a => a.stages.map(st => stockOf(st.targets[0]).group)));
+    const withPeer = [...primary].filter(g => codes.some(x => !must.has(x) && stockOf(x).group === g));
+    assert.equal(withPeer.length, Math.min(primary.size, STOCKS_PER_GAME - must.size), `${seed}`);
     /* 이번 판 종목에만 개별 변동을 정합니다 */
     assert.ok(p.rounds.every(r => Object.keys(r.stockBp).every(c => codes.includes(c as `G${number}`))));
   }

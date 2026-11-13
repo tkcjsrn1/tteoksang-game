@@ -459,6 +459,90 @@ export const ARCS: Arc[] = [
         { id: 'lease', weight: 65, beat: true, actual: '차량을 빌려 쓰는 리스 계약 체결', gap: '걱정보다 한 번에 드는 비용이 작음', label: '리스로 교체 비용 분산', impacts: [{ code: 'G03', bp: 500, reason: '비용을 여러 해로 나눠 냄' }] },
         { id: 'buy', weight: 35, beat: false, actual: '차량 200대 일시 구매', gap: '걱정대로 큰 비용', label: '차량 일시 구매', impacts: [{ code: 'G03', bp: -500, reason: '내년 이익이 크게 줄어듦' }] }
       ] }
+  ] },
+  { id: 'orbit', title: '위성 발사 사건', stages: [
+    { id: 'sp-1', step: 1, targets: ['G31'], signal: { G31: 1 }, clueDir: -1, concept: '일정이 잡혔다는 소식과 일정대로 됐다는 소식은 다릅니다.',
+      headline: '레오링크, 통신 위성 6기 추가 발사 일정 공개', facts: '발사체 업체와 계약을 마치고 발사장을 예약했습니다.', expectation: '시장은 6기 모두 이번 분기에 올라간다고 봅니다.', remaining: '발사장 날씨와 발사체 점검 결과', clue: '발사장 지역에 2주 연속 강풍 예보가 나왔습니다.',
+      outcomes: [
+        { id: 'on-time', weight: 35, beat: true, actual: '6기 모두 예정대로 발사', gap: '기대대로 일정 유지', label: '발사 일정 준수', impacts: [{ code: 'G31', bp: 520, reason: '서비스 지역이 넓어지는 시점이 확정됨' }, { code: 'G35', bp: 180, reason: '발사 지상 설비 가동 증가' }] },
+        { id: 'postponed', weight: 65, beat: false, actual: '강풍으로 발사 2주 연기', gap: '기대한 분기 안 발사가 불확실해짐', label: '발사 연기', impacts: [{ code: 'G31', bp: -600, reason: '서비스 시작이 밀려 매출 인식도 늦어짐' }, { code: 'G35', bp: -200, reason: '발사장 일정이 비게 됨' }] }
+      ] },
+    { id: 'sp-2', step: 2, targets: ['G31', 'G32'], signal: { G31: -1 }, clueDir: 1, concept: '나쁜 소식도 크기를 확인하면 공포가 줄어들 수 있습니다.',
+      headline: '레오링크 위성 2기, 궤도 안착 신호 지연', facts: '올라간 위성 2기의 교신 확인이 늦어지고 있습니다.', expectation: '시장은 위성을 잃는 상황까지 걱정합니다.', remaining: '지상국이 신호를 잡는지 여부', clue: '지상국 운영사가 “예비 안테나로 신호를 잡았다”고 밝혔습니다.',
+      outcomes: [
+        { id: 'sp-recovered', weight: 70, beat: true, actual: '2기 모두 교신 정상 확인', gap: '걱정보다 좋은 결과', label: '교신 정상', impacts: [{ code: 'G31', bp: 600, reason: '위성 손실 걱정이 걷힘' }, { code: 'G32', bp: 160, reason: '예비 안테나 수요가 확인됨' }] },
+        { id: 'sp-lost', weight: 30, beat: false, actual: '위성 1기 통신 두절', gap: '걱정이 현실이 됨', label: '위성 1기 상실', impacts: [{ code: 'G31', bp: -700, reason: '위성 한 기를 다시 올려야 함' }, { code: 'G32', bp: -120, reason: '지상국 운용 물량 감소' }] }
+      ] },
+    { id: 'sp-3', step: 3, targets: ['G31'], signal: { G31: 1 }, clueDir: 1, concept: '계약이 확정돼도 규모가 기대와 다르면 주가는 다르게 움직입니다.',
+      headline: '레오링크, 선박용 통신 요금제 공급 계약 공시 예정', facts: '계약 체결은 확정됐고 적용 선박 수만 남았습니다.', expectation: '시장 기대치는 4천 척입니다.', remaining: '실제 계약 척수', clue: '항만 공사 자료에 올해 장비를 다는 선박이 5천 척으로 적혀 있습니다.',
+      outcomes: [
+        { id: 'sp-big', weight: 55, beat: true, actual: '계약 5천 척', gap: '기대보다 1천 척 많음', label: '기대를 넘은 계약', impacts: [{ code: 'G31', bp: 620, reason: '기대 4천 척을 25% 넘김' }, { code: 'G33', bp: 220, reason: '선박용 안테나 수요 증가' }] },
+        { id: 'sp-meet', weight: 20, beat: true, actual: '계약 4천 척', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G31', bp: 120, reason: '이미 주가에 반영된 규모' }] },
+        { id: 'sp-short', weight: 25, beat: false, actual: '계약 2천5백 척', gap: '기대 4천 척보다 1천5백 척 적음', label: '기대에 못 미친 계약', impacts: [{ code: 'G31', bp: -520, reason: '계약은 땄지만 기대의 60%대에 그침' }, { code: 'G33', bp: -150, reason: '안테나 주문도 함께 줄어듦' }] }
+      ] }
+  ] },
+  { id: 'vertifarm', title: '수직농장 전기요금 사건', stages: [
+    { id: 'fa-1', step: 1, targets: ['G36'], signal: { G36: 1 }, clueDir: -1, concept: '계약을 맺었다는 사실보다 기간과 단가가 중요할 때가 있습니다.',
+      headline: '그로벤 수직농장, 대형 급식업체와 공급 협의', facts: '시범 납품을 마치고 본계약을 협의하고 있습니다.', expectation: '시장은 1년짜리 계약이 바로 맺어진다고 봅니다.', remaining: '계약 기간과 단가', clue: '급식업체가 “올해는 분기 단위로만 계약한다”는 방침을 공지했습니다.',
+      outcomes: [
+        { id: 'fa-yearly', weight: 35, beat: true, actual: '1년 공급 계약 체결', gap: '기대대로 장기 계약', label: '1년 계약 체결', impacts: [{ code: 'G36', bp: 560, reason: '매출이 1년치로 묶임' }] },
+        { id: 'fa-quarterly', weight: 65, beat: false, actual: '분기 단위 계약으로 체결', gap: '기대한 1년이 아니라 3개월', label: '분기 계약에 그침', impacts: [{ code: 'G36', bp: -600, reason: '분기마다 다시 협상해야 해 매출이 불안정해짐' }, { code: 'G40', bp: -150, reason: '수확 자동화 투자도 미뤄짐' }] }
+      ] },
+    { id: 'fa-2', step: 2, targets: ['G36', 'G38'], signal: { G36: -1 }, clueDir: 1, concept: '같은 비용 뉴스도 미리 대비한 회사에는 덜 아픕니다.',
+      headline: '전기요금 인상에 실내 농장 비용 부담 우려', facts: '수직농장은 조명과 공조에 쓰는 전기가 원가의 큰 몫입니다.', expectation: '시장은 마진이 크게 줄 것으로 봅니다.', remaining: '조명을 바꿔 아낀 전기 사용량', clue: '회사가 지난 분기 보고서에서 조명을 바꿔 전력 사용을 18% 줄였다고 밝혔습니다.',
+      outcomes: [
+        { id: 'fa-offset', weight: 70, beat: true, actual: '전력 절감으로 마진 방어', gap: '걱정보다 작은 타격', label: '비용 부담 방어', impacts: [{ code: 'G36', bp: 600, reason: '이미 줄여 둔 전력 사용으로 인상분을 흡수' }, { code: 'G38', bp: 280, reason: '절전 조명 교체 수요가 확인됨' }] },
+        { id: 'fa-hit', weight: 30, beat: false, actual: '마진 큰 폭 감소', gap: '걱정이 현실이 됨', label: '마진 감소', impacts: [{ code: 'G36', bp: -700, reason: '전기요금이 그대로 원가에 더해짐' }, { code: 'G38', bp: -150, reason: '농장들이 설비 투자를 미룸' }] }
+      ] },
+    { id: 'fa-3', step: 3, targets: ['G36'], signal: { G36: 1 }, clueDir: 1, concept: '가동률은 공장을 가진 회사의 이익을 크게 좌우합니다.',
+      headline: '그로벤, 새 농장 2곳 가동률 공개 예정', facts: '두 곳 모두 이번 달에 문을 열었습니다.', expectation: '시장 기대치는 가동률 70%입니다.', remaining: '실제 가동률', clue: '구인 공고에 3교대 인력을 모두 채웠다는 내용이 올라왔습니다.',
+      outcomes: [
+        { id: 'fa-high', weight: 55, beat: true, actual: '가동률 85%', gap: '기대보다 15%p 높음', label: '기대를 넘은 가동률', impacts: [{ code: 'G36', bp: 600, reason: '고정비를 넘기고 남는 몫이 커짐' }, { code: 'G37', bp: 180, reason: '양액 제어 장비 추가 발주' }] },
+        { id: 'fa-meet', weight: 20, beat: true, actual: '가동률 70%', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G36', bp: 100, reason: '이미 주가에 반영된 수준' }] },
+        { id: 'fa-low', weight: 25, beat: false, actual: '가동률 45%', gap: '기대 70%보다 25%p 낮음', label: '기대에 못 미친 가동률', impacts: [{ code: 'G36', bp: -520, reason: '고정비를 채우지 못해 적자 폭이 커짐' }] }
+      ] }
+  ] },
+  { id: 'carebot', title: '돌봄 로봇 시범사업 사건', stages: [
+    { id: 'ca-1', step: 1, targets: ['G41'], signal: { G41: 1 }, clueDir: -1, concept: '시범사업과 본사업은 돈이 들어오는 시점이 다릅니다.',
+      headline: '케어민 보행보조, 요양시설 시범사업 대상 선정', facts: '전국 시설 20곳에 장비를 넣기로 했습니다.', expectation: '시장은 시범사업이 곧 본사업으로 이어진다고 봅니다.', remaining: '본사업 예산이 잡히는 시점', clue: '예산안 설명자료에 본사업은 내후년부터로 적혀 있습니다.',
+      outcomes: [
+        { id: 'ca-soon', weight: 35, beat: true, actual: '내년 본사업 예산 편성', gap: '기대보다 빠른 일정', label: '본사업 조기 편성', impacts: [{ code: 'G41', bp: 540, reason: '매출이 잡히는 시점이 앞당겨짐' }, { code: 'G45', bp: 160, reason: '돌봄 연계 수요도 함께 늘어남' }] },
+        { id: 'ca-later', weight: 65, beat: false, actual: '본사업은 내후년으로', gap: '기대보다 1년 늦음', label: '본사업 지연', impacts: [{ code: 'G41', bp: -580, reason: '시범사업 물량만으로는 적자를 메우기 어려움' }] }
+      ] },
+    { id: 'ca-2', step: 2, targets: ['G41', 'G43'], signal: { G41: -1 }, clueDir: 1, concept: '같은 점검 지적도 범위를 확인해야 크기를 알 수 있습니다.',
+      headline: '케어민 로봇 안전 점검 지적, 납품 일시 중단', facts: '점검에서 잠금장치 부품 한 가지가 지적됐습니다.', expectation: '시장은 이미 나간 물량까지 거둬들일까 걱정합니다.', remaining: '지적 사항의 범위', clue: '점검 기관이 “해당 부품만 바꾸면 된다”고 확인했습니다.',
+      outcomes: [
+        { id: 'ca-minor', weight: 70, beat: true, actual: '부품 교체로 납품 재개', gap: '걱정보다 가벼운 조치', label: '부품 교체로 마무리', impacts: [{ code: 'G41', bp: 620, reason: '전량 회수 걱정이 걷힘' }, { code: 'G43', bp: 140, reason: '안전 점검용 측정 장비 수요 증가' }] },
+        { id: 'ca-recall', weight: 30, beat: false, actual: '나간 물량 전량 회수', gap: '걱정이 현실이 됨', label: '전량 회수', impacts: [{ code: 'G41', bp: -720, reason: '회수 비용과 신뢰 손상' }, { code: 'G43', bp: -200, reason: '같은 시설 납품 일정이 함께 밀림' }] }
+      ] },
+    { id: 'ca-3', step: 3, targets: ['G41'], signal: { G41: 1 }, clueDir: 1, concept: '협력사가 준비한 물량은 계약 규모를 먼저 알려 주는 선행 지표입니다.',
+      headline: '케어민, 재활병원 공급 계약 규모 공시 예정', facts: '계약 체결은 확정됐고 공급 대수만 남았습니다.', expectation: '시장 기대치는 300대입니다.', remaining: '실제 공급 대수', clue: '부품 협력사의 출하 계획이 400대 분량으로 잡혔습니다.',
+      outcomes: [
+        { id: 'ca-over', weight: 55, beat: true, actual: '공급 400대', gap: '기대보다 100대 많음', label: '기대를 넘은 공급', impacts: [{ code: 'G41', bp: 580, reason: '기대 300대를 33% 넘김' }, { code: 'G44', bp: 200, reason: '재활 기기도 함께 들어감' }] },
+        { id: 'ca-meet', weight: 20, beat: true, actual: '공급 300대', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G41', bp: 110, reason: '이미 주가에 반영된 규모' }] },
+        { id: 'ca-under', weight: 25, beat: false, actual: '공급 150대', gap: '기대 300대의 절반', label: '기대에 못 미친 공급', impacts: [{ code: 'G41', bp: -500, reason: '병원 예산 사정으로 물량이 줄어듦' }] }
+      ] }
+  ] },
+  { id: 'remetal', title: '폐금속 가격 사건', stages: [
+    { id: 're-1', step: 1, targets: ['G46', 'G50'], signal: { G46: 1 }, clueDir: -1, concept: '설비를 늘려도 파는 값이 내리면 이익은 늘지 않습니다.',
+      headline: '리메탈 정련, 폐배터리 처리 설비 증설 발표', facts: '내년까지 처리량을 두 배로 늘린다고 밝혔습니다.', expectation: '시장은 늘린 설비가 바로 꽉 찬다고 봅니다.', remaining: '회수한 금속을 파는 가격', clue: '금속 시황표에 회수 금속 가격이 석 달째 내리막으로 나옵니다.',
+      outcomes: [
+        { id: 're-firm', weight: 35, beat: true, actual: '금속 가격 반등, 증설분 조기 가동', gap: '기대대로 물량과 값이 함께 늘어남', label: '증설 효과 조기 반영', impacts: [{ code: 'G46', bp: 520, reason: '처리량과 파는 값이 함께 올라감' }, { code: 'G50', bp: 280, reason: '폐배터리 회수 물량 증가' }] },
+        { id: 're-weak', weight: 65, beat: false, actual: '금속 가격 약세 지속', gap: '물량은 늘어도 값이 받쳐 주지 않음', label: '금속 가격 약세', impacts: [{ code: 'G46', bp: -600, reason: '설비 투자비는 나갔는데 파는 값이 내림' }, { code: 'G50', bp: -300, reason: '회수 단가도 함께 내림' }] }
+      ] },
+    { id: 're-2', step: 2, targets: ['G46'], signal: { G46: -1 }, clueDir: 1, concept: '멈춘 기간이 얼마나 되는지가 손실의 크기를 정합니다.',
+      headline: '리메탈 공장 가동 중단, 정련로 설비 사고', facts: '정련로 한 기가 멈춰 섰습니다.', expectation: '시장은 이번 분기 내내 멈춘다고 봅니다.', remaining: '수리에 걸리는 기간', clue: '설비 제작사가 교체 부품 재고를 가지고 있다고 알렸습니다.',
+      outcomes: [
+        { id: 're-quick', weight: 70, beat: true, actual: '2주 만에 가동 재개', gap: '걱정보다 훨씬 짧음', label: '빠른 수리', impacts: [{ code: 'G46', bp: 580, reason: '분기 생산 차질이 작게 끝남' }, { code: 'G47', bp: 150, reason: '교체 설비 발주 증가' }] },
+        { id: 're-long', weight: 30, beat: false, actual: '분기 내내 가동 중단', gap: '걱정이 현실이 됨', label: '장기 가동 중단', impacts: [{ code: 'G46', bp: -700, reason: '고정비는 그대로 나가는데 생산이 멈춤' }] }
+      ] },
+    { id: 're-3', step: 3, targets: ['G46', 'G49'], signal: { G46: 1 }, clueDir: 1, concept: '장기 계약은 매출을 오래 고정해 주어 가치가 다릅니다.',
+      headline: '리메탈, 회수 금속 장기 공급 계약 공시 예정', facts: '계약 체결은 확정됐고 기간과 물량만 남았습니다.', expectation: '시장 기대치는 2년 계약입니다.', remaining: '계약 기간', clue: '상대 회사 사업보고서에 5년치 원료 확보 계획이 적혀 있습니다.',
+      outcomes: [
+        { id: 're-long5', weight: 55, beat: true, actual: '5년 장기 공급 계약', gap: '기대보다 3년 긺', label: '기대를 넘은 장기 계약', impacts: [{ code: 'G46', bp: 600, reason: '매출이 5년치로 묶임' }, { code: 'G49', bp: 200, reason: '희귀 합금 회수 물량도 함께 늘어남' }] },
+        { id: 're-meet2', weight: 20, beat: true, actual: '2년 공급 계약', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G46', bp: 120, reason: '이미 주가에 반영된 기간' }] },
+        { id: 're-short1', weight: 25, beat: false, actual: '1년 공급 계약', gap: '기대 2년의 절반', label: '기대에 못 미친 계약', impacts: [{ code: 'G46', bp: -520, reason: '내년에 다시 협상해야 함' }] }
+      ] }
   ] }
 ];
 

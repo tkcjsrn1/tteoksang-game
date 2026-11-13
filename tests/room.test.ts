@@ -391,7 +391,7 @@ test('행동 리포트: 기록이 부족하면 안내 문구, 충분하면 계�
   assert.equal(room.canStart(idle), false, '방장만 시작');
   assert.equal(room.canStart(a), true);
   room.start(T0);
-  const codes: StockCode[] = ['G01', 'G02', 'G03'];
+  const codes: StockCode[] = room.s.plan.stockCodes!.slice(0, 3);
   let i = 0;
   while (room.s.status === 'playing') {
     if (room.s.phase === 'trade') {
