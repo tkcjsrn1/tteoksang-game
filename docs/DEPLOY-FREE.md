@@ -23,20 +23,22 @@ Render에도 무료 DB가 있지만 **30일 뒤 만료**되므로 쓰지 않습�
 4. 테이블은 서버가 처음 켜질 때 자동으로 만듭니다. 따로 할 일은 없습니다.
 
 ## 2. 코드 준비 (5분)
-- PR #1(`improve/glossary-docs-hardening`)을 `main`에 머지합니다. Render는 `main`을 배포합니다.
+- Render는 `main` 브랜치를 배포합니다. 올리고 싶은 변경이 PR에 있다면 먼저 머지하세요.
 
 ## 3. Render에서 서버 만들기 (15분)
 1. https://render.com 에서 GitHub 계정으로 가입합니다.
 2. **New → Blueprint** → GitHub 연결 → `tkcjsrn1/tteoksang-game` 저장소를 고릅니다.
    - 비공개 저장소라면 Render GitHub 앱에 이 저장소 접근을 허용하라는 화면이 나옵니다.
-3. 저장소의 `render.yaml`을 읽어 `tteoksang-game` 서비스가 표시됩니다. **DATABASE_URL** 칸에 1번에서 복사한 Neon 연결 문자열을 붙여 넣습니다.
+3. 저장소의 `render.yaml`을 읽어 `tteoksang-game` 서비스가 표시됩니다. **DATABASE_URL** 칸에 1번에서 복사한 Neon 연결 문자열을 붙여 넣습니다. **PUBLIC_URL**은 아직 주소를 모르니 비워 두고 5번에서 채웁니다.
 4. **Apply**를 누르면 Docker 이미지를 빌드하고 배포합니다. 처음에는 5~10분 걸립니다.
-5. 끝나면 `https://tteoksang-game-xxxx.onrender.com` 같은 주소가 생깁니다.
+5. 끝나면 `https://tteoksang-game-xxxx.onrender.com` 같은 주소가 생깁니다. 그 주소를 **Environment → PUBLIC_URL**에 넣고 저장하면(끝에 `/` 없이) 카카오톡·디스코드에 링크를 보냈을 때 제목·설명·그림이 뜹니다. 저장하면 자동으로 다시 배포됩니다.
 
 ## 4. 확인 (5분)
 - PC의 게임 폴더에서 `npm run smoke -- https://<주소>` 를 실행합니다. 서버 상태, 화면, 방 만들기, 두 사람 WebSocket 입장, 게임 시작까지 자동으로 확인하고 `결과: 통과`를 보여 줍니다. 서버가 잠들어 있었다면 첫 단계에서 1분 가까이 걸릴 수 있습니다.
 - `https://<주소>/api/health` → `{"ok":true,"store":"postgres",...}` 이면 성공입니다. `"store":"memory"`면 DATABASE_URL이 빠진 것입니다.
 - 휴대폰 두 대로 친구 방을 만들어 한 판 해 보세요. QR에도 이 주소가 들어갑니다.
+- 카카오톡으로 주소를 보내 미리보기 그림이 뜨는지 봅니다. 안 뜨면 PUBLIC_URL이 비었거나 끝에 `/`가 붙은 것입니다.
+- 무료 플랜은 15분 동안 아무도 안 들어오면 서버가 잠듭니다(게임 중에는 WebSocket 메시지가 오가므로 잠들지 않습니다). 친구들을 부르기 직전에 주소를 한 번 열어 깨워 두세요. 깨어나는 데 30초~1분 걸립니다.
 - 이후 `main`에 머지할 때마다 자동으로 다시 배포됩니다.
 
 ## 5. 앱(Android)에서 쓰려면
