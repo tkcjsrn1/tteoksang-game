@@ -543,6 +543,46 @@ export const ARCS: Arc[] = [
         { id: 're-meet2', weight: 20, beat: true, actual: '2년 공급 계약', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G46', bp: 120, reason: '이미 주가에 반영된 기간' }] },
         { id: 're-short1', weight: 25, beat: false, actual: '1년 공급 계약', gap: '기대 2년의 절반', label: '기대에 못 미친 계약', impacts: [{ code: 'G46', bp: -520, reason: '내년에 다시 협상해야 함' }] }
       ] }
+  ] },
+  { id: 'chipline', title: '산업용 제어 칩 양산 사건', stages: [
+    { id: 'chip-1', step: 1, targets: ['G51'], signal: { G51: 1 }, clueDir: -1, concept: '시제품이 통과한 검사와 대량 생산 성과는 별개입니다.',
+      headline: '레브칸 새 제어 칩, 시제품 성능 검사 통과', facts: '연구실에서 만든 칩이 공장 기계 제어 시험을 통과했습니다.', expectation: '시장은 다음 달부터 10만 개씩 생산할 것으로 봅니다.', remaining: '실제 양산 가능 수량', clue: '시험 생산에서 나온 칩 세 개 중 하나는 추가 검사를 통과하지 못했습니다.',
+      outcomes: [
+        { id: 'chip-ready', weight: 35, beat: true, actual: '생산 공정을 보완해 첫 달 12만 개 생산', gap: '기대보다 2만 개 많음', label: '초기 생산 목표 초과', impacts: [{ code: 'G51', bp: 480, reason: '계획보다 많은 칩을 납품할 수 있음' }] },
+        { id: 'chip-low', weight: 65, beat: false, actual: '첫 달 6만 개 생산', gap: '기대에 4만 개 못 미침', label: '양산 목표 미달', impacts: [{ code: 'G51', bp: -570, reason: '납품 수입이 줄고 불량을 고치는 비용이 듦' }] }
+      ] },
+    { id: 'chip-2', step: 2, targets: ['G51', 'G52'], signal: { G51: -1 }, clueDir: 1, concept: '비용이 드는 조치도 납품 차질을 줄이면 기대를 높일 수 있습니다.',
+      headline: '레브칸, 출고 보류하고 검사 장비 교체', facts: '제어 칩 출고를 잠시 멈추고 포르델의 검사 장비를 들입니다.', expectation: '시장은 납품이 한 달 늦어진다고 봅니다.', remaining: '새 장비가 가동되기까지 걸리는 시간', clue: '포르델은 같은 생산 라인에서 이미 설치 시험을 마쳤다고 밝혔습니다.',
+      outcomes: [
+        { id: 'chip-quick', weight: 70, beat: true, actual: '열흘 만에 검사와 출고 재개', gap: '예상보다 약 20일 빠름', label: '출고 차질 축소', impacts: [{ code: 'G51', bp: 560, reason: '대기 중인 주문을 예정된 분기에 납품' }, { code: 'G52', bp: 160, reason: '후속 검사 장비 계약이 늘어남' }] },
+        { id: 'chip-slow', weight: 30, beat: false, actual: '설치 중 오류로 여섯 주 동안 출고 보류', gap: '예상보다 약 2주 느림', label: '출고 지연', impacts: [{ code: 'G51', bp: -620, reason: '납품 대금이 다음 분기로 밀림' }] }
+      ] },
+    { id: 'chip-3', step: 3, targets: ['G51'], signal: { G51: 1 }, clueDir: 1, concept: '계약 기간과 최소 발주량을 보면 매출을 더 구체적으로 예상할 수 있습니다.',
+      headline: '레브칸 제어 칩, 자동화 설비에 채택', facts: '자동화 설비 제조사가 새 칩을 쓰기로 했습니다.', expectation: '시장은 1년간 30만 개 납품을 기대합니다.', remaining: '최소 발주량과 계약 기간', clue: '설비사가 새 칩을 넣은 생산 계획을 3년치로 잡았습니다.',
+      outcomes: [
+        { id: 'chip-long', weight: 65, beat: true, actual: '3년간 해마다 35만 개 납품', gap: '기간과 연간 물량 모두 기대 초과', label: '장기 납품 확보', impacts: [{ code: 'G51', bp: 440, reason: '앞으로 3년치 납품량이 보장됨' }] },
+        { id: 'chip-trial', weight: 35, beat: false, actual: '1년간 20만 개만 납품', gap: '첫해 물량부터 기대에 못 미침', label: '계약 규모 실망', impacts: [{ code: 'G51', bp: -450, reason: '새 계약으로 늘어나는 매출이 예상보다 작음' }] }
+      ] }
+  ] },
+  { id: 'cooplaunch', title: '협동 게임 출시 사건', stages: [
+    { id: 'game-1', step: 1, targets: ['G56'], signal: { G56: 1 }, clueDir: -1, concept: '사전 등록 수가 높아도 출시 후 이용이 이어져야 매출을 기대할 수 있습니다.',
+      headline: '루베칸 신작, 사전 등록 100만 명 돌파', facts: '협동 게임 신작에 100만 명이 사전 등록했습니다.', expectation: '시장은 출시 일주일 뒤에도 50만 명이 게임을 할 것으로 봅니다.', remaining: '출시 일주일 뒤 실제 이용자 수', clue: '마지막 공개 시험에서는 첫날 이용자 열 명 중 일곱 명이 일주일 안에 떠났습니다.',
+      outcomes: [
+        { id: 'game-stay', weight: 35, beat: true, actual: '출시 일주일 뒤에도 60만 명 이용', gap: '기대보다 10만 명 많음', label: '출시 초반 이용자 유지', impacts: [{ code: 'G56', bp: 490, reason: '유료 추가 콘텐츠를 살 잠재 이용자가 늘어남' }] },
+        { id: 'game-leave', weight: 65, beat: false, actual: '출시 일주일 뒤 이용자 28만 명', gap: '기대보다 22만 명 적음', label: '이용자 이탈', impacts: [{ code: 'G56', bp: -580, reason: '사전 등록 열기가 실제 이용과 매출로 이어지지 않음' }] }
+      ] },
+    { id: 'game-2', step: 2, targets: ['G56', 'G57'], signal: { G56: -1 }, clueDir: 1, concept: '서비스 장애가 나도 해결 속도에 따라 이용자 이탈과 손실이 달라집니다.',
+      headline: '루베칸 신작, 주말 접속 장애로 긴급 점검', facts: '접속 오류가 이어져 텔루반의 예비 서버를 투입합니다.', expectation: '시장은 주말 내내 접속이 어렵다고 봅니다.', remaining: '예비 서버가 오류를 해결할 수 있는지', clue: '별도로 운영하는 시험 서버에서는 같은 오류가 재현되지 않았습니다.',
+      outcomes: [
+        { id: 'game-fix', weight: 70, beat: true, actual: '당일 예비 서버 투입 후 정상화', gap: '예상보다 하루 이상 빠름', label: '접속 장애 조기 해소', impacts: [{ code: 'G56', bp: 550, reason: '주말 이용자 이탈을 줄임' }, { code: 'G57', bp: 170, reason: '예비 서버 운영 계약을 연장함' }] },
+        { id: 'game-down', weight: 30, beat: false, actual: '월요일까지 접속 불안 지속', gap: '예상보다 복구가 늦음', label: '장애 장기화', impacts: [{ code: 'G56', bp: -650, reason: '환불과 이용자 이탈이 늘어남' }] }
+      ] },
+    { id: 'game-3', step: 3, targets: ['G56'], signal: { G56: 1 }, clueDir: 1, concept: '출시 지역이 늘어도 판매 조건에 따라 남는 몫이 다릅니다.',
+      headline: '루베칸, 협동 게임 해외 출시 계약 발표 예정', facts: '해외 유통사가 현지 판매를 맡는 데 합의했습니다.', expectation: '시장은 두 지역 출시와 판매액에 따른 정산을 예상합니다.', remaining: '출시 지역 수와 최소 보장금', clue: '유통사가 네 지역의 번역과 판매 준비를 동시에 시작했습니다.',
+      outcomes: [
+        { id: 'game-wide', weight: 65, beat: true, actual: '네 지역 출시와 최소 보장금 확정', gap: '두 지역이 더 열리고 최소 수입을 확보', label: '해외 출시 확대', impacts: [{ code: 'G56', bp: 430, reason: '판매 지역과 계약으로 보장된 수입이 늘어남' }] },
+        { id: 'game-narrow', weight: 35, beat: false, actual: '한 지역에서 먼저 출시하고 판매량으로만 정산', gap: '출시 지역이 기대보다 적음', label: '해외 출시 축소', impacts: [{ code: 'G56', bp: -430, reason: '초기 매출을 낼 시장이 작아짐' }] }
+      ] }
   ] }
 ];
 

@@ -715,7 +715,7 @@ function OrderBook({ book, price, open, onPick }: { book: QuoteBook; price: numb
     </figure>
   );
 }
-/** 떡상 지수: 이번 판 10종목의 시가총액 가중 지수(시작 1,000). 라운드 종료 값과 지금 값을 작은 그래프로 */
+/** 떡상 지수: 이번 판 종목의 시가총액 가중 지수(시작 1,000). 라운드 종료 값과 지금 값을 작은 그래프로 */
 /** 배당 일정 안내: 기준일 전·당일·배당락 라운드에 보여 줍니다. */
 /** 장중 속보가 뜨면 화면 위에서 큼직하게 내려옵니다. 주문을 막지 않도록 아래쪽은 그대로 쓸 수 있고, 5초 뒤 저절로 닫힙니다. */
 function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView; card: NewsCard; onClose: () => void; onOpen: (c: StockCode) => void }) {

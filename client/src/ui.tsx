@@ -57,12 +57,14 @@ const GLYPH: Record<string, string> = {
   space: 'M12 3a9 9 0 1 1-9 9M12 3v4M12 12l5-5M3 12h4',
   farm: 'M12 21V9M12 9c0-3 2-5 5-5 0 3-2 5-5 5zM12 13c0-3-2-5-5-5 0 3 2 5 5 5z',
   care: 'M12 20s-7-4.5-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.5-7 9-7 9z',
-  recycle: 'M7 7l-3 5 3 2M17 7l3 5-3 2M9 19h6M12 4l3 5h-6z'
+  recycle: 'M7 7l-3 5 3 2M17 7l3 5-3 2M9 19h6M12 4l3 5h-6z',
+  chips: 'M7 7h10v10H7zM9 3v4m6-4v4m-6 10v4m6-4v4M3 9h4m-4 6h4m10-6h4m-4 6h4',
+  games: 'M8 8h8c3 0 5 3 5 7 0 2-2 3-4 1l-2-2H9l-2 2c-2 2-4 1-4-1 0-4 2-7 5-7zM7 12h4m-2-2v4m7-2h.1m2-1h.1'
 };
 export function StockAvatar({ code, name }: { code: string; name: string }) {
   const s = STOCKS.find(x => x.code === code);
   if (!s) return <span className="avatar" style={{ background: avatarColor(code) }} aria-hidden="true">{name[0]}</span>;
-  const v = logoVariant(code), stroke = s.group === 'cold' || s.group === 'bio' || s.group === 'stage';
+  const v = logoVariant(code), stroke = s.group === 'cold' || s.group === 'bio' || s.group === 'stage' || s.group === 'chips' || s.group === 'games';
   return (
     <span className={`avatar logo-${v}`} style={{ background: avatarColor(code) }} aria-hidden="true">
       <svg width="36" height="36" viewBox="0 0 36 36">

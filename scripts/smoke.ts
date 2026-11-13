@@ -68,7 +68,7 @@ if (code) {
     clients[0].ws.send(JSON.stringify({ t: 'start' }));
     await until(() => clients.every(c => c.view?.status === 'playing' && c.view.phase === 'news'), '게임 시작');
     const v = clients[1].view!;
-    if (v.stocks.length !== 10) throw new Error(`종목 ${v.stocks.length}개(10개여야 함)`);
+    if (v.stocks.length !== 60) throw new Error(`종목 ${v.stocks.length}개(60개여야 함)`);
     if (!v.news.length || !v.news[0].cards.length) throw new Error('뉴스가 없음');
     if (JSON.stringify(v).includes('outcomeId')) throw new Error('결말 정보가 화면 데이터에 섞여 있음');
     console.log(`    첫 뉴스: ${v.news[0].cards[0].card.headline}`);

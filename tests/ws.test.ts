@@ -56,14 +56,14 @@ async function advance(room: GameRoom, watchers: Client[]) {
   await until(() => watchers.every(w => w.view?.round === room.s.round && w.view?.phase === room.s.phase && w.view?.status === room.s.status));
 }
 
-test('혼자 연습은 선택한 종목 수·라운드·장 시간을 적용하고 재대전에도 유지한다', async () => {
-  const settings = { stocks: 30, rounds: 3, trade: 45, level: 'pro' as const };
-  const { code } = await create({ mode: 'solo', seed: 5, settings });
+test('혼자 연습은 60종목과 선택한 라운드·장 시간을 적용하고 재대전에도 유지한다', async () => {
+  const settings = { rounds: 3, trade: 45, level: 'pro' as const };
+  const { code } = await create({ mode: 'solo', seed: 5, settings: { stocks: 30, ...settings } });
   const room = hub.rooms.get(code)!;
   const player = await new Client().connect();
   try {
     await player.hello(code);
-    assert.equal(player.view!.stocks.length, 30);
+    assert.equal(player.view!.stocks.length, 60);
     assert.equal(player.view!.totalRounds, 3);
     await advance(room, [player]);
     assert.equal(player.view!.phaseSeconds, 45);
@@ -72,14 +72,14 @@ test('혼자 연습은 선택한 종목 수·라운드·장 시간을 적용하�
     assert.equal(restored.config.trade, 45);
     assert.equal(restored.config.level, 'pro');
     assert.equal(restored.config.rounds, 3);
-    assert.equal(restored.stocks.length, 30);
+    assert.equal(restored.stocks.length, 60);
     while (room.s.status === 'playing') await advance(room, [player]);
     assert.equal(room.s.round, 3);
     player.send({ t: 'rematch' });
     await until(() => !!player.view?.nextRoomCode);
     const next = hub.rooms.get(player.view!.nextRoomCode!)!;
     assert.deepEqual(next.s.settings, settings);
-    assert.equal(next.stocks.length, 30);
+    assert.equal(next.stocks.length, 60);
   } finally {
     player.close();
   }

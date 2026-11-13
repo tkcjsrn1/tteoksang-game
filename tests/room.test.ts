@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
 import { ARCS } from '../server/src/content';
-import { GROUPS, lowerLimit, stockOf, STOCKS, feeOf } from '../shared/rules';
+import { GROUPS, lowerLimit, stockOf, feeOf } from '../shared/rules';
 import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
@@ -161,7 +161,7 @@ test('같은 업종 종목은 대장주 사건 영향의 linkBeta배만큼 함�
   toTrade(room);
   while (room.s.status === 'playing') next(room);
   const v = room.view(a, 'player', room.s.phaseEndsAt ?? T0);
-  assert.equal(v.stocks.length, 10);
+  assert.equal(v.stocks.length, 60);
   const leader = v.stocks.find(s => s.code === GROUPS.power.leader)!;
   const peers = v.stocks.filter(s => s.code !== leader.code && stockOf(s.code).group === 'power');
   assert.ok(peers.length >= 1, '뉴스 업종 동반 종목이 판에 있다');
@@ -182,13 +182,16 @@ test('같은 업종 종목은 대장주 사건 영향의 linkBeta배만큼 함�
   v.stocks.filter(s => stockOf(s.code).group !== 'power' && !Object.values(GROUPS).some(g => g.leader === s.code))
     .forEach(s => s.history.forEach(h => assert.ok(h.events.every(e => !e.label.includes('누바칸')))));
 });
-test('이번 판에 없는 종목은 주문할 수 없다', () => {
+test('이전 종목 구성으로 저장된 방에서는 그 판에 없는 종목을 주문할 수 없다', () => {
   const { room, a } = setup();
-  const t = toTrade(room);
-  const absent = STOCKS.find(s => !room.s.plan.stockCodes!.includes(s.code))!;
-  const r = room.placeOrder(a, 'x1', absent.code, 'buy', 1, t);
+  const saved = JSON.parse(JSON.stringify(room.s)) as typeof room.s;
+  saved.plan.stockCodes = ['G01', 'G02', 'G03', 'G04', 'G05', 'G06'];
+  const restored = new GameRoom(saved);
+  const t = toTrade(restored);
+  assert.equal(restored.stocks.length, 6);
+  const r = restored.placeOrder(a, 'x1', 'G30', 'buy', 1, t);
   assert.equal(r.ok, false);
-  assert.equal(room.placeOrder(a, 'x2', 'G99' as StockCode, 'buy', 1, t).ok, false);
+  assert.equal(restored.placeOrder(a, 'x2', 'G99' as StockCode, 'buy', 1, t).ok, false);
 });
 test('슬리피지는 큰 시장가 주문을 낸 사람에게만 적용되고 시세·종료가는 바꾸지 않는다. 체결 수량은 거래량에 기록된다', () => {
   const run = (bigQty: number) => {

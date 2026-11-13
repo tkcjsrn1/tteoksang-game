@@ -4,7 +4,7 @@ export type StockCode = `G${number}`;
 export type GameMode = 'friend' | 'solo';
 /** 난이도. easy(쉬움)는 시장가만 쓰고 호가창·지정가·손절·익절·슬리피지 숫자를 감춥니다. pro(실전)는 전부 보여 줍니다. */
 export type Level = 'easy' | 'pro';
-export interface RoomSettings { stocks?: number; rounds?: number; trade?: number; level?: Level }
+export interface RoomSettings { rounds?: number; trade?: number; level?: Level }
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 export type Side = 'buy' | 'sell';

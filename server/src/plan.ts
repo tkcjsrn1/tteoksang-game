@@ -1,5 +1,5 @@
 /* 시드로 게임 전체 시나리오를 미리 확정합니다. 같은 시드와 설정이면 같은 결말과 변동이 나옵니다. */
-import { GROUPS, MARKET_MAX_BP, MODES,  stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
+import { MARKET_MAX_BP, MODES, stockOf, STOCKS } from '../../shared/rules';
 import type { GameMode, RoomSettings, StockCode } from '../../shared/types';
 import { ARCS, CARDS, type Arc, type Outcome, type Stage } from './content';
 
@@ -10,31 +10,6 @@ export function mulberry(seed: number) {
 export interface PlannedStage { stageId: string; outcomeId: string; breaking: boolean }
 export interface RoundPlan { round: number; stages: PlannedStage[]; marketBp: number; stockBp: Record<StockCode, number>; cardId: string | null }
 export interface GamePlan { arcIds: string[]; rounds: RoundPlan[]; /** 이번 판에 나오는 종목. 예전 저장 데이터에는 없습니다 */ stockCodes?: StockCode[] }
-/* 한 판에 나오는 종목 수 기본값은 shared/rules.ts STOCKS_PER_GAME */
-export { STOCKS_PER_GAME };
-
-/** 이번 판 사건이 다루거나 결과로 움직이는 종목은 반드시 넣고, 그 업종의 같은 업종 종목을 한 개씩 먼저 고른 뒤
-    나머지를 무작위로 채웁니다. 업종 동조화를 화면에서 바로 볼 수 있게 하려는 순서입니다.
-    (업종 10개에 모두 사건이 생긴 뒤로, 대장주 전부가 아니라 이번 판 사건의 종목만 넣습니다.) */
-export function pickStocks(arcs: Arc[], rnd: () => number, count = STOCKS_PER_GAME): StockCode[] {
-  const must = [...new Set(arcs.flatMap(a => a.stages.flatMap(st =>
-    [...st.targets, ...st.outcomes.flatMap(o => o.impacts.map(i => i.code))])))];
-  const peerCount = Math.max(0, count - must.length);
-  const peers = STOCKS.filter(s => !must.includes(s.code));
-  /* 뉴스 카드에 크게 나오는 종목(targets[0])의 업종을 먼저, 함께 영향받는 종목의 업종을 다음으로 채웁니다. */
-  const groupsOf = (codes: StockCode[]) => [...new Set(codes.map(c => stockOf(c).group))];
-  const primary = groupsOf(arcs.flatMap(a => a.stages.map(st => st.targets[0])));
-  const secondary = groupsOf(arcs.flatMap(a => a.stages.flatMap(st => st.targets))).filter(g => !primary.includes(g));
-  const picked: StockCode[] = [];
-  for (const g of [...shuffled(primary, rnd), ...shuffled(secondary, rnd)]) {
-    const pool = shuffled(peers.filter(p => p.group === g && !picked.includes(p.code)), rnd);
-    if (pool[0] && picked.length < peerCount) picked.push(pool[0].code);
-  }
-  /* 남은 자리는 전체 종목에서 무작위로 채웁니다. 뉴스가 없는 업종도 섞여 나옵니다(실제 시장처럼). */
-  for (const p of shuffled(peers, rnd)) if (picked.length < peerCount && !picked.includes(p.code)) picked.push(p.code);
-  const order = (c: StockCode) => Object.keys(GROUPS).indexOf(stockOf(c).group) * 100 + Number(c.slice(1));
-  return [...must, ...picked].sort((a, b) => order(a) - order(b));
-}
 /** 테스트에서 특정 결말을 강제할 때 씁니다. { 'nu-3a': 'short' } 처럼 단계별로 지정합니다. */
 export type ForcedOutcomes = Record<string, string>;
 
@@ -72,7 +47,7 @@ export function buildPlan(seed: number, mode: GameMode, excludedArcs: string[] =
   const old = shuffled(ARCS.filter(a => excludedArcs.includes(a.id)), rnd);
   const chosen = forcedArcs ? forcedArcs.map(id => ARCS.find(a => a.id === id)!) : [...fresh, ...old].slice(0, arcCount);
   const resolved = chosen.map(a => resolveArc(a, rnd, forced));
-  const stockCodes = pickStocks(chosen, rnd, settings?.stocks);
+  const stockCodes = STOCKS.map(s => s.code);
   /* 사건들을 번갈아 배치합니다. 뉴스가 라운드보다 많으면 앞 라운드에 두 건씩 넣습니다. */
   const queue: { stage: Stage; outcome: Outcome }[] = [];
   for (let i = 0; i < 3; i++) resolved.forEach(r => { if (r[i]) queue.push(r[i]); });

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { navigate } from './App';
 import { createRoom, roomInfo, store } from './net';
 import { TERMS } from '../../shared/glossary';
-import { cleanSettings, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
+import { cleanSettings, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS } from '../../shared/rules';
 import type { RoomSettings } from '../../shared/types';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
@@ -24,7 +24,7 @@ export function Home() {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  /* 게임 설정은 고른 값을 이 기기에 기억합니다. 처음에는 기본값(10종목·5라운드·90초) */
+  /* 게임 설정은 고른 값을 이 기기에 기억합니다. 처음에는 기본값(5라운드·90초) */
   const [settings, setSettings] = useState<RoomSettings>(() => cleanSettings(store.get('settings')));
   const { open, seen } = useGlossary();
   const games = parseRecords(store.get(RECORDS_KEY)).length;
@@ -33,7 +33,7 @@ export function Home() {
     try { await f(); } catch (e) { setError(e instanceof Error && e.message !== 'Failed to fetch' ? e.message : '서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요'); } finally { setBusy(false); }
   };
   const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, settings); navigate(`/room/${r.code}`); });
-  const stocks = settings.stocks ?? STOCKS_PER_GAME, rounds = settings.rounds ?? MODES.solo.rounds, trade = settings.trade ?? MODES.solo.trade;
+  const rounds = settings.rounds ?? MODES.solo.rounds, trade = settings.trade ?? MODES.solo.trade;
   const level = settings.level ?? MODES.solo.level;
   const minutes = Math.max(1, Math.round(rounds * (MODES.solo.news + trade + MODES.solo.recap) / 60));
   const pick = (o: RoomSettings) => { const next = { ...settings, ...o }; setSettings(next); store.set('settings', JSON.stringify(next)); };
@@ -57,16 +57,11 @@ export function Home() {
         <p className="lede">가상 기업과 가상 자금 1,000만 원으로 하는 주식 게임</p>
         <div className="home-actions">
           <details className="game-opts">
-            <summary>게임 설정 · {LEVEL_LABEL[level]} · {stocks}종목 · {rounds}라운드 · 장 {trade}초 <small className="hint">(한 판 약 {minutes}분)</small></summary>
+            <summary>게임 설정 · {LEVEL_LABEL[level]} · {STOCKS.length}종목 · {rounds}라운드 · 장 {trade}초 <small className="hint">(한 판 약 {minutes}분)</small></summary>
             <div className="room-settings" role="group" aria-label="혼자 연습과 친구 대전 설정">
               <label>난이도
                 <select value={level} onChange={e => pick({ level: e.target.value as typeof level })}>
                   {LEVELS.map(l => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}
-                </select>
-              </label>
-              <label>종목 수
-                <select value={stocks} onChange={e => pick({ stocks: Number(e.target.value) })}>
-                  {ROOM_OPTIONS.stocks.map(n => <option key={n} value={n}>{n}개</option>)}
                 </select>
               </label>
               <label>라운드 수
@@ -81,7 +76,7 @@ export function Home() {
               </label>
             </div>
             <p className="hint">{LEVEL_LABEL[level]}: {LEVEL_NOTE[level]}. 뉴스·속보·돌발 사건은 두 난이도에서 똑같이 나와요.</p>
-            <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다. 처음이라면 쉬움·10종목·5라운드를 권합니다.</p>
+            <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다. 처음이라면 쉬움·5라운드를 권합니다.</p>
           </details>
           <button className="cta" disabled={busy} onClick={() => make('solo')}>혼자 연습 시작</button>
           <button className="ghost" disabled={busy} onClick={startTutorial}>처음이라면 · 튜토리얼로 시작</button>

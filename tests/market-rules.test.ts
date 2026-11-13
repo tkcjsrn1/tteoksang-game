@@ -133,7 +133,7 @@ test('실전 난이도: 지정가와 손절을 쓸 수 있다', () => {
 
 test('기기에 저장한 설정: 난이도는 easy·pro만 받는다', () => {
   assert.deepEqual(cleanSettings('{"level":"easy"}'), { level: 'easy' });
-  assert.deepEqual(cleanSettings('{"level":"pro","stocks":20}'), { stocks: 20, level: 'pro' });
+  assert.deepEqual(cleanSettings('{"level":"pro","stocks":20}'), { level: 'pro' });
   assert.deepEqual(cleanSettings('{"level":"hard"}'), {});
   assert.deepEqual(cleanSettings('{"level":1}'), {});
 });

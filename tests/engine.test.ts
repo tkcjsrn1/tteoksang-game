@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aggregate, buildCandle, movingAverage } from '../shared/candles';
-import { chargeOf, checkOrder, computeClose, feeOf, GROUPS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, taxOf } from '../shared/rules';
+import { chargeOf, checkOrder, computeClose, feeOf, FUNDAMENTALS, GROUPS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, taxOf } from '../shared/rules';
 import { ARCS, CARDS } from '../server/src/content';
-import { buildPlan, STOCKS_PER_GAME } from '../server/src/plan';
+import { buildPlan } from '../server/src/plan';
 import { pickDiversified } from '../server/src/npc';
 
 test('기획서 예시 계산: 12,400원 +780bp는 13,370원, +7.82%', () => {
@@ -188,42 +188,30 @@ test('모드별 라운드 구성과 변동 범위', () => {
     assert.ok(p.rounds.every(r => Math.abs(r.marketBp) <= 50 && (Object.entries(r.stockBp) as [`G${number}`, number][]).every(([c, x]) => Math.abs(x) <= stockOf(c).maxMoveBp)));
   }
 });
-test('종목 풀 50개, 업종 10개 × 5종목, 판마다 기본 10종목', () => {
-  assert.equal(STOCKS.length, 50);
-  assert.equal(new Set(STOCKS.map(s => s.code)).size, 50);
-  assert.equal(new Set(STOCKS.map(s => s.name)).size, 50);
+test('60종목이 12개 업종에 고르게 속하고 모든 판에서 거래된다', () => {
+  assert.equal(STOCKS.length, 60);
+  assert.equal(new Set(STOCKS.map(s => s.code)).size, 60);
+  assert.equal(new Set(STOCKS.map(s => s.name)).size, 60);
+  assert.equal(Object.keys(GROUPS).length, 12);
+  const targets = new Set(ARCS.flatMap(a => a.stages.flatMap(st => st.targets)));
   for (const [g, def] of Object.entries(GROUPS)) {
     const members = STOCKS.filter(s => s.group === g);
     assert.equal(members.length, 5, g);
     assert.equal(stockOf(def.leader).group, g);
+    assert.ok(targets.has(def.leader), g);
+    assert.ok(members.every(s => Object.hasOwn(FUNDAMENTALS, s.code)));
     assert.ok(members.every(s => s.code === def.leader ? s.linkBeta === 1 : s.linkBeta > 0 && s.linkBeta < 1));
   }
-  const seen = new Set<string>();
-  for (let seed = 1; seed < 300; seed++) {
-    const p = buildPlan(seed, 'friend');
-    const codes = p.stockCodes!;
-    for (const code of codes) seen.add(code);
-    assert.equal(codes.length, STOCKS_PER_GAME);
-    assert.equal(new Set(codes).size, STOCKS_PER_GAME);
-    /* 이번 판 사건이 다루거나 결과로 움직이는 종목은 반드시 나옵니다 */
-    const arcs = ARCS.filter(a => p.arcIds.includes(a.id));
-    const targets = arcs.flatMap(a => a.stages.flatMap(st => st.targets));
-    const moved = arcs.flatMap(a => a.stages.flatMap(st => st.outcomes.flatMap(o => o.impacts.map(i => i.code))));
-    assert.ok([...targets, ...moved].every(c => codes.includes(c)), `${seed}`);
-    /* 뉴스 카드의 주인공(targets[0]) 업종에는 같은 업종 종목이 함께 나옵니다 */
-    const must = new Set([...targets, ...moved]);
-    const primary = new Set(arcs.flatMap(a => a.stages.map(st => stockOf(st.targets[0]).group)));
-    const withPeer = [...primary].filter(g => codes.some(x => !must.has(x) && stockOf(x).group === g));
-    assert.equal(withPeer.length, Math.min(primary.size, STOCKS_PER_GAME - must.size), `${seed}`);
-    /* 이번 판 종목에만 개별 변동을 정합니다 */
-    assert.ok(p.rounds.every(r => Object.keys(r.stockBp).every(c => codes.includes(c as `G${number}`))));
+  const codes = STOCKS.map(s => s.code).sort();
+  for (const mode of ['solo', 'friend'] as const) for (const seed of [1, 7, 42]) {
+    const plan = buildPlan(seed, mode);
+    assert.deepEqual(plan.stockCodes?.slice().sort(), codes);
+    for (const round of plan.rounds) assert.deepEqual(Object.keys(round.stockBp).sort(), codes);
   }
-  assert.deepEqual([...seen].sort(), STOCKS.map(s => s.code).sort());
-  assert.notDeepEqual(buildPlan(1, 'friend').stockCodes, buildPlan(2, 'friend').stockCodes);
 });
-test('10라운드 방은 선택한 20종목을 사용하고 모든 라운드에 뉴스가 있다', () => {
-  const plan = buildPlan(5, 'solo', [], undefined, undefined, { stocks: 20, rounds: 10, trade: 60 });
-  assert.equal(plan.stockCodes?.length, 20);
+test('10라운드 방에서도 60종목을 사용하고 모든 라운드에 뉴스가 있다', () => {
+  const plan = buildPlan(5, 'solo', [], undefined, undefined, { rounds: 10, trade: 60 });
+  assert.equal(plan.stockCodes?.length, 60);
   assert.equal(plan.rounds.length, 10);
   assert.ok(plan.rounds.every(round => round.stages.length > 0));
 });

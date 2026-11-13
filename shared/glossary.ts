@@ -439,7 +439,7 @@ export const TERMS: Term[] = [
   { id: 'diversification', term: '분산 투자', en: 'Diversification', category: 'risk',
     short: '서로 다르게 움직이는 여러 자산에 나눠 투자',
     body: '"달걀을 한 바구니에 담지 마라"는 말입니다. 한 회사의 사고로 계좌 전체가 무너지는 위험을 줄입니다. 다만 시장 전체가 내리는 위험은 분산으로도 피하기 어렵습니다.',
-    game: 'NPC 분산형은 업종마다 한 종목씩 6종목을 15%씩 사고 한 종목이 25%를 넘지 않게 관리합니다. 같은 업종끼리는 함께 움직이므로, 종목 수보다 업종을 나누는 것이 중요합니다.',
+    game: 'NPC 분산형은 업종마다 한 종목을 골라 현금의 90%를 고르게 나누고 한 종목이 25%를 넘지 않게 관리합니다. 같은 업종끼리는 함께 움직이므로, 종목 수보다 업종을 나누는 것이 중요합니다.',
     match: ['분산 투자', '분산투자', '나눠서 담'],   /* '분산'만 쓰면 '분산 전력 장치'(업종명)에 잘못 붙습니다 */ related: ['concentration', 'systematic-risk', 'portfolio'] },
   { id: 'concentration', term: '몰빵(집중 투자)', category: 'risk',
     short: '한 종목에 돈 대부분을 넣는 것',

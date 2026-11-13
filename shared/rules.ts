@@ -17,9 +17,9 @@ export const MODES: Record<GameMode, { rounds: number; news: number; trade: numb
   solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 3, level: 'easy', label: '혼자 연습' }
 };
 
-/* 방을 만들 때 고를 수 있는 값. 고르지 않으면 MODES와 STOCKS_PER_GAME 기본값을 씁니다. */
-export const ROOM_OPTIONS: Record<'stocks' | 'rounds' | 'trade', readonly number[]> = {
-  stocks: [10, 20, 30, 50], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120]
+/* 방을 만들 때 고를 수 있는 값. 고르지 않으면 MODES 기본값을 씁니다. */
+export const ROOM_OPTIONS: Record<'rounds' | 'trade', readonly number[]> = {
+  rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120]
 };
 /* 난이도. 쉬움은 시장가만 쓰고 어려운 장치를 감춥니다. 사건·속보·VI처럼 재미를 주는 부분은 그대로입니다. */
 export const LEVELS: readonly Level[] = ['easy', 'pro'];
@@ -29,8 +29,6 @@ export const LEVEL_NOTE: Record<Level, string> = {
   pro: '호가창·지정가·손절·익절까지 모두 씁니다'
 };
 export const isLevel = (v: unknown): v is Level => v === 'easy' || v === 'pro';
-/** 한 판에 나오는 종목 수 기본값 */
-export const STOCKS_PER_GAME = 10;
 /** 기기에 저장해 둔 설정 문자열을 읽습니다. 깨졌거나 고를 수 없는 값은 버립니다. */
 export function cleanSettings(saved: string | null | undefined): RoomSettings {
   let raw: unknown = null;
@@ -39,18 +37,15 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
   const out: RoomSettings = {};
   for (const [key, choices] of Object.entries(ROOM_OPTIONS)) {
     const v = (raw as Record<string, unknown>)[key];
-    if (typeof v === 'number' && choices.includes(v)) out[key as 'stocks' | 'rounds' | 'trade'] = v;
+    if (typeof v === 'number' && choices.includes(v)) out[key as keyof typeof ROOM_OPTIONS] = v;
   }
   const level = (raw as Record<string, unknown>).level;
   if (isLevel(level)) out.level = level;
   return out;
 }
 
-/* 종목 50개 = 업종 10개 × 5종목. 그중 뉴스가 붙는 업종은 앞의 6개입니다. 각 업종의 첫 종목(대표 종목)이 뉴스의 주인공이고,
-   같은 업종 종목은 대표 종목 뉴스에 linkBeta 비율만큼 함께 움직입니다(업종 동조화).
-   한 판에는 대표 종목 6개와 방 설정으로 정한 수의 관련 종목이 나옵니다(server/src/plan.ts pickStocks).
-   모든 기업은 지어낸 가상 기업입니다. */
-export type StockGroup = 'power' | 'storage' | 'cold' | 'bio' | 'stage' | 'water' | 'space' | 'farm' | 'care' | 'recycle';
+/* 가상 종목 60개, 업종별 5종목. 대장주 뉴스는 같은 업종 종목에도 linkBeta 비율로 반영됩니다. */
+export type StockGroup = 'power' | 'storage' | 'cold' | 'bio' | 'stage' | 'water' | 'space' | 'farm' | 'care' | 'recycle' | 'chips' | 'games';
 export const GROUPS: Record<StockGroup, { label: string; leader: StockCode; color: string }> = {
   power:   { label: '분산 전력',    leader: 'G01', color: '#E08E0B' },
   storage: { label: '열에너지 저장', leader: 'G02', color: '#7B61FF' },
@@ -62,7 +57,9 @@ export const GROUPS: Record<StockGroup, { label: string; leader: StockCode; colo
   space:   { label: '위성 통신',    leader: 'G31', color: '#5B7FFF' },
   farm:    { label: '스마트 농업',  leader: 'G36', color: '#6FA82B' },
   care:    { label: '돌봄 로봇',    leader: 'G41', color: '#D9743B' },
-  recycle: { label: '금속 재활용',  leader: 'G46', color: '#8A8F98' }
+  recycle: { label: '금속 재활용',  leader: 'G46', color: '#8A8F98' },
+  chips:   { label: '산업용 반도체', leader: 'G51', color: '#447F9D' },
+  games:   { label: '디지털 게임',  leader: 'G56', color: '#A55DB5' }
 };
 export interface StockDef { code: StockCode; name: string; sector: string; group: StockGroup; start: number; maxMoveBp: number; linkBeta: number; desc: string }
 export const STOCKS: StockDef[] = [
@@ -115,7 +112,17 @@ export const STOCKS: StockDef[] = [
   { code: 'G48', name: '엔베르 선별기',     sector: '금속 자동 선별', group: 'recycle', start: 9100, maxMoveBp: 90, linkBeta: 0.55, desc: '섞인 금속을 종류별로 자동으로 가려냅니다. 선별이 정확할수록 값을 더 받습니다.' },
   { code: 'G49', name: '크로마 합금회수',   sector: '희귀 합금 회수', group: 'recycle', start: 24300, maxMoveBp: 140, linkBeta: 0.6, desc: '적게 섞인 귀한 금속을 뽑아냅니다. 회수율이 조금만 올라도 수익이 크게 바뀝니다.' },
   { code: 'G50', name: '지온테크 폐배터리', sector: '폐배터리 재활용', group: 'recycle', start: 14700, maxMoveBp: 125, linkBeta: 0.55, desc: '다 쓴 배터리에서 금속을 회수합니다. 배터리 폐기량이 늘면 물량이 늘어납니다.' },
-  { code: 'G30', name: '바노렐 수질계측', sector: '재이용수 수질 검사', group: 'water', start: 9700, maxMoveBp: 55, linkBeta: 0.45, desc: '재이용수의 탁도와 오염도를 측정하는 장비를 공급합니다. 처리 시설의 정기 검사와 신규 발주에 영향을 받습니다.' }
+  { code: 'G30', name: '바노렐 수질계측', sector: '재이용수 수질 검사', group: 'water', start: 9700, maxMoveBp: 55, linkBeta: 0.45, desc: '재이용수의 탁도와 오염도를 측정하는 장비를 공급합니다. 처리 시설의 정기 검사와 신규 발주에 영향을 받습니다.' },
+  { code: 'G51', name: '레브칸 산업칩', sector: '산업용 제어 칩', group: 'chips', start: 26400, maxMoveBp: 140, linkBeta: 1, desc: '공장 기계를 제어하는 칩을 설계합니다. 생산 수율과 장비 업체의 채택 여부가 납품량을 좌우합니다.' },
+  { code: 'G52', name: '포르델 검사장비', sector: '반도체 검사 장비', group: 'chips', start: 13300, maxMoveBp: 95, linkBeta: 0.5, desc: '칩이 규격에 맞게 작동하는지 검사하는 장비를 공급합니다. 생산 라인이 늘면 수주가 늘어납니다.' },
+  { code: 'G53', name: '미르켄 칩포장', sector: '반도체 포장 공정', group: 'chips', start: 9800, maxMoveBp: 80, linkBeta: 0.55, desc: '칩을 외부 충격으로부터 보호하고 회로 기판에 연결할 수 있도록 포장합니다.' },
+  { code: 'G54', name: '제보른 회로설계', sector: '칩 설계 도구', group: 'chips', start: 17800, maxMoveBp: 110, linkBeta: 0.4, desc: '칩 내부 회로를 설계하고 검증하는 소프트웨어를 공급합니다. 설계 회사의 신규 프로젝트에 영향을 받습니다.' },
+  { code: 'G55', name: '투르넬 기판', sector: '반도체 연결 기판', group: 'chips', start: 7400, maxMoveBp: 75, linkBeta: 0.45, desc: '칩과 전자 기기를 연결하는 작은 기판을 만듭니다. 칩 생산량이 늘면 함께 주문이 들어옵니다.' },
+  { code: 'G56', name: '루베칸 게임즈', sector: '협동 게임 개발', group: 'games', start: 15900, maxMoveBp: 145, linkBeta: 1, desc: '친구와 함께 즐기는 게임을 개발합니다. 출시 뒤 얼마나 많은 이용자가 계속 플레이하는지가 실적을 좌우합니다.' },
+  { code: 'G57', name: '텔루반 게임서버', sector: '게임 서버 운영', group: 'games', start: 9100, maxMoveBp: 85, linkBeta: 0.55, desc: '게임 제작사에 접속 서버를 빌려줍니다. 동시 접속 인원이 많을수록 이용료 수입이 늘어납니다.' },
+  { code: 'G58', name: '포르네브 현지화', sector: '게임 번역·검수', group: 'games', start: 5200, maxMoveBp: 65, linkBeta: 0.4, desc: '게임을 해외에 출시할 수 있도록 대사와 화면을 번역하고 검수합니다.' },
+  { code: 'G59', name: '네르폴 가상무대', sector: '게임 그래픽 제작', group: 'games', start: 11300, maxMoveBp: 100, linkBeta: 0.45, desc: '게임 속 배경과 캐릭터 움직임을 만듭니다. 새 게임과 추가 콘텐츠 제작이 주요 일감입니다.' },
+  { code: 'G60', name: '바르켄 게임도구', sector: '게임 개발 도구', group: 'games', start: 19400, maxMoveBp: 120, linkBeta: 0.5, desc: '게임을 여러 기기에서 실행할 수 있도록 개발 도구를 공급합니다. 새 프로젝트의 도입 건수에 민감합니다.' }
 ];
 /* ---------- 기업 정보(가상) ----------
    shares: 발행 주식 수(주), netIncome: 지난해 순이익(억 원, 적자면 음수), dps: 지난해 주당 배당금(원).
@@ -146,7 +153,12 @@ export const FUNDAMENTALS: Record<StockCode, Fundamentals> = {
   G49: { shares: 9_000_000, netIncome: 187, dps: 0 },    G50: { shares: 26_000_000, netIncome: 124, dps: 0 },
   G25: { shares: 17_000_000, netIncome: 98, dps: 0 },    G26: { shares: 19_000_000, netIncome: 103, dps: 0 },
   G27: { shares: 21_000_000, netIncome: 90, dps: 120 },  G28: { shares: 16_000_000, netIncome: 102, dps: 0 },
-  G29: { shares: 14_000_000, netIncome: 66, dps: 0 },    G30: { shares: 23_000_000, netIncome: 174, dps: 240 }
+  G29: { shares: 14_000_000, netIncome: 66, dps: 0 },    G30: { shares: 23_000_000, netIncome: 174, dps: 240 },
+  G51: { shares: 16_000_000, netIncome: 139, dps: 0 },  G52: { shares: 19_000_000, netIncome: 121, dps: 100 },
+  G53: { shares: 24_000_000, netIncome: 136, dps: 180 }, G54: { shares: 12_000_000, netIncome: 86, dps: 0 },
+  G55: { shares: 28_000_000, netIncome: 129, dps: 120 }, G56: { shares: 18_000_000, netIncome: 92, dps: 0 },
+  G57: { shares: 26_000_000, netIncome: 132, dps: 140 }, G58: { shares: 15_000_000, netIncome: 58, dps: 80 },
+  G59: { shares: 13_000_000, netIncome: 71, dps: 0 },   G60: { shares: 10_000_000, netIncome: 69, dps: 0 }
 };
 export const fundOf = (code: StockCode): Fundamentals => FUNDAMENTALS[code] ?? { shares: 10_000_000, netIncome: 0, dps: 0 };
 /** 시가총액(원) = 주가 × 발행 주식 수 */
@@ -199,10 +211,11 @@ export function cleanLabel(raw: unknown): string | null {
 /** 뉴스(사건)의 주인공이 되는 대장주. 한 판에 늘 들어갑니다.
     뉴스가 없는 업종(위성 통신·스마트 농업·돌봄 로봇·금속 재활용)의 대장주는 여기 넣지 않습니다. */
 /** 사건(아크)이 붙어 있는 업종. 2026-11부터 10개 업종 모두에 사건이 있습니다. */
-export const NEWS_GROUPS: StockGroup[] = ['power', 'storage', 'cold', 'bio', 'stage', 'water', 'space', 'farm', 'care', 'recycle'];
+export const NEWS_GROUPS = Object.keys(GROUPS) as StockGroup[];
 /** 예전 저장 데이터(종목 6개 시절)를 복구할 때 쓰는 기본 종목 */
 export const LEGACY_CODES: StockCode[] = ['G01', 'G02', 'G03', 'G04', 'G05', 'G06'];
-export const stockOf = (code: StockCode) => STOCKS.find(s => s.code === code)!;
+const STOCK_BY_CODE = new Map(STOCKS.map(s => [s.code, s]));
+export const stockOf = (code: StockCode) => STOCK_BY_CODE.get(code)!;
 
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 export const feeOf = (gross: number) => Math.ceil(gross * FEE_BP / 10000);

@@ -98,11 +98,12 @@ await step('홈과 첫 방문 안내', async () => {
   await settings.getByRole('button', { name: '닫기' }).click();
 });
 
-await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async () => {
+await step('혼자 연습: 실전 난이도·3라운드·60종목', async () => {
   await page.getByText(/^게임 설정 ·/).click();
   /* 호가창·지정가·손절은 실전 난이도에서만 나옵니다 */
   await page.getByLabel('난이도').selectOption('pro');
-  await page.getByLabel('종목 수').selectOption('30');
+  ok(await page.getByLabel('종목 수').count() === 0, '종목 수 설정이 남아 있음');
+  ok(await page.getByLabel('장 시간').count() === 1, '장 시간 설정이 없음');
   await page.getByLabel('라운드 수').selectOption('3');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.getByLabel('1라운드, 전체 3라운드').waitFor();
@@ -128,9 +129,11 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
   await order.waitFor({ state: 'detached' });
   await page.getByText('4. 시세를 지켜봐요', { exact: true }).waitFor();
   await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
-  ok(await page.locator('.sector-head').count() >= 1, '업종 머리줄 없음');
+  ok(await page.locator('.sector-head').count() === 12, '업종이 12개가 아님');
   await page.getByRole('button', { name: '모두 펼치기' }).click();
-  ok(await page.locator('.sectors button.row').count() === 30, '종목이 30개가 아님');
+  ok(await page.locator('.sectors button.row').count() === 60, '종목이 60개가 아님');
+  await page.getByRole('button', { name: /산업용 반도체/ }).waitFor();
+  await page.getByRole('button', { name: /디지털 게임/ }).waitFor();
 });
 
 await step('장중 시세: 가격이 1초마다 바뀐다', async () => {

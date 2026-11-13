@@ -289,13 +289,20 @@ export class Hub {
             const settings: unknown = p.settings;
             const okSetting = ([key, value]: [string, unknown]) => key === 'level'
               ? isLevel(value)
+              /* 업데이트 전 화면에서 보낸 종목 수는 검증한 뒤 버립니다. */
+              : key === 'stocks' ? typeof value === 'number' && [10, 20, 30, 50].includes(value)
               : Object.hasOwn(ROOM_OPTIONS, key) && typeof value === 'number'
-                && ROOM_OPTIONS[key as 'stocks' | 'rounds' | 'trade'].includes(value);
+                && ROOM_OPTIONS[key as keyof typeof ROOM_OPTIONS].includes(value);
             if (!settings || typeof settings !== 'object' || Array.isArray(settings)
               || !Object.entries(settings).every(okSetting)) {
               return this.json(res, 400, { error: '선택할 수 없는 게임 설정입니다' });
             }
-            extra.settings = settings as RoomSettings;
+            const { rounds, trade, level } = settings as RoomSettings;
+            extra.settings = {
+              ...(rounds === undefined ? {} : { rounds }),
+              ...(trade === undefined ? {} : { trade }),
+              ...(level === undefined ? {} : { level })
+            };
           }
           if (this.opts.allowTestHooks) Object.assign(extra, { seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs });
         } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
