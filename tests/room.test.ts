@@ -368,6 +368,10 @@ test('상대 주문과 개인 리포트는 비공개다', () => {
   assert.equal(ownFill?.price, room.player(a)!.fills.find(f => f.qty === 77)?.price);
   const vb = room.view(b, 'player', end);
   assert.equal(JSON.stringify(vb).includes('"qty":77'), false);
+  /* 이번 판 사건 id는 판이 끝나기 전에는 아무에게도 나가지 않습니다(다음 사건을 미리 아는 힌트) */
+  assert.equal(vb.arcIds, undefined);
+  assert.equal(room.view(a, 'player', end).arcIds, undefined);
+  assert.equal(room.view(null, 'spectator', end).arcIds, undefined);
   assert.equal(room.view(null, 'spectator', end).report, null);
   assert.equal(room.view(null, 'spectator', end).portfolio, null);
   /* 거래량·매수·매도 수량은 정산이 끝나 결과가 공개된 뒤에만, 종목별 합계로만 나갑니다 */

@@ -1,22 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { BOOK_SHOW, LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, dividendYieldBp, feeOf, taxOf, formatEok, fundOf, GROUPS, marketCapWon, perOf, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, type QuoteBook } from '../../shared/rules';
-import { intradayBp } from './live';
-import { buildJournal, journalKey, parseNotes } from './journal';
-import type { CardView, ClientMsg, NewsCard, NewsResult, Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../shared/types';
-import { termById, termsIn } from '../../shared/glossary';
+import { LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, MODES, STOCKS } from '../../shared/rules';
+import type { ClientMsg, NewsCard, RoomView, StockCode } from '../../shared/types';
 import { navigate } from './App';
-import { coachStep, type CoachStep } from './coach';
-import { buzz, fillTone, play, revealTone, setMusicScene, useCountUp } from './fx';
+import { coachStep } from './coach';
+import { buzz, fillTone, play, revealTone, setMusicScene } from './fx';
 import { SettingsButton } from './Settings';
-import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
-import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
-import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
-import { defaultOpenGroups, groupStocks } from './sectors';
-import type { StockGroup } from '../../shared/rules';
-import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, formatCountdown, LiveChart, pct, pctBp, PriceChart, signedWon, Confetti, StockAvatar, useToast, won } from './ui';
+import { TermLink } from './glossary/GlossaryContext';
+import { store, useRoom, useSecondsLeft, joinNote, useJoinUrl } from './net';
+import { defaultOpenGroups } from './sectors';
+import { dir, Disclaimer, formatCountdown, pct, pctBp, signedWon, StockAvatar, useToast, won } from './ui';
+import { Coach, SectorBoard, StockRow, Sheet, TAB_ICON, type PlayProps, type Tab } from './game/parts';
+import { BreakingPopup, Card, CurrentNews, DividendNotice, NewsLog, Recap, SchedulePanel, ViNotice } from './game/news';
+import { StockSheet } from './game/order';
+import { Finished } from './game/final';
 
-type Tab = 'market' | 'assets' | 'news';
 
 export function Game({ code }: { code: string }) {
   const r = useRoom(code);
@@ -89,7 +87,6 @@ function NameEditor({ view, send }: { view: RoomView; send: (m: ClientMsg) => vo
 const PHASE_LABEL: Record<string, string> = { news: '뉴스 확인', trade: '장중 거래', settling: '결과 집계 중', recap: '라운드 결과' };
 const CLOCK_LABEL: Record<string, string> = { news: '장 시작까지', trade: '장 마감', settling: '', recap: '다음 라운드' };
 
-interface PlayProps { view: RoomView; offset: number; online: boolean; send: (m: ClientMsg) => void; placeOrder: (c: StockCode, s: Side, q: number, kind?: OrderKind, limit?: number) => Promise<OrderOutcome>; cancelOrder: (c: StockCode) => Promise<OrderOutcome>; setStop: (c: StockCode, stop: number | null, take: number | null) => Promise<OrderOutcome> }
 function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop }: PlayProps) {
   const [tab, setTab] = useState<Tab>('market');
   const [detail, setDetail] = useState<StockCode | null>(null);
@@ -184,6 +181,8 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   return (
     <div className="game">
       <header className="topbar">
+        {/* 화면에는 안 보이지만 읽어 주는 제목. 페이지마다 h1이 하나 있어야 합니다. */}
+        <h1 className="sr-only">{view.mode === 'solo' ? '혼자 연습' : '친구 대전'} {view.round}라운드 · {PHASE_LABEL[view.phase ?? 'news']}</h1>
         <div className="status">
           <b>{PHASE_LABEL[view.phase ?? 'news']}</b>
           <span className="num" aria-label={`${view.round}라운드, 전체 ${view.totalRounds}라운드`}>{view.round}/{view.totalRounds}</span>
@@ -227,7 +226,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
       <nav className="tabs">
         {(['market', 'assets', 'news'] as Tab[]).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{TAB_ICON[t]}{t === 'market' ? '시장' : t === 'assets' ? '내 자산' : '뉴스'}</button>)}
       </nav>
-      <div className="foot"><Disclaimer /></div>
+      <footer className="foot"><Disclaimer /></footer>
       {stock && <StockSheet stock={stock} view={view} left={left} coach={coach} onClose={() => setDetail(null)}
         favorite={favorites.includes(stock.code)} onFavorite={() => toggleFavorite(stock.code)}
         onWatch={() => { setWatching(true); setDetail(null); }}
@@ -240,24 +239,6 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   );
 }
 
-const icon = (d: React.ReactNode) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
-const TAB_ICON: Record<Tab, React.ReactNode> = {
-  market: icon(<><path d="M3 17l5-5 4 4 8-8" /><path d="M14 8h6v6" /></>),
-  assets: icon(<><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /></>),
-  news: icon(<><path d="M5 4h11l3 3v13H5z" /><path d="M8 10h8M8 14h8" /></>)
-};
-
-/** 첫 판 따라 하기 안내. 단계 판단은 coach.ts에 있습니다. */
-function Coach({ step, onSkip }: { step: CoachStep; onSkip?: () => void }) {
-  return (
-    <section className="coach" aria-live="polite">
-      <p className="coach-head"><span className="coach-dots" aria-label={`따라 하기 ${step.no}/${step.total}단계`}>{Array.from({ length: step.total }, (_, i) => <i key={i} className={i < step.no ? 'on' : ''} />)}</span>
-        <b>{step.no}. {step.title}</b></p>
-      <p>{step.text}</p>
-      {onSkip && <button className="link" onClick={onSkip}>안내 끄기</button>}
-    </section>
-  );
-}
 function HelpSheet({ phase, level, onClose, onReplayTutorial }: { phase: RoomView['phase']; level: RoomView['level']; onClose: () => void; onReplayTutorial: (() => void) | null }) {
   return (
     <Sheet title="짧은 도움말" onClose={onClose}>
@@ -284,110 +265,6 @@ function HelpSheet({ phase, level, onClose, onReplayTutorial }: { phase: RoomVie
   );
 }
 /** 뉴스 카드. compact면 시장 기대와 단서만 보이고 나머지는 '자세히'에 접어 둡니다. */
-function NewsBody({ card, result, compact = false, action }: { card: NewsCard; result: NewsResult | null; compact?: boolean; action?: React.ReactNode }) {
-  if (compact) return (
-    <article className="news">
-      <p className="news-meta">{card.breaking ? <span className="chip alert">속보</span> : <span className="chip">이번 뉴스</span>}<span className="chip soft">{card.arcTitle}</span></p>
-      <h3 className="headline"><Rich text={card.headline} /></h3>
-      <dl className="facts">
-        <dt><TermLink id="expectation">시장 기대</TermLink></dt><dd className="expect"><Rich text={card.expectation} /></dd>
-        <dt>단서</dt><dd><Rich text={card.clue} /></dd>
-      </dl>
-      <details className="more"><summary>자세히: 확인된 사실 · 남은 변수</summary>
-        <dl className="facts"><dt>확인된 사실</dt><dd><Rich text={card.facts} /></dd><dt>남은 변수</dt><dd><Rich text={card.remaining} /></dd></dl>
-      </details>
-      {action}
-    </article>
-  );
-  return (
-    <article className="news">
-      <p className="news-meta">{card.breaking && <span className="chip alert">속보</span>}<span className="chip soft">{card.arcTitle}</span></p>
-      <h3 className="headline"><Rich text={card.headline} /></h3>
-      <dl className="facts">
-        <dt>확인된 사실</dt><dd><Rich text={card.facts} /></dd>
-        <dt><TermLink id="expectation">시장의 기대치</TermLink></dt><dd className="expect"><Rich text={card.expectation} /></dd>
-        <dt>아직 남은 변수</dt><dd><Rich text={card.remaining} /></dd>
-        <dt>주문 전 단서</dt><dd><Rich text={card.clue} /></dd>
-      </dl>
-      {result && <div className="result">
-        <dl className="facts">
-          <dt>실제 결과</dt><dd className="actual"><Rich text={result.actual} /></dd>
-          <dt>기대와의 차이</dt><dd><Rich text={result.gap} /></dd>
-          <dt>기업별 영향 이유</dt><dd><ul className="impact">{result.impacts.map((i, k) => <li key={k}><span className={dir(i.bp)}>{i.code} {arrow(i.bp)} {pctBp(i.bp)}</span> <Rich text={i.reason} /></li>)}</ul></dd>
-          <dt>배운 점</dt><dd><Rich text={result.concept} /></dd>
-        </dl>
-      </div>}
-    </article>
-  );
-}
-function CurrentNews({ view, onOpen }: { view: RoomView; onOpen?: (code: StockCode) => void }) {
-  const now = view.news[view.news.length - 1];
-  if (!now) return null;
-  return <div className="panel">{now.cards.map(({ card }, i) => {
-    const stock = i === 0 && onOpen ? view.stocks.find(s => s.code === card.targets[0]) : null;
-    return <NewsBody key={card.stageId} card={card} result={null} compact
-      action={stock && onOpen && <button className="ghost blue" onClick={() => onOpen(stock.code)}>{stock.name} 종목 보기</button>} />;
-  })}</div>;
-}
-/** 내 투자 행동 리포트. 관찰이 모자라 계산하지 못한 지표는 카드로 늘어놓지 않고 한 줄로 줄입니다. */
-function BehaviorReport({ metrics }: { metrics: NonNullable<RoomView['report']>['metrics'] }) {
-  if (metrics.length === 0) return null;
-  const shown = metrics.filter(m => m.available), missing = metrics.filter(m => !m.available);
-  const names = missing.map(m => m.title).join(' · ');
-  if (shown.length === 0) return (
-    <section className="sec">
-      <h2 className="h">내 투자 행동 리포트</h2>
-      <p className="hint">이번 판은 거래가 적어서 계산할 것이 없었어요. 사고파는 횟수가 늘면 {names}을 숫자로 보여 드립니다.</p>
-    </section>
-  );
-  return (
-    <section className="sec">
-      <h2 className="h">내 투자 행동 리포트</h2>
-      <p className="hint">이번 판에서 관찰한 행동만 설명합니다.</p>
-      <div className="metrics">{shown.map(m => (
-        <div className="metric" key={m.key}>
-          <h3>{m.title}</h3>
-          <p className="metric-val">{m.value}</p>
-          <p>{m.text}</p>
-          <details><summary>계산 방법</summary><p className="hint">{m.formula} · 필요한 관찰 수: {m.minObservations}</p></details>
-        </div>
-      ))}</div>
-      {missing.length > 0 && <p className="hint">{names}은 거래가 더 쌓이면 나와요.</p>}
-    </section>
-  );
-}
-function Card({ view, send }: { view: RoomView; send: (m: ClientMsg) => void }) {
-  const c = view.card!;
-  /* 고른 즉시 결과 창을 띄웁니다. 닫은 카드는 라운드가 바뀔 때까지 다시 뜨지 않습니다. */
-  const [closed, setClosed] = useState('');
-  const mine = c.answered ? c.options.find(o => o.key === c.answered) ?? null : null;
-  const key = `${view.round}:${c.id}`;
-  return (
-    <div className="card-box">
-      <h3>{c.title}</h3><p><Rich text={c.body} /></p>
-      <div className="seg">{c.options.map(o => <button key={o.key} aria-pressed={c.answered === o.key} disabled={!!c.answered} onClick={() => send({ t: 'card', choice: o.key })}>{o.key}. {o.label}</button>)}</div>
-      {mine && c.feedback
-        ? <p className="card-done">내 판단 <b>{mine.key}. {mine.label}</b></p>
-        : <p className="hint">한 번 고르면 바꿀 수 없고, 고르면 바로 결과가 나옵니다. 응답은 판단 기록으로만 저장되며 주문은 주문 패널에서 따로 확정합니다.</p>}
-      {mine && c.feedback && closed !== key && <CardResult card={c} mine={mine} onClose={() => setClosed(key)} />}
-    </div>
-  );
-}
-/** 돌발 카드를 고른 뒤 바로 뜨는 결과 창. 어떤 판단이었는지와 그 이유를 알려 줍니다. */
-function CardResult({ card, mine, onClose }: { card: CardView; mine: { key: 'A' | 'B'; label: string }; onClose: () => void }) {
-  useEffect(() => { play('stamp'); buzz('trigger'); }, []);
-  return (
-    <Sheet title="판단 결과" onClose={onClose}>
-      <p className="news-meta"><span className="chip soft">{card.title}</span><span className="chip">{card.concept}</span></p>
-      <p className="card-pick">내 판단 <b>{mine.key}. {mine.label}</b></p>
-      <p className="card-feedback"><Rich text={card.feedback ?? ''} /></p>
-      <p className="hint">점수는 아니에요. 판단 기록은 판이 끝난 뒤 보고서에 모아 보여 드립니다.</p>
-      <button className="primary" onClick={onClose}>알겠어요</button>
-      <Disclaimer />
-    </Sheet>
-  );
-}
-/** 내 평가액 구역. 관전자에게는 상위 순위만 보여 줍니다. */
 function Standing({ view }: { view: RoomView }) {
   const me = view.leaderboard.find(l => l.playerId === view.you.id);
   if (!me) return <div className="panel"><ol className="mini-rank">{view.leaderboard.slice(0, 5).map(l => <li key={l.playerId}>{l.rank}위 {l.label} <span className={dir(l.returnPct)}>{pct(l.returnPct)}</span></li>)}</ol></div>;
@@ -408,37 +285,6 @@ function Standing({ view }: { view: RoomView }) {
 }
 /** 업종별로 묶은 종목 목록. 머리줄을 누르면 접고 펼칩니다. 접힌 업종은 종목 수와 평균 등락만 보여 줍니다.
     pinned 종목이 있는 업종(따라 하기 안내 대상)은 항상 펼칩니다. 머리줄은 버튼이라 안에 용어 링크를 넣지 않습니다. */
-function SectorBoard({ stocks, defaultOpen, pinned, renderRow, summary, live = false }: {
-  stocks: StockView[]; defaultOpen: Set<StockGroup>; pinned: StockCode[]; live?: boolean;
-  renderRow: (s: StockView) => React.ReactNode; summary?: (b: ReturnType<typeof groupStocks>[number]) => React.ReactNode;
-}) {
-  const [toggled, setToggled] = useState<Partial<Record<StockGroup, boolean>>>({});
-  const blocks = groupStocks(stocks, live);
-  const isOpen = (g: StockGroup) => pinned.some(c => stockOf(c).group === g) || (toggled[g] ?? defaultOpen.has(g));
-  const allOpen = blocks.every(b => isOpen(b.group));
-  return (
-    <div className="sectors">
-      {blocks.map(b => {
-        const open = isOpen(b.group);
-        const avg = b.avgChangeBp;
-        return (
-          <section key={b.group} className={`sector${open ? ' open' : ''}`}>
-            <button className="sector-head" aria-expanded={open} onClick={() => setToggled(t => ({ ...t, [b.group]: !open }))}>
-              <i className="sector-dot" style={{ background: b.color }} aria-hidden="true" />
-              <b>{b.label}</b>
-              <span className="sector-meta">{b.stocks.length}종목</span>
-              <span className="sector-sum">{summary ? summary(b) : avg === null ? <small className="flat">—</small> : <small className={dir(avg)}>{live ? '오늘' : '평균'} {arrow(avg)} {pctBp(avg)}</small>}</span>
-              <svg className={`chev sector-chev${open ? ' up' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-            </button>
-            {open && <div className="board">{b.stocks.map(renderRow)}</div>}
-          </section>
-        );
-      })}
-      <button className="link sector-all" onClick={() => setToggled(Object.fromEntries(blocks.map(b => [b.group, !allOpen])))}>{allOpen ? '모두 접기' : '모두 펼치기'}</button>
-    </div>
-  );
-}
-/** 내가 가진 종목을 시장 화면 맨 위에 모아 보여 줍니다. 눌러서 바로 팔 수 있습니다. */
 function MyHoldings({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => void }) {
   const p = view.portfolio;
   if (!p || p.holdings.length === 0) return null;
@@ -471,329 +317,6 @@ function MyHoldings({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) =
     </section>
   );
 }
-function StockRow({ s, view, onOpen, hint = false }: { s: StockView; view: RoomView; onOpen: () => void; hint?: boolean }) {
-  const held = view.portfolio?.holdings.find(h => h.code === s.code);
-  const ord = view.portfolio?.orders.find(o => o.code === s.code);
-  const trading = view.phase === 'trade' && !!s.ticks;
-  const ch = trading ? intradayBp(s) : s.lastChangeBp;
-  const live = view.phase === 'news' || view.phase === 'trade';
-  const targets = live ? view.news[view.news.length - 1]?.cards.map(c => c.card.targets[0]) ?? [] : [];
-  const inNews = targets.includes(s.code);
-  /* 대장주에 뉴스가 났으면 같은 업종 종목도 함께 움직일 수 있다고 알려 줍니다. */
-  const peerNews = !inNews && targets.includes(GROUPS[stockOf(s.code).group].leader);
-  const sub = [s.sector, inNews ? '이번 뉴스' : '', peerNews ? '같은 업종 뉴스' : '', held ? `${held.qty.toLocaleString('ko-KR')}주 보유` : '', ord ? `${ord.side === 'buy' ? '매수' : '매도'} ${ord.qty.toLocaleString('ko-KR')}주 ${won(ord.price)} 예약` : ''].filter(Boolean).join(' · ');
-  return (
-    <button className={`row${inNews ? ' is-news' : ''}${hint ? ' hint-pulse' : ''}`} onClick={onOpen}>
-      <StockAvatar code={s.code} name={s.name} />
-      <span className="row-main"><b>{s.name}</b><small>{sub}</small></span>
-      <span className="row-price"><b key={trading ? s.price : 'x'} className={`num${trading ? ' tick-flash' : ''}`}>{s.price.toLocaleString('ko-KR')}원</b>
-        <small className={ch === null ? 'flat' : dir(ch)}>{ch === null ? '—' : `${arrow(ch)} ${pctBp(ch)}`}</small></span>
-    </button>
-  );
-}
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="sheet-wrap" onClick={onClose}>
-      <section className="sheet" role="dialog" aria-label={title} onClick={e => e.stopPropagation()}>
-        <div className="sheet-head"><h2>{title}</h2><button className="help-btn" aria-label="닫기" onClick={onClose}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
-        {children}
-      </section>
-    </div>
-  );
-}
-function StockSheet({ stock, view, left, coach, onClose, onWatch, favorite, onFavorite, place, cancel, setStop, toast }: { stock: StockView; view: RoomView; left: number; coach: CoachStep | null; onClose: () => void; onWatch: () => void; favorite: boolean; onFavorite: () => void; place: PlayProps['placeOrder']; cancel: PlayProps['cancelOrder']; setStop: PlayProps['setStop']; toast: (m: string) => void }) {
-  const [point, setPoint] = useState<number | null>(stock.history.length ? stock.history[stock.history.length - 1].round : null);
-  /* 그래프 종류: 1초 선 · 10초봉 · 일봉(라운드 하나가 하루). 고른 값은 이 기기에 저장합니다. */
-  const hasTicks = !!stock.ticks && stock.ticks.length > 1;
-  const [chart, setChart] = useState<'line' | 'candle' | 'day'>(() => {
-    try { const v = localStorage.getItem('tteoksang:chart'); return v === 'candle' || v === 'day' ? v : 'line'; } catch { return 'line'; }
-  });
-  const pickChart = (m: 'line' | 'candle' | 'day') => { setChart(m); try { localStorage.setItem('tteoksang:chart', m); } catch { /* 저장 못 해도 됨 */ } };
-  const news = view.news.find(r => r.round === view.round)?.cards ?? [];
-  const related = news.filter(c => c.card.targets.includes(stock.code));
-  const breakingHeadline = news.find(c => c.card.breaking)?.card.headline;
-  const breaking = view.breakingAt !== undefined && breakingHeadline ? { tick: view.breakingAt, headline: breakingHeadline } : null;
-  const fills = (view.portfolio?.fillLog ?? []).flatMap(f =>
-    f.round === view.round && f.code === stock.code && f.tick !== undefined
-      ? [{ tick: f.tick, side: f.side, qty: f.qty, price: f.price }] : []);
-  const held = view.portfolio?.holdings.find(h => h.code === stock.code);
-  const pointData = stock.history.find(h => h.round === point);
-  const intro = coach?.target === stock.code && (view.phase === 'news' || view.phase === 'trade');
-  const order = view.you.role === 'player' && <OrderPanel stock={stock} view={view} left={left} place={place} cancel={cancel} toast={toast} intro={intro} />;
-  const details = <>
-      <p className="hint"><Rich text={`${GROUPS[stockOf(stock.code).group].label} 업종 · ${stock.sector}${stockOf(stock.code).linkBeta === 1 ? ' · 대장주' : ''}`} /></p>
-      <p className="hint">{stock.desc}</p>
-      <CompanyInfo stock={stock} />
-      {view.phase === 'trade' && stock.ticks
-        ? <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 <small className={dir(intradayBp(stock))}>{arrow(intradayBp(stock))} {pctBp(intradayBp(stock))} <span className="hint">오늘</span></small></p>
-        : <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 {stock.lastChangeBp !== null && <small className={dir(stock.lastChangeBp)}>{arrow(stock.lastChangeBp)} {pctBp(stock.lastChangeBp)}</small>}</p>}
-      <div className="seg mini" role="group" aria-label="그래프 종류">
-        <button aria-pressed={chart === 'line'} disabled={!hasTicks} onClick={() => pickChart('line')}>1초</button>
-        <button aria-pressed={chart === 'candle'} disabled={!hasTicks} onClick={() => pickChart('candle')}>10초봉</button>
-        <button aria-pressed={chart === 'day'} onClick={() => pickChart('day')}>일봉</button>
-      </div>
-      {chart !== 'day' && hasTicks
-        ? <LiveChart stock={stock} steps={view.phase === 'trade' ? view.phaseSeconds : stock.ticks!.length - 1} closing={view.phase === 'recap' ? stock.history[stock.history.length - 1] ?? null : null} breaking={breaking} fills={fills} mode={chart} />
-        : <PriceChart stock={stock} totalRounds={view.totalRounds} selected={point} onSelect={setPoint} live={view.phase === 'trade' || view.phase === 'settling'} />}
-      {pointData ? <BreakdownPanel b={pointData} /> : <p className="hint">주문 시간 동안 시세가 1초마다 움직이고, 장 마감 때 뉴스 결과가 공개되면 크게 움직여요. 첫 결과가 나오면 봉을 눌러 이유를 볼 수 있어요.</p>}
-      {related.length > 0 && view.phase !== 'recap' && <p className="hint">관련 뉴스: {related.map(r => r.card.headline).join(', ')}</p>}
-      {held && <p className="hint">보유 {held.qty.toLocaleString('ko-KR')}주 · <TermLink id="avg-cost">평균</TermLink> {won(held.avgCost)} · <TermLink id="unrealized-pnl">평가손익</TermLink> <span className={dir(held.pnl)}>{signedWon(held.pnl)}</span></p>}
-      {held && view.level === 'pro' && view.you.role === 'player' && view.status === 'playing' && <StopEditor key={`${held.stop}-${held.take}`} held={held} price={stock.price} setStop={setStop} toast={toast} />}
-  </>;
-  return (
-    <Sheet title={stock.name} onClose={onClose}>
-      <button type="button" className="ghost small favorite-toggle" aria-pressed={favorite} onClick={onFavorite}>
-        <span aria-hidden="true">{favorite ? '★' : '☆'}</span> 관심종목
-      </button>
-      {coach?.no === 3 && <>
-        <Coach step={coach} />
-        <button className="ghost" onClick={onWatch}>이번에는 지켜보기</button>
-      </>}
-      {intro ? <>
-        {order}
-        <details className="more"><summary>차트·기업 정보</summary>{details}</details>
-      </> : <>{details}{order}</>}
-    </Sheet>
-  );
-}
-function OrderPanel({ stock, view, left, place, cancel, toast, intro }: { stock: StockView; view: RoomView; left: number; place: PlayProps['placeOrder']; cancel: PlayProps['cancelOrder']; toast: (m: string) => void; intro: boolean }) {
-  const pf = view.portfolio!;
-  const existing = pf.orders.find(o => o.code === stock.code) ?? null;
-  const [side, setSide] = useState<Side>('buy');
-  /* 쉬움 난이도에서는 지정가·호가창·슬리피지 숫자를 감추고 시장가만 씁니다 */
-  const easy = view.level === 'easy';
-  const [kindPick, setKind] = useState<OrderKind>('market');
-  const kind: OrderKind = easy ? 'market' : kindPick;
-  const [qty, setQty] = useState('');
-  const [limitText, setLimitText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const open = view.phase === 'trade' && left > 0;
-  const heldQty = pf.holdings.find(h => h.code === stock.code)?.qty ?? 0;
-  const ctx = useMemo(() => ({ cash: pf.cash, holdings: {}, orders: Object.fromEntries(pf.orders.map(o => [o.code, o])) as Partial<Record<StockCode, Order>> }), [pf.cash, pf.orders]);
-  const lo = lowerLimit(stock.openPrice), hi = upperLimit(stock.openPrice);
-  const book = useMemo(() => quoteBook(stock.code, stock.price, stock.openPrice, view.round, Math.max(0, (stock.ticks?.length ?? 1) - 1)), [stock.code, stock.price, stock.openPrice, view.round, stock.ticks?.length]);
-  const lim = Math.floor(Number(limitText) || 0);
-  const limitOk = lim >= lo && lim <= hi && lim % 10 === 0;
-  const isLimit = kind === 'limit';
-  const lockedSell = !isLimit && existing?.side === 'sell' ? existing.qty : 0;
-  const max = side === 'buy'
-    ? (isLimit ? (limitOk ? maxBuyQty(ctx, stock.code, stock.price, { limit: lim }) : 0) : maxBuyQty(ctx, stock.code, stock.price, { replace: false, book }))
-    : Math.max(0, heldQty - lockedSell);
-  const n = Math.floor(Number(qty) || 0);
-  const mf = isLimit ? null : marketFill(book, side, n);
-  const fp = isLimit ? { price: lim, slipBp: 0, best: lim } : mf ?? { price: 0, slipBp: 0, best: 0 };
-  const gross = n * fp.price, commission = feeOf(gross), tax = side === 'sell' ? taxOf(gross) : 0, fee = commission + tax;
-  const slipWon = isLimit ? 0 : Math.abs(fp.price - fp.best) * n;
-  const bestBid = book.bids[0]?.price ?? null;
-  const marketable = isLimit && limitOk && (side === 'buy' ? stock.price <= lim : bestBid !== null && bestBid >= lim);
-  const pickLevel = (price: number) => { setKind('limit'); setLimitText(String(price)); };
-  const chooseKind = (k: OrderKind) => { setKind(k); if (k === 'limit' && !limitText) setLimitText(String(stock.price)); };
-  const nudge = (d: number) => setLimitText(String(Math.min(hi, Math.max(lo, (limitOk ? lim : stock.price) + d))));
-  const submit = async () => {
-    setBusy(true);
-    const res = await place(stock.code, side, n, kind, isLimit ? lim : undefined);
-    setBusy(false);
-    if (!res.ok) { toast(res.reason ?? '주문하지 못했습니다'); return; }
-    if (!res.fill) play('book');
-    setQty('');
-    if (res.fill) toast(`체결 · ${res.fill.side === 'buy' ? '매수' : '매도'} ${res.fill.qty.toLocaleString('ko-KR')}주 × ${won(res.fill.price)}`);
-    else toast('지정가 예약 완료 · 시세가 닿으면 체결돼요');
-  };
-  const doCancel = async () => {
-    setBusy(true);
-    const res = await cancel(stock.code);
-    setBusy(false);
-    toast(res.ok ? '예약을 취소했습니다' : res.reason ?? '취소하지 못했습니다');
-  };
-  if (!open && view.phase !== 'news') return <p className="hint strong">이번 라운드 장 마감</p>;
-  const sideLabel = side === 'buy' ? '매수' : '매도';
-  const bookPanel = !easy && view.phase === 'trade' && <OrderBook book={book} price={stock.price} open={stock.openPrice} onPick={pickLevel} />;
-  const kindPanel = !easy && <div className="seg kind" role="group" aria-label="주문 방식">
-    <button aria-pressed={kind === 'market'} onClick={() => chooseKind('market')}>시장가 · 바로 체결</button>
-    <button aria-pressed={kind === 'limit'} onClick={() => chooseKind('limit')}>지정가 · 예약</button>
-  </div>;
-  return (
-    <div className="order">
-      {existing && <div className="booked">
-        <p><b>{existing.side === 'buy' ? '매수' : '매도'} {existing.qty.toLocaleString('ko-KR')}주 · 지정가 {won(existing.price)}</b> 예약 중 · 시세가 닿으면 체결, 안 닿으면 마감 때 자동 취소</p>
-        <button className="ghost small" disabled={!open || busy} onClick={doCancel}>예약 취소</button>
-      </div>}
-      {!intro && bookPanel}
-      <div className="seg side"><button data-s="buy" aria-pressed={side === 'buy'} onClick={() => { setSide('buy'); setQty(''); }}>매수</button><button data-s="sell" aria-pressed={side === 'sell'} onClick={() => { setSide('sell'); setQty(''); }}>매도</button></div>
-      {easy ? null : intro ? <details className="more"><summary>주문 방식·호가창</summary>{kindPanel}{bookPanel}</details> : kindPanel}
-      {isLimit && <>
-        <label htmlFor="order-limit" className="hint"><TermLink id="limit-order">지정가</TermLink> · 오늘 가능 범위 {won(lo)}~{won(hi)}</label>
-        <div className="stepper">
-          <button aria-label="지정가 10원 내리기" onClick={() => nudge(-10)}>−</button>
-          <input id="order-limit" inputMode="numeric" value={limitText} onChange={e => setLimitText(e.target.value.replace(/\D/g, ''))} />
-          <button aria-label="지정가 10원 올리기" onClick={() => nudge(10)}>+</button>
-        </div>
-        {!limitOk && limitText && <p className="error">10원 단위로, 가능 범위 안에서 정해 주세요</p>}
-      </>}
-      <label htmlFor="order-qty" className="hint">수량 · {side === 'buy' ? '최대' : '팔 수 있는 수량'} {max.toLocaleString('ko-KR')}주</label>
-      <div className="stepper">
-        <button aria-label="1주 빼기" onClick={() => setQty(String(Math.max(0, n - 1)))}>−</button>
-        <input id="order-qty" inputMode="numeric" value={qty} placeholder="0" onChange={e => setQty(e.target.value.replace(/\D/g, ''))} />
-        <button aria-label="1주 더하기" onClick={() => setQty(String(n + 1))}>+</button>
-      </div>
-      <div className="pcts">{([[0.1, '10%'], [0.25, '25%'], [0.5, '50%'], [1, '최대']] as const).map(([r, label]) => <button key={label} onClick={() => setQty(String(Math.floor(max * r)))}>{label}</button>)}</div>
-      <dl className="kv">
-        <dt>지금 시세</dt><dd>{won(stock.price)}</dd>
-        {!isLimit && !easy && <><dt>{side === 'buy' ? '최우선 매도 호가' : '최우선 매수 호가'}</dt><dd>{mf ? won(mf.best) : '없음'}</dd></>}
-        {isLimit
-          ? <><dt>지정가</dt><dd>{limitOk ? won(lim) : '—'}</dd></>
-          : <><dt>예상 체결가</dt><dd>{won(fp.price)}</dd>
-            {!easy && <><dt><TermLink id="slippage">슬리피지</TermLink>{fp.slipBp ? ` ${fp.slipBp}bp` : ''}</dt><dd>{slipWon ? `${side === 'buy' ? '+' : '−'}${won(slipWon)}` : '없음'}</dd></>}</>}
-        <dt>주문 금액</dt><dd>{won(gross)}</dd>
-        <dt><TermLink id="fee">수수료</TermLink> 0.10%</dt><dd>{won(commission)}</dd>
-        {side === 'sell' && <><dt><TermLink id="transaction-tax">증권거래세</TermLink> 0.20%</dt><dd>{won(tax)}</dd></>}
-        <dt className="total">{side === 'buy' ? (isLimit ? '묶어 둘 돈(예약금)' : '빠져나갈 돈') : '받을 돈'}</dt><dd className="total">{won(side === 'buy' ? gross + fee : Math.max(0, gross - fee))}</dd>
-      </dl>
-      {n > max && <p className="error">가능한 수량을 넘었어요</p>}
-      <p className="hint">{easy
-        ? (side === 'buy' ? '지금 시세로 바로 체결돼요. 한 번에 많이 사면 체결가가 조금 올라갈 수 있어요.' : '지금 시세로 바로 팔려요. 파는 값은 시세보다 한 칸(10원) 낮은 값부터 시작해요.')
-        : isLimit
-          ? (marketable ? '지금 시세가 지정가보다 유리해서 바로 체결돼요.' : '시세가 지정가에 닿으면 그 가격에 체결돼요. 장 마감까지 안 닿으면 자동 취소돼요.' + (existing ? ' 이 종목의 기존 예약은 새 예약으로 바뀌어요.' : ''))
-          : side === 'buy' ? '가장 싼 매도 호가부터 차례로 사요. 수량이 많으면 더 비싼 호가까지 사게 돼요(슬리피지).' : `가장 비싼 매수 호가부터 차례로 팔아요. 시세보다 한 칸(10원) 낮은 값부터 시작해요(스프레드).`}</p>
-      {!isLimit && !mf && <p className="error">{side === 'sell' ? '사려는 주문이 없어 지금은 시장가로 팔 수 없어요(하한가).' : '팔려는 주문이 없어 지금은 시장가로 살 수 없어요.'}</p>}
-      <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max || (isLimit && !limitOk) || (!isLimit && !mf)} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 장 시작` : busy ? '요청 중' : `${n > 0 ? `${n.toLocaleString('ko-KR')}주 ` : ''}${sideLabel}${isLimit && !marketable ? ' 예약' : ''}`}</button>
-    </div>
-  );
-}
-/** 호가창: 위(파랑)는 팔려는 주문, 아래(빨강)는 사려는 주문. 가격을 누르면 그 가격으로 지정가를 채웁니다. */
-/** 손절·익절 자동 주문 설정. 가격을 직접 넣거나 평균 단가 대비 ±5%·±10%를 고릅니다. */
-function StopEditor({ held, price, setStop, toast }: { held: NonNullable<RoomView['portfolio']>['holdings'][number]; price: number; setStop: PlayProps['setStop']; toast: (m: string) => void }) {
-  const [stop, setStopText] = useState(held.stop ? String(held.stop) : '');
-  const [take, setTakeText] = useState(held.take ? String(held.take) : '');
-  const [busy, setBusy] = useState(false);
-  const round10 = (v: number) => Math.round(v / 10) * 10;
-  const ns = stop ? Math.floor(Number(stop)) : null, nt = take ? Math.floor(Number(take)) : null;
-  const err = ns !== null && (ns >= price || ns % 10) ? '손절가는 지금 시세보다 낮게, 10원 단위로' : nt !== null && (nt <= price || nt % 10) ? '익절가는 지금 시세보다 높게, 10원 단위로' : '';
-  const save = async (s: number | null, t: number | null) => {
-    setBusy(true);
-    const r = await setStop(held.code, s, t);
-    setBusy(false);
-    toast(r.ok ? (s === null && t === null ? '손절·익절을 해제했어요' : '손절·익절을 걸었어요') : r.reason ?? '설정하지 못했습니다');
-  };
-  const on = held.stop || held.take;
-  return (
-    <details className="company stops" open={!!on}>
-      <summary>손절·익절 자동 주문{on ? ` · ${held.stop ? `손절 ${won(held.stop)}` : ''}${held.stop && held.take ? ' · ' : ''}${held.take ? `익절 ${won(held.take)}` : ''}` : ''}</summary>
-      <p className="hint">시세가 정한 값에 닿으면 가진 수량 전부를 그 순간 <TermLink id="market-order">시장가</TermLink>로 팔아요. 결과 공개로 값이 건너뛰면 정한 값보다 불리하게 팔릴 수 있어요.</p>
-      <div className="stop-grid">
-        <label><span><TermLink id="stop-loss">손절가</TermLink></span><input inputMode="numeric" value={stop} placeholder="없음" onChange={e => setStopText(e.target.value.replace(/\D/g, ''))} /></label>
-        <div className="pcts">{[5, 10].map(pc => <button key={pc} onClick={() => setStopText(String(round10(held.avgCost * (100 - pc) / 100)))}>평균 −{pc}%</button>)}</div>
-        <label><span><TermLink id="take-profit">익절가</TermLink></span><input inputMode="numeric" value={take} placeholder="없음" onChange={e => setTakeText(e.target.value.replace(/\D/g, ''))} /></label>
-        <div className="pcts">{[5, 10].map(pc => <button key={pc} onClick={() => setTakeText(String(round10(held.avgCost * (100 + pc) / 100)))}>평균 +{pc}%</button>)}</div>
-      </div>
-      {err && <p className="error">{err}</p>}
-      <div className="btn-row">
-        <button className="ghost" disabled={busy || !!err || (ns === null && nt === null)} onClick={() => save(ns, nt)}>걸기</button>
-        {on && <button className="ghost" disabled={busy} onClick={() => { setStopText(''); setTakeText(''); save(null, null); }}>해제</button>}
-      </div>
-    </details>
-  );
-}
-function OrderBook({ book, price, open, onPick }: { book: QuoteBook; price: number; open: number; onPick: (p: number) => void }) {
-  const asks = book.asks.slice(0, BOOK_SHOW).reverse(), bids = book.bids.slice(0, BOOK_SHOW);
-  const maxQ = Math.max(1, ...asks.map(a => a.qty), ...bids.map(b => b.qty));
-  const pctOf = (p: number) => { const bp = Math.round((p - open) * 10000 / open); return `${bp > 0 ? '+' : bp < 0 ? '−' : ''}${(Math.abs(bp) / 100).toFixed(2)}%`; };
-  const row = (l: { price: number; qty: number }, kind: 'ask' | 'bid') => (
-    <tr key={`${kind}${l.price}`} className={`${kind}${l.price === price ? ' now' : ''}`}>
-      <td>{kind === 'ask' && <><i style={{ width: `${Math.round(l.qty / maxQ * 100)}%` }} />{l.qty.toLocaleString('ko-KR')}</>}</td>
-      <td><button type="button" className="lvl" onClick={() => onPick(l.price)} aria-label={`${l.price.toLocaleString('ko-KR')}원으로 지정가 채우기`}><b className="num">{l.price.toLocaleString('ko-KR')}</b><small>{pctOf(l.price)}</small></button></td>
-      <td>{kind === 'bid' && <><i style={{ width: `${Math.round(l.qty / maxQ * 100)}%` }} />{l.qty.toLocaleString('ko-KR')}</>}</td>
-    </tr>
-  );
-  return (
-    <figure className="qbook">
-      <table aria-label="호가창">
-        <thead><tr><th>팔려는 수량</th><th>가격</th><th>사려는 수량</th></tr></thead>
-        <tbody>{asks.map(a => row(a, 'ask'))}{bids.map(b => row(b, 'bid'))}</tbody>
-      </table>
-      <figcaption className="chart-note"><TermLink id="order-book">호가창</TermLink> · 가격을 누르면 그 값으로 <TermLink id="limit-order">지정가</TermLink>를 채워요. 상대방은 가상 시장이고, 수량은 1초마다 바뀌어요.</figcaption>
-    </figure>
-  );
-}
-/** 떡상 지수: 이번 판 10종목의 시가총액 가중 지수(시작 1,000). 라운드 종료 값과 지금 값을 작은 그래프로 */
-/** 배당 일정 안내: 기준일 전·당일·배당락 라운드에 보여 줍니다. */
-/** 장중 속보가 뜨면 화면 위에서 큼직하게 내려옵니다. 주문을 막지 않도록 아래쪽은 그대로 쓸 수 있고, 5초 뒤 저절로 닫힙니다. */
-function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView; card: NewsCard; onClose: () => void; onOpen: (c: StockCode) => void }) {
-  const targets = card.targets.map(c => view.stocks.find(s => s.code === c)).filter((s): s is StockView => !!s);
-  return (
-    <div className="breaking-wrap" role="status" aria-label="속보">
-      <div className="breaking">
-        <p className="news-meta"><span className="chip alert">속보</span><span className="chip soft">{card.arcTitle}</span></p>
-        <p className="headline"><Rich text={card.headline} /></p>
-        <dl className="facts"><dt>시장 기대</dt><dd><Rich text={card.expectation} /></dd><dt>단서</dt><dd><Rich text={card.clue} /></dd></dl>
-        {targets.length > 0 && <ul className="list breaking-stocks">{targets.map(s => {
-          const bp = intradayBp(s);
-          return <li key={s.code}><button className="plain" onClick={() => onOpen(s.code)}>
-            <span>{s.name}<small>지금 {won(s.price)}</small></span>
-            <b className={dir(bp)}>{arrow(bp)} {pctBp(bp)}</b>
-          </button></li>;
-        })}</ul>}
-        <p className="hint">속보가 뜨는 순간 가격이 먼저 반응했어요. 결과는 장 마감 때 공개됩니다. 아무 곳이나 누르면 닫혀요.</p>
-        <button className="ghost" onClick={onClose}>닫기 (5초 뒤 자동)</button>
-      </div>
-    </div>
-  );
-}
-/** VI(변동성 완화장치)로 멈춘 종목 안내 */
-function ViNotice({ view }: { view: RoomView }) {
-  const halted = view.stocks.filter(s => s.haltLeft);
-  if (view.phase !== 'trade' || halted.length === 0) return null;
-  return (
-    <section className="panel vi-note" role="status" aria-label="변동성 완화장치 안내">
-      <p className="news-meta"><span className="chip alert">VI</span></p>
-      <p><b>{halted.map(s => s.name).join(', ')}의 거래가 잠깐 멈췄어요.</b> 시가 대비 10% 넘게 움직여 <TermLink id="vi">변동성 완화장치</TermLink>가 걸렸습니다. 걸어 둔 예약은 취소됐어요.</p>
-      <ul className="list">{halted.map(s => <li key={s.code}><span>{s.name}<small>시가 대비 {pctBp(Math.round((s.price - s.openPrice) * 10000 / s.openPrice))}</small></span><b className="num">{s.haltLeft}초 뒤 재개</b></li>)}</ul>
-    </section>
-  );
-}
-/** 다음 라운드 발표 예정(실제 시장의 실적 발표 일정표에 해당) */
-function SchedulePanel({ view }: { view: RoomView }) {
-  if (view.schedule.length === 0 || (view.phase !== 'trade' && view.phase !== 'recap')) return null;
-  return (
-    <section className="panel schedule" aria-label="다음 라운드 발표 예정">
-      <div className="list-head"><span><TermLink id="earnings-calendar">발표 일정</TermLink> · {view.schedule[0].round}라운드 예정</span></div>
-      <ul className="list">{view.schedule.map(x => <li key={x.code}><span>{x.name}<small>{x.arcTitle || '처음 나오는 소식'}</small></span></li>)}</ul>
-      <p className="hint">어떤 회사 소식이 나올지만 미리 알려 드려요. 내용과 결과는 그때 공개됩니다.</p>
-    </section>
-  );
-}
-function DividendNotice({ view }: { view: RoomView }) {
-  const d = view.dividend;
-  if (!d || d.status === 'before' || d.status === 'done') return null;
-  const list = d.items.map(i => `${i.name} 주당 ${won(i.dps)}`).join(', ');
-  const mine = (view.portfolio?.dividendLog ?? []).filter(x => x.round === view.round);
-  const got = mine.reduce((a, x) => a + x.amount, 0);
-  return (
-    <section className="panel dividend-note" aria-label="배당 안내">
-      <p className="news-meta"><span className="chip">배당</span></p>
-      {d.status === 'upcoming' && <p><b>다음 라운드 장 마감이 <TermLink id="record-date">배당 기준일</TermLink>이에요.</b> {list}. 기준일 장 마감 때 가진 주식만 받아요.</p>}
-      {d.status === 'record' && <p><b>오늘 장 마감 때 가진 주식에 배당이 확정돼요.</b> {list}. 다음 라운드 시작 때 배당금이 들어오고, 시가는 배당금만큼 낮아져요(<TermLink id="ex-dividend">배당락</TermLink>).</p>}
-      {d.status === 'ex' && <p><b><TermLink id="ex-dividend">배당락</TermLink>: 배당주의 시가가 배당금만큼 낮아졌어요.</b> {got ? <>내 배당금 <span className="up">+{won(got)}</span> 입금. 받은 돈과 떨어진 가격이 같아 평가액은 그대로예요.</> : '기준일에 가진 주식이 없어 받은 배당금은 없어요.'}</p>}
-    </section>
-  );
-}
-function CompanyInfo({ stock }: { stock: StockView }) {
-  const f = fundOf(stock.code), per = perOf(stock.code, stock.price), dy = dividendYieldBp(stock.code, stock.price);
-  return (
-    <details className="company">
-      {/* 요약 줄에 시가총액·PER을 적어 두면 처음 하는 사람에게 읽을 숫자만 늘어서 안으로 넣었습니다(2026-11 결정) */}
-      <summary>기업 정보 · 지난해 실적과 PER</summary>
-      <dl className="kv">
-        <dt>발행 주식 수</dt><dd className="num">{(f.shares / 10000).toLocaleString('ko-KR')}만 주</dd>
-        <dt><TermLink id="market-cap">시가총액</TermLink></dt><dd className="num">{formatEok(marketCapWon(stock.code, stock.price))}</dd>
-        <dt>지난해 <TermLink id="net-income">순이익</TermLink></dt><dd className={`num ${f.netIncome < 0 ? 'down' : ''}`}>{f.netIncome < 0 ? `−${Math.abs(f.netIncome).toLocaleString('ko-KR')}억 원(적자)` : `${f.netIncome.toLocaleString('ko-KR')}억 원`}</dd>
-        <dt><TermLink id="per">PER</TermLink></dt><dd className="num">{per === null ? '적자라 계산하지 않음' : `${per}배`}</dd>
-        <dt>주당 <TermLink id="dividend">배당금</TermLink></dt><dd className="num">{f.dps ? `${f.dps.toLocaleString('ko-KR')}원 · ` : '없음'}{f.dps ? <><TermLink id="dividend-yield">배당수익률</TermLink> {pctBp(dy)}</> : null}</dd>
-      </dl>
-      <p className="hint">가상 기업의 지어낸 숫자입니다. PER은 지금 주가로 계산해서 주가가 오르면 함께 올라갑니다.</p>
-    </details>
-  );
-}
 function Assets({ view, cancel, toast }: { view: RoomView; cancel: PlayProps['cancelOrder']; toast: (m: string) => void }) {
   const p = view.portfolio;
   if (!p) return <div className="panel"><p className="hint">관전자는 개인 자산이 없습니다.</p></div>;
@@ -818,215 +341,5 @@ function Assets({ view, cancel, toast }: { view: RoomView; cancel: PlayProps['ca
       <h3 className="h small">체결 내역</h3>
       {p.fillLog.length ? <ul className="list">{p.fillLog.slice().reverse().map((f, i) => <li key={i}><span>R{f.round} {view.stocks.find(s => s.code === f.code)!.name}<small>{f.side === 'buy' ? '매수' : '매도'} {f.qty.toLocaleString('ko-KR')}주 · {won(f.price)} · 수수료 {won(f.fee)}</small></span></li>)}</ul> : <p className="hint">아직 체결된 주문이 없습니다.</p>}
     </div>
-  );
-}
-function NewsLog({ view }: { view: RoomView }) {
-  return <div className="panel"><h2 className="h">뉴스</h2>{view.news.slice().reverse().map(r => <div key={r.round}><p className="round-tag">라운드 {r.round}</p>{r.cards.map(c => <NewsBody key={c.card.stageId} card={c.card} result={c.result} />)}</div>)}</div>;
-}
-function lessonLink(view: RoomView, code?: StockCode) {
-  const r = view.lastResult?.round ?? view.round;
-  const s = code ?? view.stocks.slice().sort((a, b) => Math.abs(b.lastChangeBp ?? 0) - Math.abs(a.lastChangeBp ?? 0))[0].code;
-  const stock = view.stocks.find(x => x.code === s)!;
-  const b = stock.history.find(h => h.round === r);
-  const q = new URLSearchParams({ name: stock.name, summary: b?.summary ?? '', base: String(b?.basePrice ?? ''), close: String(b?.closePrice ?? ''), reason: b?.events[0]?.reason ?? '시장·종목 변동' });
-  return `/lessons/news?${q.toString()}`;
-}
-/** 라운드 결과: 내 변화 → 기대 vs 실제 → 왜 움직였나(막대) → 종목별 결과 */
-function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => void }) {
-  const r = view.lastResult;
-  const now = view.news[view.news.length - 1];
-  const movers = view.stocks.slice().sort((a, b) => Math.abs(b.lastChangeBp ?? 0) - Math.abs(a.lastChangeBp ?? 0));
-  const delta = useCountUp(r?.delta ?? 0, 900);
-  /* 폭죽: 내가 가진 종목이 상한가를 쳤거나, 이번 라운드에 1위로 올라섰을 때 */
-  const held = new Set(view.portfolio?.holdings.map(h => h.code) ?? []);
-  const fire = view.stocks.some(s => held.has(s.code) && s.history[s.history.length - 1]?.round === view.round && s.history[s.history.length - 1]?.limit === 'upper')
-    || (!!r && r.rankAfter === 1 && r.rankBefore > 1);
-  return (<>
-    {r && <div className="panel recap-top">
-      <p className="wallet-label">내 평가액 변화 {r.rankBefore !== r.rankAfter && <span className={`pill pop ${r.rankAfter < r.rankBefore ? 'up' : 'down'}`}>{r.rankBefore}위 → {r.rankAfter}위</span>}{r.rankBefore === r.rankAfter && <span className="pill">{r.rankAfter}위 유지</span>}</p>
-      <p className={`delta-big ${dir(r.delta)}`} aria-label={signedWon(r.delta)}>{signedWon(delta)}</p>
-      <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료·세금 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 ${won(r.slippage)}(체결가에 포함)` : ''}</p>
-    </div>}
-    {fire && <Confetti key={view.round} />}
-    {view.leaderboard.length > 1 && <div className="panel">
-      <p className="wallet-label">순위 변화</p>
-      <ol className="rank-moves">{view.leaderboard.map(l => { const move = l.prevRank - l.rank; return (
-        <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''} style={{ '--from': `${move * 100}%` } as CSSProperties}>
-          <span className="r">{l.rank}</span>
-          <b>{l.playerId === view.you.id ? `나 · ${l.label}` : l.label}</b>
-          <span className={`mv ${move > 0 ? 'up' : move < 0 ? 'down' : 'flat'}`} aria-label={move > 0 ? `${move}계단 올라감` : move < 0 ? `${-move}계단 내려감` : '순위 그대로'}>{move > 0 ? `▲${move}` : move < 0 ? `▼${-move}` : '–'}</span>
-          <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
-        </li>); })}</ol>
-    </div>}
-    {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
-    {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
-    <div className="panel flush">
-      <div className="list-head"><span>종목별 결과 · 눌러서 이유 보기</span></div>
-      <div className="board">{movers.map(s => <button key={s.code} className="row" onClick={() => onOpen(s.code)}>
-        <StockAvatar code={s.code} name={s.name} />
-        <span className="row-main"><b>{s.name}{s.history[s.history.length - 1]?.limit && <span className={`stamp ${s.history[s.history.length - 1]!.limit === 'upper' ? 'up' : 'down'}`}>{s.history[s.history.length - 1]!.limit === 'upper' ? '상한가' : '하한가'}</span>}</b><small>{s.history[s.history.length - 1]?.summary}</small></span>
-        <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.lastChangeBp ?? 0)}>{s.lastChangeBp === null ? '—' : `${arrow(s.lastChangeBp)} ${pctBp(s.lastChangeBp)}`}</small></span>
-      </button>)}</div>
-    </div>
-    <div className="panel"><button className="ghost" onClick={() => navigate(lessonLink(view))}>이 변동을 읽는 법 (차트 연습실)</button></div>
-  </>);
-}
-/** 사건 하나의 결과: 기대와 실제를 나란히, 주인공 종목의 등락을 막대로 나눠 보여 줍니다. */
-function RecapNews({ card, result, stock }: { card: NewsCard; result: NewsResult; stock: StockView }) {
-  const b = stock.history[stock.history.length - 1];
-  const mainBp = result.impacts.find(i => i.code === stock.code)?.bp ?? 0;
-  const parts = b ? [
-    { label: '사건 결과', bp: b.eventBp },
-    { label: '시장 전체', bp: b.marketBp },
-    { label: '종목 변동', bp: b.stockBp }
-  ] : [];
-  const scale = Math.max(100, ...parts.map(p => Math.abs(p.bp)));
-  return (
-    <div className="panel">
-      <p className="news-meta"><span className="chip soft">{card.arcTitle}</span></p>
-      <p className="headline"><Rich text={result.gap} /></p>
-      <div className="vs">
-        <div><small>시장 기대</small><b><Rich text={card.expectation.replace(/^시장(은| 기대치는| 기대)\s*/, '')} /></b></div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--chev)" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-        <div className={mainBp >= 0 ? 'hit' : 'miss'}><small>실제 결과</small><b className={dir(mainBp)}><Rich text={result.actual} /></b></div>
-      </div>
-      {b && <div className="bars" aria-label={`${stock.name} 등락 ${pctBp(b.changeBp)}의 구성`}>
-        <p className="hint">{stock.name} {pctBp(b.changeBp)}는 이렇게 만들어졌어요</p>
-        {parts.map(p => {
-          const w = Math.abs(p.bp) / scale * 48;
-          return <div key={p.label} className="bar-row"><span>{p.label}</span>
-            <span className="bar"><i style={{ left: `${p.bp >= 0 ? 50 : 50 - w}%`, width: `${Math.max(w, 1)}%`, background: p.bp >= 0 ? 'var(--up)' : 'var(--down)', transformOrigin: p.bp >= 0 ? 'left' : 'right' }} /></span>
-            <span className={dir(p.bp)}>{bpText(p.bp)}</span></div>;
-        })}
-      </div>}
-      {b && <CandleReplay b={b} name={stock.name} ticks={stock.ticks} />}
-      <p className="lesson-box"><b>배운 점</b> <Rich text={result.concept} /></p>
-      <details className="more"><summary>기업별 영향 자세히</summary>
-        <ul className="impact">{result.impacts.map((i, k) => <li key={k}><span className={dir(i.bp)}>{i.code} {arrow(i.bp)} {pctBp(i.bp)}</span> <Rich text={i.reason} /></li>)}</ul>
-      </details>
-    </div>
-  );
-}
-function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) => void }) {
-  const rep = view.report;
-  const [open, setOpen] = useState<StockCode | null>(null);
-  const [point, setPoint] = useState<number | null>(null);
-  const stock = open ? view.stocks.find(s => s.code === open)! : null;
-  const pointData = stock?.history.find(h => h.round === point);
-  const shownValue = useCountUp(rep?.value ?? 0, 1200, rep ? rep.value - Math.round(rep.value * 0.02) : 0);
-  useEffect(() => { if (rep) play(rep.rank === 1 ? 'win' : revealTone(rep.returnPct)); }, [!!rep]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* 끝난 판을 이 기기의 개인 기록에 한 번만 남깁니다. */
-  useEffect(() => {
-    if (!rep || view.you.role !== 'player') return;
-    const humans = view.leaderboard.filter(l => l.kind === 'human');
-    const rec = { code: view.code, mode: view.mode, at: Date.now(), rank: rep.rank, players: view.leaderboard.length, returnPct: rep.returnPct, fees: rep.fees,
-      bestHuman: !humans.some(h => h.playerId !== view.you.id && h.value > rep.value) };
-    store.set(RECORDS_KEY, JSON.stringify(addRecord(parseRecords(store.get(RECORDS_KEY)), rec)));
-  }, [rep, view.code, view.mode, view.you.id, view.you.role, view.leaderboard]);
-  return (
-    <main className="final">
-      <section className="sec final-head">
-        <p className="course">{MODES[view.mode].label} · {view.totalRounds}라운드 끝</p>
-        {rep?.rank === 1 && <Confetti />}
-        {rep ? <>
-          <div className={`trophy${rep.rank === 1 ? ' shine' : ''}`} aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={rep.rank === 1 ? 'var(--gold)' : 'var(--faint)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg></div>
-          <h1 className="rank-big pop">{view.leaderboard.length}명 중 {rep.rank}위</h1>
-          <p className="num" aria-label={`${won(rep.value)} ${pct(rep.returnPct)}`}>{won(shownValue)} <b className={dir(rep.returnPct)}>{pct(rep.returnPct)}</b></p>
-        </> : <h1 className="rank-big">결과 발표</h1>}
-      </section>
-      <section className="sec tight">
-        <ol className="rank-list">{view.leaderboard.map(l => <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''}>
-          <span className={`r${l.rank === 1 ? ' first' : ''}`}>{l.rank}</span>
-          <span className="who"><b>{l.playerId === view.you.id ? `나 · ${l.label}` : l.label}</b>{l.npcRule && <small>{l.npcRule}</small>}</span>
-          <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
-        </li>)}</ol>
-      </section>
-      {rep && <TradeJournal view={view} fees={rep.fees} fallback={rep.majorTrades} />}
-      {rep && rep.judgments.length > 0 && <section className="sec"><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></section>}
-      {rep && <BehaviorReport metrics={rep.metrics} />}
-      <GameTerms view={view} />
-      <section className="sec tight">
-        <div className="list-head"><span>종목 그래프 다시 보기</span><span>처음 대비</span></div>
-        <SectorBoard stocks={view.stocks} defaultOpen={new Set(view.stocks.map(s => stockOf(s.code).group))} pinned={[]} summary={b => { const r = b.stocks.reduce((a, s) => a + (s.price / s.startPrice - 1) * 100, 0) / b.stocks.length; return <small className={dir(r)}>평균 {pct(r)}</small>; }}
-          renderRow={s => <button key={s.code} className="row" onClick={() => { setOpen(s.code); setPoint(s.history[s.history.length - 1]?.round ?? null); }}><StockAvatar code={s.code} name={s.name} /><span className="row-main"><b>{s.name}</b><small>{s.sector}</small></span><span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.price - s.startPrice)}>{pct((s.price / s.startPrice - 1) * 100)}</small></span></button>} />
-      </section>
-      {stock && <Sheet title={stock.name} onClose={() => setOpen(null)}><PriceChart stock={stock} totalRounds={view.totalRounds} selected={point} onSelect={setPoint} />{pointData && <BreakdownPanel b={pointData} />}</Sheet>}
-      <div className="final-actions">
-        <button className="ghost" onClick={() => navigate('/records')}>내 기록</button>
-        {view.nextRoomCode
-          ? <button className="cta" onClick={() => navigate(`/room/${view.nextRoomCode}`)}>다음 판 대기실로</button>
-          : <button className="cta" onClick={() => send({ t: 'rematch' })}>{view.mode === 'solo' ? '한 판 더' : '같은 멤버로 한 판 더'}</button>}
-        <button className="link full" onClick={() => navigate('/')}>처음으로</button>
-      </div>
-      <Disclaimer />
-    </main>
-  );
-}
-
-/** 매매일지: 내 체결마다 그 라운드 뉴스, 종가 기준 결과, 내 메모를 나란히 보여 줍니다. 메모는 이 기기에만 저장합니다. */
-function TradeJournal({ view, fees, fallback }: { view: RoomView; fees: number; fallback: { round: number; name: string; side: Side; qty: number; price: number }[] }) {
-  const entries = useMemo(() => buildJournal(view), [view]);
-  const [notes, setNotes] = useState(() => parseNotes(store.get(journalKey(view.code))));
-  const [editing, setEditing] = useState<string | null>(null);
-  const save = (key: string, text: string) => {
-    const next = { ...notes, [key]: text.slice(0, 200) };
-    if (!text.trim()) delete next[key];
-    setNotes(next); store.set(journalKey(view.code), JSON.stringify(next));
-  };
-  const good = entries.filter(e => e.verdict === 'good').length, bad = entries.filter(e => e.verdict === 'bad').length;
-  const label = (k: string, t: 'stop' | 'take' | null) => t === 'stop' ? '손절' : t === 'take' ? '익절' : k === 'limit' ? '지정가' : '시장가';
-  if (!view.portfolio) return (
-    <section className="sec">
-      <h2 className="h">주요 거래 <small className="hint">· 낸 수수료 {won(fees)}</small></h2>
-      {fallback.length ? <ul className="list">{fallback.map((t, i) => <li key={i}><span>{t.round}라운드 {t.name}<small>{t.side === 'buy' ? '매수' : '매도'} {t.qty.toLocaleString('ko-KR')}주 · {won(t.price)}</small></span></li>)}</ul> : <p className="hint">이번 판에는 거래가 없었습니다.</p>}
-    </section>
-  );
-  return (
-    <section className="sec journal">
-      <h2 className="h"><TermLink id="trading-journal">매매일지</TermLink> <small className="hint">· 거래 {entries.length}건 · 수수료·세금 {won(fees)}</small></h2>
-      {entries.length === 0 ? <p className="hint">이번 판에는 거래가 없었습니다.</p> : <>
-        <p className="hint">체결가를 그 라운드 종가와 비교했어요. 유리 {good}건 · 불리 {bad}건. 다음 판을 위해 이유를 한 줄 남겨 보세요.</p>
-        <ol className="journal-list">{entries.map(e => (
-          <li key={e.key} className="journal-item">
-            <div className="journal-top">
-              <span className={`side-tag ${e.side}`}>{e.side === 'buy' ? '매수' : '매도'}</span>
-              <b>{e.round}R · {e.name}</b>
-              <small className="hint">{label(e.kind, e.trigger)} · {e.qty.toLocaleString('ko-KR')}주 · {won(e.price)}</small>
-            </div>
-            {e.headline && <p className="journal-news">라운드 관련 뉴스 · {e.headline}</p>}
-            {e.close !== null && e.afterBp !== null && <p className="journal-after">
-              그 라운드 종가 {won(e.close)} → <b className={e.verdict === 'good' ? 'up' : e.verdict === 'bad' ? 'down' : 'flat'}>{e.verdict === 'good' ? '유리' : e.verdict === 'bad' ? '불리' : '비슷'} {pctBp(e.afterBp)}</b>
-            </p>}
-            {editing === e.key
-              ? <textarea className="journal-note" aria-label={`${e.round}라운드 ${e.name} 메모`} maxLength={200} rows={2} autoFocus defaultValue={notes[e.key] ?? ''}
-                  placeholder="왜 샀는지·팔았는지, 다음엔 어떻게 할지" onBlur={ev => { save(e.key, ev.target.value); setEditing(null); }} />
-              : <button className="link journal-memo" onClick={() => setEditing(e.key)}>{notes[e.key] ? `메모: ${notes[e.key]}` : '+ 메모 남기기'}</button>}
-          </li>
-        ))}</ol>
-        <p className="hint">종가 비교는 그 라운드 하나만 본 결과입니다. 길게 보면 달라질 수 있어요.</p>
-      </>}
-    </section>
-  );
-}
-
-/** 이번 판 뉴스·돌발 카드에 나온 용어를 모아 복습하게 합니다. 열어 본 용어는 ✓로 표시합니다. */
-function GameTerms({ view }: { view: RoomView }) {
-  const { open, seen } = useGlossary();
-  /* 모든 뉴스 카드에 '시장의 기대치' 칸이 있으므로 항상 맨 앞에 넣습니다. */
-  const ids = useMemo(() => termsIn([
-    '시장의 기대치',
-    ...view.news.flatMap(r => r.cards.flatMap(c => [c.card.headline, c.card.facts, c.card.expectation, c.card.remaining, c.card.clue,
-      ...(c.result ? [c.result.actual, c.result.gap, c.result.concept, ...c.result.impacts.map(i => i.reason)] : [])])),
-    ...(view.report?.judgments.map(j => j.concept) ?? [])
-  ]), [view.news, view.report]);
-  if (!ids.length) return null;
-  const learned = ids.filter(id => seen.has(id)).length;
-  return (
-    <section className="sec game-terms">
-      <h2 className="h">이번 판에 나온 용어</h2>
-      <p className="hint">{ids.length}개 중 {learned}개를 열어 봤어요. 눌러서 뜻을 확인하세요.</p>
-      <div className="term-chips">{ids.map(id => <button key={id} className={`term-chip${seen.has(id) ? ' seen' : ''}`} onClick={() => open(id)}>{termById.get(id)!.term}</button>)}</div>
-      <button className="ghost blue" onClick={() => navigate(`/glossary?quiz=1&pool=${ids.join(',')}`)}>이 용어들로 퀴즈 5문제</button>
-    </section>
   );
 }

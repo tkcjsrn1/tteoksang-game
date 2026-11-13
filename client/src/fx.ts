@@ -40,7 +40,6 @@ const savedVolume = Number(readAudioSetting(VOLUME_KEY) ?? '100');
 let volume = Number.isInteger(savedVolume) && savedVolume >= 0 && savedVolume <= 100 ? savedVolume : 100;
 const listeners = new Set<(on: boolean) => void>();
 
-export function soundOn() { return enabled; }
 export function setSound(on: boolean) {
   enabled = on;
   saveAudioSetting(SOUND_KEY, on ? 'on' : 'off');

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientMsg, FillInfo, GameMode, OrderKind, Role, RoomSettings, RoomView, ServerMsg, Side, StockCode } from '../../shared/types';
 import { applyTick } from './live';
+import { mergeRecentArcs, parseRecentArcs } from './recent';
 
 /* 앱은 VITE_SERVER_URL로 서버 주소를 받습니다. 웹은 페이지와 같은 서버를 씁니다. */
 const BASE = (import.meta.env.VITE_SERVER_URL as string | undefined)?.replace(/\/$/, '') ?? '';
@@ -18,8 +19,15 @@ export const store = {
   set(name: string, v: string) { try { localStorage.setItem(key(name), v); } catch { /* 저장 불가 환경에서는 재접속 복구만 빠집니다 */ } },
   del(name: string) { try { localStorage.removeItem(key(name)); } catch { /* 무시 */ } }
 };
+/** 기기에 적어 둔 '최근에 본 사건'. 방을 만들 때 서버로 보냅니다. */
+export function recentArcs(): string[] { return parseRecentArcs(store.get('recentArcs')); }
+/** 판이 끝나면 이번 판 사건을 적어 둡니다. */
+export function rememberArcs(ids: string[]) {
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  store.set('recentArcs', JSON.stringify(mergeRecentArcs(recentArcs(), ids)));
+}
 export async function createRoom(mode: GameMode, settings?: RoomSettings) {
-  const r = await fetch(`${BASE}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode, settings }) });
+  const r = await fetch(`${BASE}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode, settings, recentArcs: recentArcs() }) });
   if (!r.ok) throw new Error('방을 만들지 못했습니다');
   return r.json() as Promise<{ code: string }>;
 }
