@@ -58,3 +58,29 @@ test('돌발 카드: 선택지에는 결과 설명이 섞여 들어가지 않는
   assert.deepEqual(card.options.map(o => o.label), full.options.map(o => o.label));
   assert.equal(JSON.stringify(card.options).includes(full.options[0].feedback), false);
 });
+
+test('돌발 카드 데이터: 20개 이상이고 보기 두 개에 모두 설명이 붙어 있다', () => {
+  assert.ok(CARDS.length >= 20, `돌발 카드 ${CARDS.length}개`);
+  assert.equal(new Set(CARDS.map(c => c.id)).size, CARDS.length);
+  for (const c of CARDS) {
+    assert.ok(c.title && c.body && c.concept, c.id);
+    assert.deepEqual(c.options.map(o => o.key), ['A', 'B'], c.id);
+    for (const o of c.options) {
+      assert.ok(o.label.length > 0 && o.label.length <= 24, `${c.id} ${o.key} 보기 길이 ${o.label.length}`);
+      assert.ok(o.feedback.length >= 30, `${c.id} ${o.key} 설명이 너무 짧음`);
+    }
+  }
+});
+
+test('돌발 카드: 한 판에서 같은 카드가 두 번 나오지 않는다', () => {
+  const { room, a } = setup();
+  const seen: string[] = [];
+  for (let i = 0; i < 200 && room.s.status === 'playing'; i++) {
+    const now = room.s.phaseEndsAt! - 1000;
+    const card = room.s.phase === 'trade' ? room.view(a, 'player', now).card : null;
+    if (card && !seen.includes(card.id)) seen.push(card.id);
+    else if (card) assert.fail(`같은 카드 ${card.id}가 다시 나옴`);
+    next(room);
+  }
+  assert.ok(seen.length >= 2, `한 판에서 나온 카드 ${seen.length}개`);
+});
