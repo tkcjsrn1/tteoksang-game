@@ -746,7 +746,8 @@ function CompanyInfo({ stock }: { stock: StockView }) {
   const f = fundOf(stock.code), per = perOf(stock.code, stock.price), dy = dividendYieldBp(stock.code, stock.price);
   return (
     <details className="company">
-      <summary>기업 정보 · 시가총액 {formatEok(marketCapWon(stock.code, stock.price))} · PER {per === null ? '적자' : `${per}배`}</summary>
+      {/* 요약 줄에 시가총액·PER을 적어 두면 처음 하는 사람에게 읽을 숫자만 늘어서 안으로 넣었습니다(2026-11 결정) */}
+      <summary>기업 정보 · 지난해 실적과 PER</summary>
       <dl className="kv">
         <dt>발행 주식 수</dt><dd className="num">{(f.shares / 10000).toLocaleString('ko-KR')}만 주</dd>
         <dt><TermLink id="market-cap">시가총액</TermLink></dt><dd className="num">{formatEok(marketCapWon(stock.code, stock.price))}</dd>

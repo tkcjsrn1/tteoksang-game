@@ -511,7 +511,6 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 /* 장중 그래프 모양 토글, 이동평균선 범례 */
 .seg.mini { width: 220px; margin: 0 0 6px auto; }
 .seg.mini button { padding: 5px 6px; font-size: 13px; border-radius: 8px; }
-.legend.ma { width: 12px; height: 2px; border-radius: 1px; background: var(--gold); vertical-align: 3px; }
 /* 매매일지 */
 .journal-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .journal-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--panel); min-width: 0; }

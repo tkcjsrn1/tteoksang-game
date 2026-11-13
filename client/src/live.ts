@@ -37,12 +37,6 @@ export function bucketCandles(ticks: number[], size: number): MiniCandle[] {
   }
   return out;
 }
-/** 이동평균(원, 반올림): n개가 모이기 전은 null */
-export function movingAverage(values: number[], n: number): (number | null)[] {
-  let sum = 0;
-  return values.map((v, i) => { sum += v; if (i >= n) sum -= values[i - n]; return i >= n - 1 ? Math.round(sum / n) : null; });
-}
-
 /** 그래프의 가로 위치(svg 좌표)를 몇 초째 시세인지로 바꿉니다. 범위를 벗어나면 양 끝으로 붙입니다. */
 export function probeIndex(svgX: number, left: number, stepWidth: number, count: number): number {
   if (count <= 1 || stepWidth <= 0) return 0;
