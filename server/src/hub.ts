@@ -24,6 +24,7 @@ const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 /* 남용 방지. 게임 시계가 아니라 실제 시간(Date.now)으로 셉니다. */
 export const MSG_LIMIT_PER_SEC = 30;       // 연결 하나가 1초에 보낼 수 있는 메시지 수
 export const MAX_ROOMS = 1000;             // 서버 전체 방 수 상한
+export const RECENT_ARCS_MAX = 12;         // 방을 만들 때 "최근에 본 사건"으로 받아 줄 개수
 export const ROOMS_PER_IP_PER_MIN = 20;    // 같은 주소에서 1분에 만들 수 있는 방 수
 
 export class Hub {
@@ -296,6 +297,11 @@ export class Hub {
               return this.json(res, 400, { error: '선택할 수 없는 게임 설정입니다' });
             }
             extra.settings = settings as RoomSettings;
+          }
+          /* 최근에 본 사건은 뒤로 미룹니다(아예 막는 것이 아니라 순서상 뒤로. plan.ts 참고) */
+          if (Array.isArray(p.recentArcs)) {
+            const recent = p.recentArcs.filter((x: unknown): x is string => typeof x === 'string').slice(0, RECENT_ARCS_MAX);
+            if (recent.length > 0) extra.excludedArcs = recent;
           }
           if (this.opts.allowTestHooks) Object.assign(extra, { seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs });
         } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }

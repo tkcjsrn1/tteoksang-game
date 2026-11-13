@@ -144,6 +144,9 @@ export interface RoomView {
   lastResult: RoundResult | null;
   dividend?: DividendView | null;
   report: FinalReport | null;
+  /** 이번 판에 나온 사건 id. 판이 끝난 뒤에만 채웁니다(그 전에는 결말 힌트가 되므로).
+      다음 판에서 같은 사건이 또 나오지 않게 기기에 저장해 두었다가 방 만들 때 보냅니다. */
+  arcIds?: string[];
   nextRoomCode: string | null;
 }
 

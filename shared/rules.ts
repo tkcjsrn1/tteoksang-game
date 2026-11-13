@@ -5,7 +5,6 @@ export const DISCLAIMER = '게임용 가상 정보이며 투자 조언이 아닙
 export const START_CASH = 10_000_000;
 export const MAX_RETURN_BP = 2000;
 export const MARKET_MAX_BP = 50;
-export const STOCK_MAX_BP = 150;
 /* 거래 비용: 수수료는 살 때와 팔 때 모두, 증권거래세는 팔 때만 냅니다.
    실제 세율(2026년 양도분부터 코스피·코스닥 모두 농어촌특별세 포함 0.20%)을 그대로 쓰고, 수수료는 게임용 값입니다. */
 export const FEE_BP = 10;
@@ -196,10 +195,6 @@ export function cleanLabel(raw: unknown): string | null {
   return t;
 }
 
-/** 뉴스(사건)의 주인공이 되는 대장주. 한 판에 늘 들어갑니다.
-    뉴스가 없는 업종(위성 통신·스마트 농업·돌봄 로봇·금속 재활용)의 대장주는 여기 넣지 않습니다. */
-/** 사건(아크)이 붙어 있는 업종. 2026-11부터 10개 업종 모두에 사건이 있습니다. */
-export const NEWS_GROUPS: StockGroup[] = ['power', 'storage', 'cold', 'bio', 'stage', 'water', 'space', 'farm', 'care', 'recycle'];
 /** 예전 저장 데이터(종목 6개 시절)를 복구할 때 쓰는 기본 종목 */
 export const LEGACY_CODES: StockCode[] = ['G01', 'G02', 'G03', 'G04', 'G05', 'G06'];
 export const stockOf = (code: StockCode) => STOCKS.find(s => s.code === code)!;

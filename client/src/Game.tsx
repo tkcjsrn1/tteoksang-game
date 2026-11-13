@@ -11,7 +11,7 @@ import { buzz, fillTone, play, revealTone, setMusicScene, useCountUp } from './f
 import { SettingsButton } from './Settings';
 import { addRecord, parseRecords, RECORDS_KEY } from './recordStore';
 import { Rich, TermLink, useGlossary } from './glossary/GlossaryContext';
-import { store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
+import { rememberArcs, store, useRoom, useSecondsLeft, type OrderOutcome, joinNote, useJoinUrl } from './net';
 import { defaultOpenGroups, groupStocks } from './sectors';
 import type { StockGroup } from '../../shared/rules';
 import { arrow, BreakdownPanel, bpText, CandleReplay, dir, Disclaimer, formatCountdown, LiveChart, pct, pctBp, PriceChart, signedWon, Confetti, StockAvatar, useToast, won } from './ui';
@@ -184,6 +184,8 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   return (
     <div className="game">
       <header className="topbar">
+        {/* 화면에는 안 보이지만 읽어 주는 제목. 페이지마다 h1이 하나 있어야 합니다. */}
+        <h1 className="sr-only">{view.mode === 'solo' ? '혼자 연습' : '친구 대전'} {view.round}라운드 · {PHASE_LABEL[view.phase ?? 'news']}</h1>
         <div className="status">
           <b>{PHASE_LABEL[view.phase ?? 'news']}</b>
           <span className="num" aria-label={`${view.round}라운드, 전체 ${view.totalRounds}라운드`}>{view.round}/{view.totalRounds}</span>
@@ -227,7 +229,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
       <nav className="tabs">
         {(['market', 'assets', 'news'] as Tab[]).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{TAB_ICON[t]}{t === 'market' ? '시장' : t === 'assets' ? '내 자산' : '뉴스'}</button>)}
       </nav>
-      <div className="foot"><Disclaimer /></div>
+      <footer className="foot"><Disclaimer /></footer>
       {stock && <StockSheet stock={stock} view={view} left={left} coach={coach} onClose={() => setDetail(null)}
         favorite={favorites.includes(stock.code)} onFavorite={() => toggleFavorite(stock.code)}
         onWatch={() => { setWatching(true); setDetail(null); }}
@@ -251,7 +253,7 @@ const TAB_ICON: Record<Tab, React.ReactNode> = {
 function Coach({ step, onSkip }: { step: CoachStep; onSkip?: () => void }) {
   return (
     <section className="coach" aria-live="polite">
-      <p className="coach-head"><span className="coach-dots" aria-label={`따라 하기 ${step.no}/${step.total}단계`}>{Array.from({ length: step.total }, (_, i) => <i key={i} className={i < step.no ? 'on' : ''} />)}</span>
+      <p className="coach-head"><span className="coach-dots" role="img" aria-label={`따라 하기 ${step.no}/${step.total}단계`}>{Array.from({ length: step.total }, (_, i) => <i key={i} className={i < step.no ? 'on' : ''} />)}</span>
         <b>{step.no}. {step.title}</b></p>
       <p>{step.text}</p>
       {onSkip && <button className="link" onClick={onSkip}>안내 끄기</button>}
@@ -288,7 +290,7 @@ function NewsBody({ card, result, compact = false, action }: { card: NewsCard; r
   if (compact) return (
     <article className="news">
       <p className="news-meta">{card.breaking ? <span className="chip alert">속보</span> : <span className="chip">이번 뉴스</span>}<span className="chip soft">{card.arcTitle}</span></p>
-      <h3 className="headline"><Rich text={card.headline} /></h3>
+      <h2 className="headline"><Rich text={card.headline} /></h2>
       <dl className="facts">
         <dt><TermLink id="expectation">시장 기대</TermLink></dt><dd className="expect"><Rich text={card.expectation} /></dd>
         <dt>단서</dt><dd><Rich text={card.clue} /></dd>
@@ -302,7 +304,7 @@ function NewsBody({ card, result, compact = false, action }: { card: NewsCard; r
   return (
     <article className="news">
       <p className="news-meta">{card.breaking && <span className="chip alert">속보</span>}<span className="chip soft">{card.arcTitle}</span></p>
-      <h3 className="headline"><Rich text={card.headline} /></h3>
+      <h2 className="headline"><Rich text={card.headline} /></h2>
       <dl className="facts">
         <dt>확인된 사실</dt><dd><Rich text={card.facts} /></dd>
         <dt><TermLink id="expectation">시장의 기대치</TermLink></dt><dd className="expect"><Rich text={card.expectation} /></dd>
@@ -923,6 +925,8 @@ function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) => void
       bestHuman: !humans.some(h => h.playerId !== view.you.id && h.value > rep.value) };
     store.set(RECORDS_KEY, JSON.stringify(addRecord(parseRecords(store.get(RECORDS_KEY)), rec)));
   }, [rep, view.code, view.mode, view.you.id, view.you.role, view.leaderboard]);
+  /* 이번 판 사건을 적어 두어 다음 판에 같은 이야기가 또 나오지 않게 합니다. */
+  useEffect(() => { if (view.arcIds) rememberArcs(view.arcIds); }, [view.arcIds]);
   return (
     <main className="final">
       <section className="sec final-head">
