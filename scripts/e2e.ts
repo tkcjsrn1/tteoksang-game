@@ -348,7 +348,10 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   /* 관심종목은 이 판에 나온 종목으로 확인합니다. 판마다 종목 구성이 달라서
      앞 판에서 담아 둔 종목이 이번 판에 없을 수 있습니다. */
   const pickedName = await easy.getByRole('heading').first().innerText();
-  await easy.getByRole('button', { name: '관심종목', exact: true }).click();
+  /* 관심종목은 켜고 끄는 버튼이라, 앞 판에서 이미 담아 둔 종목이면 누르면 빠집니다 */
+  const fav = easy.getByRole('button', { name: '관심종목', exact: true });
+  if (await fav.getAttribute('aria-pressed') !== 'true') await fav.click();
+  ok(await fav.getAttribute('aria-pressed') === 'true', '관심종목으로 담기지 않음');
   ok(await easy.getByRole('group', { name: '주문 방식' }).count() === 0, '쉬움인데 주문 방식(지정가) 버튼이 보임');
   ok(await easy.locator('table[aria-label="호가창"]').count() === 0, '쉬움인데 호가창이 보임');
   ok(!/슬리피지/.test(await easy.innerText()), '쉬움인데 슬리피지가 보임');
