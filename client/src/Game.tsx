@@ -58,7 +58,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
       <ul className="people">{humans.map(p => <li key={p.playerId} className={p.connected ? '' : 'off'}>{p.label}{p.playerId === view.you.id ? ' (나)' : ''}{!p.connected ? ' · 접속 끊김' : ''}</li>)}</ul>
       {view.you.isHost
         ? <button className="cta" disabled={!canStart} onClick={() => send({ t: 'start' })}>{canStart ? '게임 시작' : `${view.minToStart}명이 모이면 시작할 수 있어요`}</button>
-        : <p className="hint">방장이 시작하면 자동으로 넘어갑니다.</p>}
+        : <p className="hint">{view.operated ? '운영자가 대형 화면에서 시작하면 자동으로 넘어갑니다.' : '방장이 시작하면 자동으로 넘어갑니다.'}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <ul className="rules">
         <li>시장가 주문은 현재 호가로 바로 체결됩니다. 지정가 주문은 가격 조건을 충족하면 체결됩니다.</li>

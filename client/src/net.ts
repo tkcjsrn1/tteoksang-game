@@ -26,11 +26,15 @@ export function rememberArcs(ids: string[]) {
   if (!Array.isArray(ids) || ids.length === 0) return;
   store.set('recentArcs', JSON.stringify(mergeRecentArcs(recentArcs(), ids)));
 }
-export async function createRoom(mode: GameMode, settings?: RoomSettings) {
-  const r = await fetch(`${BASE}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode, settings, recentArcs: recentArcs() }) });
+export async function createRoom(mode: GameMode, settings?: RoomSettings, operated = false) {
+  const r = await fetch(`${BASE}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode, settings, recentArcs: recentArcs(), ...(operated ? { operated: true } : {}) }) });
   if (!r.ok) throw new Error('방을 만들지 못했습니다');
-  return r.json() as Promise<{ code: string }>;
+  return r.json() as Promise<{ code: string; operatorToken?: string }>;
 }
+/** 운영자 열쇠는 방을 만든 기기에만 저장합니다. 다음 판도 같은 열쇠를 씁니다. */
+export const operatorKey = (code: string) => `operator:${code}`;
+/** 대형 화면 주소(읽기 전용). 운영자 열쇠는 주소에 넣지 않습니다. */
+export const displayUrl = (code: string) => `${BASE || location.origin + location.pathname}#/display/${code}`;
 export async function roomInfo(code: string) {
   const r = await fetch(`${BASE}/api/rooms/${code}`);
   if (!r.ok) throw new Error('방을 찾을 수 없습니다. 코드를 확인해 주세요');
@@ -63,7 +67,9 @@ export const joinNote = (note: 'ok' | 'lan' | 'none') => note === 'lan'
   : note === 'none' ? '지금 주소(localhost)로는 다른 기기가 들어올 수 없어요. PC의 와이파이 주소나 배포된 주소로 열어 주세요.' : '';
 
 export interface OrderOutcome { ok: boolean; reason?: string; fill?: FillInfo | null }
-export function useRoom(code: string) {
+/** staff: 대형 화면으로 들어갈 때. operatorToken이 맞으면 운영자, 아니면 읽기 전용 대형 화면이 됩니다. */
+export function useRoom(code: string, staff?: { operatorToken: string | null }) {
+  const staffMode = !!staff, opKey = staff?.operatorToken ?? null;
   const [view, setView] = useState<RoomView | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [online, setOnline] = useState(false);
@@ -81,7 +87,9 @@ export function useRoom(code: string) {
       wsRef.current = ws;
       ws.onopen = () => {
         retry = 0; setOnline(true);
-        ws.send(JSON.stringify({ t: 'hello', code, token: store.get(tokenKey) } satisfies ClientMsg));
+        ws.send(JSON.stringify(staffMode
+          ? { t: 'hello', code, token: null, display: true, operatorToken: opKey }
+          : { t: 'hello', code, token: store.get(tokenKey) } satisfies ClientMsg));
         /* 응답을 못 받은 주문은 같은 요청 ID로 다시 보냅니다. 서버가 중복을 걸러 줍니다. */
         pending.current.forEach(p => ws.send(JSON.stringify(p.msg)));
       };
@@ -116,7 +124,7 @@ export function useRoom(code: string) {
       window.removeEventListener('online', wake);
       wsRef.current?.close();
     };
-  }, [code]);
+  }, [code, staffMode, opKey]);
 
   const send = useCallback((m: ClientMsg) => { if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(m)); }, []);
   const request = useCallback((msg: Extract<ClientMsg, { requestId: string }>) => new Promise<OrderOutcome>(resolve => {
