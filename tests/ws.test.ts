@@ -87,11 +87,19 @@ test('혼자 연습은 선택한 종목 수·라운드·장 시간을 적용하�
 
 test('범위를 벗어난 게임 설정은 방을 만들기 전에 거절한다', async () => {
   const count = hub.rooms.size;
-  for (const settings of [{ stocks: 31 }, { rounds: '5' }, { trade: 0 }, { unknown: 1 }, { level: 'hard' }, { level: 1 }, null]) {
+  /* 정원(maxPlayers)은 친구 대전에만 있는 설정입니다. 혼자 연습에 보내면 거절합니다 */
+  for (const settings of [{ stocks: 31 }, { rounds: '5' }, { trade: 0 }, { unknown: 1 }, { level: 'hard' }, { level: 1 }, { maxPlayers: 80 }, null]) {
     const r = await fetch(`http://localhost:${port}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode: 'solo', settings }) });
     assert.equal(r.status, 400);
   }
   assert.equal(hub.rooms.size, count);
+});
+
+test('친구 대전은 정원을 올려서 만들 수 있다', async () => {
+  const r = await fetch(`http://localhost:${port}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode: 'friend', settings: { maxPlayers: 80 } }) });
+  assert.equal(r.status, 201);
+  const { code } = await r.json() as { code: string };
+  assert.equal(hub.rooms.get(code)!.config.maxPlayers, 80);
 });
 
 test('정산 중인 방은 서버 시작 후 결과를 공개하고 다음 라운드로 진행한다', async () => {

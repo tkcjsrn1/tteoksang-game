@@ -446,3 +446,30 @@ test('작은 시장가 매도의 슬리피지는 0이다(스프레드는 슬리�
   next(room);
   assert.equal(p.results[0].slippage, 0, '사고판 수량이 호가 한 칸 안이므로 슬리피지 0');
 });
+
+test('정원을 80명으로 열면 80명이 들어와 한 판을 끝까지 마친다', () => {
+  const room = GameRoom.create({ code: '654321', mode: 'friend', now: T0, seed: 11, settings: { maxPlayers: 80 } });
+  const toks = Array.from({ length: 80 }, (_, i) => room.join(null, T0 + i));
+  assert.equal(room.humans.length, 80);
+  assert.equal(room.join(null, T0 + 80).role, 'spectator');   // 정원을 넘으면 관전자
+  room.start(T0 + 100);
+  let guard = 0;
+  while (room.s.status !== 'finished' && guard++ < 100) {
+    if (room.s.phase === 'trade') {
+      const now = room.s.phaseEndsAt! - 1000;
+      const codes = room.s.plan.stockCodes ?? [];
+      assert.ok(codes.length > 0, '이번 판 종목');
+      /* 사람마다 다른 종목·수량을 사서 정산과 순위가 한 줄로 몰리지 않게 합니다 */
+      toks.forEach((t, i) => room.placeOrder(t.token, `r${room.s.round}-${i}`, codes[i % codes.length], 'buy', 1 + (i % 7), now, 'market'));
+    }
+    next(room);
+  }
+  assert.equal(room.s.status, 'finished');
+  const v = room.view(toks[0].token, toks[0].role, T0);
+  assert.equal(v.leaderboard.length, 83, '사람 80명 + NPC 3명');
+  const ranks = v.leaderboard.map(l => l.rank), vals = v.leaderboard.map(l => l.value);
+  assert.equal(ranks[0], 1, '1위부터 시작');
+  assert.ok(ranks.every((r, i) => i === 0 || r >= ranks[i - 1]), '등수가 뒤로 갈수록 커지거나 같다(동률 허용)');
+  assert.ok(vals.every((x, i) => i === 0 || vals[i - 1] >= x), '평가액 내림차순');
+  assert.equal(room.s.players.filter(p => p.cash < 0).length, 0, '현금이 음수인 참가자');
+});

@@ -28,16 +28,16 @@ export function coachStep(view: RoomView, openStock: StockCode | null, watching 
   const hasOrder = (view.portfolio?.orders.length ?? 0) > 0 || !!view.portfolio?.fillLog.some(f => f.round === view.round);
   const step = (no: number, title: string, text: string): CoachStep => ({ no, total: COACH_TOTAL, title, text, target });
   if (view.phase === 'news') return step(1, '시장 기대와 단서를 읽어요',
-    '“시장 기대”가 기준점입니다. 실제 결과가 이보다 좋으면 오르고, 나쁘면 내립니다. “단서”는 결과가 어느 쪽일지 알려 주는 힌트예요. 밑줄 친 낱말을 누르면 뜻이 나옵니다.');
+    '기준은 “시장 기대”예요. 결과가 그보다 좋으면 오르고, 나쁘면 내립니다. “단서”가 힌트. 밑줄을 누르면 뜻이 나와요.');
   if (view.phase === 'trade' && hasOrder) return step(4, '주문 완료! 시세를 지켜봐요',
-    '가격은 1초마다 움직이고, 마감 때 뉴스의 실제 결과가 공개되면 크게 움직입니다. 그 전까지 더 사거나 팔 수 있어요.');
+    '가격은 1초마다 움직여요. 마감 때 결과가 공개되면 크게 움직입니다. 그 전까진 더 사고팔 수 있어요.');
   if (view.phase === 'trade' && !openStock && watching) return step(4, '시세를 지켜봐요',
-    '장 마감 뒤 시장 기대와 실제 결과를 비교해 보세요. 마감 전에는 언제든 종목을 다시 열어 주문할 수 있어요.');
+    '마감 뒤 기대와 결과를 비교해 보세요. 마감 전엔 언제든 다시 주문할 수 있어요.');
   if (view.phase === 'trade' && openStock) return step(3, '매수할지 지켜볼지 골라요',
-    '시장 기대와 단서를 바탕으로 결정해 보세요. 매수하려면 수량과 비용을 확인하세요. 주문 없이 결과를 기다려도 됩니다.');
+    '기대와 단서를 보고 정하세요. 살 거면 수량과 비용을 확인하고요. 안 사고 기다려도 됩니다.');
   if (view.phase === 'trade') return step(2, `${eulReul(name)} 눌러 보세요`,
-    '뉴스 아래 버튼을 누르면 관련 종목의 가격과 주문 창이 열려요.');
+    '뉴스 아래 버튼을 누르면 가격과 주문 창이 열려요.');
   if (view.phase === 'settling' || view.phase === 'recap') return step(5, '기대와 결과를 비교해요',
-    '실제 결과가 기대치보다 좋았는지 확인하세요. 종목을 누르고 그래프의 점을 누르면 가격이 왜 움직였는지 bp 단위로 나옵니다. 다음 라운드부터는 혼자 해 보세요!');
+    '결과가 기대보다 좋았는지 보세요. 그래프의 점을 누르면 가격이 왜 움직였는지 나와요. 다음 라운드부터는 혼자 해 보세요!');
   return null;
 }

@@ -305,8 +305,11 @@ export class Hub {
             const settings: unknown = p.settings;
             const okSetting = ([key, value]: [string, unknown]) => key === 'level'
               ? isLevel(value)
-              : Object.hasOwn(ROOM_OPTIONS, key) && typeof value === 'number'
-                && ROOM_OPTIONS[key as 'stocks' | 'rounds' | 'trade'].includes(value);
+              /* 정원은 친구 대전에만 있습니다. 혼자 연습에 보내면 거절합니다(화면에서도 감춤) */
+              : key === 'maxPlayers' && mode !== 'friend'
+                ? false
+                : Object.hasOwn(ROOM_OPTIONS, key) && typeof value === 'number'
+                  && ROOM_OPTIONS[key as 'stocks' | 'rounds' | 'trade' | 'maxPlayers'].includes(value);
             if (!settings || typeof settings !== 'object' || Array.isArray(settings)
               || !Object.entries(settings).every(okSetting)) {
               return this.json(res, 400, { error: '선택할 수 없는 게임 설정입니다' });
