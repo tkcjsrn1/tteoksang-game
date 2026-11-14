@@ -1,6 +1,6 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
-import { randomBytes, randomInt } from 'node:crypto';
+import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { cleanLabel, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
@@ -44,6 +44,8 @@ export interface RoomState {
   exDividendRound?: number | null;
   /** 장중 시세. 예전 저장 데이터에는 없습니다 */
   live?: LiveState | null;
+  /** 운영자 열쇠. 있으면 운영자가 진행하는 방(학술제)입니다. 운영자 기기에만 있고 화면(view)으로는 절대 나가지 않습니다 */
+  operatorToken?: string | null;
 }
 export type OrderResult = { ok: boolean; reason?: string; duplicate?: boolean; fill?: FillInfo | null };
 /** 한 라운드에 참가자 한 명이 보낼 수 있는 주문·취소 요청 수. 넘으면 거절해 저장 상태가 무한히 커지지 않게 합니다. */
@@ -66,7 +68,7 @@ export class GameRoom {
   touched = new Set<string>();
   constructor(state: RoomState) { this.s = state; }
 
-  static create(opts: { code: string; mode: GameMode; now: number; seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; settings?: RoomSettings }): GameRoom {
+  static create(opts: { code: string; mode: GameMode; now: number; seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; settings?: RoomSettings; operated?: boolean }): GameRoom {
     const seed = opts.seed ?? randomInt(2 ** 31);
     const excluded = opts.excludedArcs ?? [];
     const plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, opts.settings);
@@ -75,7 +77,8 @@ export class GameRoom {
       code: opts.code, mode: opts.mode, seed, status: 'lobby', hostId: null,
       createdAt: opts.now, updatedAt: opts.now, plan, excludedArcs: excluded, round: 0, phase: null, phaseEndsAt: null, phaseSeconds: 0, newsStartedAt: 0, secondRevealed: false,
       players: npcs, spectators: [], prices: initialPrices(gameCodes(plan)), history: Object.fromEntries(gameCodes(plan).map(c => [c, []])) as unknown as Record<StockCode, PriceBreakdown[]>,
-      settled: [], nextRoomCode: null, live: null, settings: opts.settings
+      settled: [], nextRoomCode: null, live: null, settings: opts.settings,
+      operatorToken: opts.operated ? token() : null
     });
   }
 
@@ -83,6 +86,16 @@ export class GameRoom {
   get stocks(): StockDef[] { return gameCodes(this.s.plan).map(stockOf); }
   get humans() { return this.s.players.filter(p => p.kind === 'human'); }
   get config() { return { ...MODES[this.s.mode], ...this.s.settings }; }
+  /** 운영자가 진행하는 방인가 */
+  get operated() { return !!this.s.operatorToken; }
+  /** 운영자 열쇠가 맞는가. 길이가 다르거나 비어 있으면 거짓 */
+  isOperator(key: string | null | undefined) {
+    const real = this.s.operatorToken;
+    if (!real || typeof key !== 'string' || key.length !== real.length) return false;
+    return timingSafeEqual(Buffer.from(key), Buffer.from(real));
+  }
+  /** 시작에 필요한 사람 수. 운영자 방은 운영자가 판단하므로 1명이면 됩니다(리허설용) */
+  get minToStart() { return this.operated ? 1 : this.config.minToStart; }
   player(tokenValue: string | null | undefined) { return tokenValue ? this.s.players.find(p => p.token === tokenValue) ?? null : null; }
 
   /** 재접속 토큰이 맞으면 복구, 시작 전이면 참가, 시작 후 처음 온 사람은 관전자입니다. */
@@ -121,6 +134,8 @@ export class GameRoom {
   }
   /** 대기실에서 방장이 나가면 가장 먼저 들어온 접속 중 참가자에게 넘깁니다. 시작한 판은 방장과 상관없이 진행합니다. */
   private fixHost() {
+    /* 운영자 방에는 참가자 방장이 없습니다. 시작·재대전은 운영자만 합니다. */
+    if (this.operated) { this.s.hostId = null; return; }
     const host = this.humans.find(p => p.id === this.s.hostId);
     if (host?.connected) return;
     if (this.s.status !== 'lobby' && host) return;
@@ -145,9 +160,11 @@ export class GameRoom {
   }
   private touch(now: number) { this.s.updatedAt = now; }
 
-  canStart(tokenValue: string | null | undefined) {
+  /** operatorKey: 운영자 연결이면 운영자 열쇠. 운영자 방에서는 운영자만, 그 밖의 방에서는 방장만 시작합니다. */
+  canStart(tokenValue: string | null | undefined, operatorKey?: string | null) {
     if (this.s.status !== 'lobby') return false;
-    if (this.humans.length < this.config.minToStart) return false;
+    if (this.humans.length < this.minToStart) return false;
+    if (this.operated) return this.isOperator(operatorKey);
     return this.player(tokenValue)?.id === this.s.hostId;
   }
   start(now: number) {
@@ -682,7 +699,7 @@ export class GameRoom {
       code: this.s.code, mode: this.s.mode, status: this.s.status, phase: this.s.phase, round: this.s.round, totalRounds: cfg.rounds,
       phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade, level: cfg.level,
       you: { id: p?.id ?? null, label: p?.label ?? null, role, isHost: !!p && p.id === this.s.hostId },
-      humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
+      humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: this.minToStart, startCash: START_CASH, operated: this.operated,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */
       leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
       stocks, news: this.newsView(), schedule: this.scheduleView(), breakingAt, card: this.cardView(p),

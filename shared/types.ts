@@ -8,7 +8,9 @@ export interface RoomSettings { stocks?: number; rounds?: number; trade?: number
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 export type Side = 'buy' | 'sell';
-export type Role = 'player' | 'spectator';
+/** operator: 학술제처럼 운영자가 진행하는 방의 진행자(시작·재대전 권한, 개인 자산 없음).
+    display: 강당 스크린용 대형 화면(읽기 전용). 둘 다 참가자 자리를 차지하지 않습니다. */
+export type Role = 'player' | 'spectator' | 'operator' | 'display';
 export type NpcType = 'chaser' | 'waiter' | 'diversifier';
 
 export interface EventImpact { stageId: string; label: string; bp: number; reason: string }
@@ -132,6 +134,8 @@ export interface RoomView {
   level: Level;
   you: { id: string | null; label: string | null; role: Role; isHost: boolean };
   humanCount: number; maxPlayers: number; minToStart: number; startCash: number;
+  /** 운영자가 진행하는 방이면 true. 참가자 중 방장이 없고, 시작·재대전은 운영자만 합니다 */
+  operated: boolean;
   leaderboard: LeaderRow[];
   stocks: StockView[];
   news: RoundNews[];
@@ -151,7 +155,7 @@ export interface RoomView {
 }
 
 export type ClientMsg =
-  | { t: 'hello'; code: string; token?: string | null }
+  | { t: 'hello'; code: string; token?: string | null; operatorToken?: string | null; display?: boolean }
   | { t: 'start' }
   | { t: 'order'; requestId: string; code: StockCode; side: Side; qty: number; kind?: OrderKind; limit?: number }
   | { t: 'cancel'; requestId: string; code: StockCode }
