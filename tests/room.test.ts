@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
 import { ARCS } from '../server/src/content';
-import { GROUPS, lowerLimit, stockOf, STOCKS, feeOf } from '../shared/rules';
+import { FESTIVAL_MAX_PLAYERS, ROOM_OPTIONS, GROUPS, lowerLimit, stockOf, STOCKS, feeOf } from '../shared/rules';
 import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
@@ -334,7 +334,7 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
   const secretTexts = ARCS.flatMap(x => x.stages.flatMap(s => s.outcomes.map(o => o.actual)));
   room.start(T0);
   const check = (label: string, allowed: Set<string>) => {
-    for (const [tok, role] of [[a, 'player'], [null, 'spectator'], ['x', 'spectator']] as const) {
+    for (const [tok, role] of [[a, 'player'], [null, 'spectator'], ['x', 'spectator'], [null, 'operator'], [null, 'display']] as const) {
       const js = JSON.stringify(room.view(tok, role, T0));
       assert.equal(js.includes('seed'), false, label);
       assert.equal(js.includes('outcomeId'), false, label);
@@ -472,6 +472,56 @@ test('정원을 80명으로 열면 80명이 들어와 한 판을 끝까지 마�
   assert.ok(ranks.every((r, i) => i === 0 || r >= ranks[i - 1]), '등수가 뒤로 갈수록 커지거나 같다(동률 허용)');
   assert.ok(vals.every((x, i) => i === 0 || vals[i - 1] >= x), '평가액 내림차순');
   assert.equal(room.s.players.filter(p => p.cash < 0).length, 0, '현금이 음수인 참가자');
+});
+
+test('운영자 방: 참가자 방장이 없고 운영자 열쇠로만 시작하며, 열쇠는 어떤 화면에도 나가지 않는다', () => {
+  const room = GameRoom.create({ code: '777777', mode: 'friend', now: T0, seed: 5, settings: { maxPlayers: 80 }, operated: true });
+  const key = room.s.operatorToken!;
+  assert.ok(key && key.length > 10);
+  const a = room.join(null, T0).token;
+  assert.equal(room.s.hostId, null, '먼저 들어온 참가자도 방장이 아님');
+  assert.equal(room.view(a, 'player', T0).you.isHost, false);
+  assert.equal(room.view(a, 'player', T0).operated, true);
+  assert.equal(room.view(a, 'player', T0).minToStart, 1, '운영자 방은 1명이면 시작 가능(리허설)');
+  assert.equal(room.canStart(a), false, '참가자는 시작 못 함');
+  assert.equal(room.canStart(a, 'x'.repeat(key.length)), false, '틀린 열쇠');
+  assert.equal(room.canStart(null, key.slice(1)), false, '길이가 다른 열쇠');
+  assert.equal(room.canStart(null, ''), false);
+  assert.equal(room.canStart(null, key), true);
+  /* 판이 시작되고 끝날 때까지 어느 역할의 화면에도 열쇠가 실리지 않습니다 */
+  const views = () => [[a, 'player'], [null, 'spectator'], [null, 'operator'], [null, 'display']] as const;
+  const noKey = (label: string) => { for (const [tok, role] of views()) assert.equal(JSON.stringify(room.view(tok, role, T0)).includes(key), false, `${label} ${role}`); };
+  noKey('대기실');
+  room.start(T0);
+  while (room.s.status === 'playing') { next(room); if (room.s.phase === 'trade') noKey(`R${room.s.round} 주문`); }
+  noKey('최종');
+  /* 운영자·대형 화면은 개인 자산이 없습니다 */
+  for (const role of ['operator', 'display'] as const) {
+    const v = room.view(null, role, T0);
+    assert.equal(v.portfolio, null);
+    assert.equal(v.report, null);
+    assert.equal(v.lastResult, null);
+    assert.equal(v.card, null);
+  }
+});
+test('운영자 방이 아니면 열쇠가 없고 기존처럼 방장이 시작한다', () => {
+  const { room, a } = setup();
+  assert.equal(room.s.operatorToken, null);
+  assert.equal(room.operated, false);
+  assert.equal(room.isOperator(null), false);
+  assert.equal(room.isOperator(''), false);
+  assert.equal(room.canStart(null, ''), false);
+  assert.equal(room.canStart(a), true);
+  assert.equal(room.view(a, 'player', T0).operated, false);
+});
+
+test('정원 상한은 80명이고, 고를 수 있는 가장 큰 정원과 같다', () => {
+  assert.equal(FESTIVAL_MAX_PLAYERS, 80);
+  assert.equal(Math.max(...ROOM_OPTIONS.maxPlayers), FESTIVAL_MAX_PLAYERS);
+  const room = GameRoom.create({ code: '808080', mode: 'friend', now: T0, seed: 1, settings: { maxPlayers: FESTIVAL_MAX_PLAYERS }, operated: true });
+  for (let i = 0; i < FESTIVAL_MAX_PLAYERS; i++) assert.equal(room.join(null, T0 + i).role, 'player');
+  assert.equal(room.join(null, T0 + 100).role, 'spectator', '81번째는 관전자');
+  assert.equal(room.humans.length, FESTIVAL_MAX_PLAYERS);
 });
 
 test('대기실에서 탭을 닫은 자리는 인원에서 빠지고, 꽉 차면 새 사람에게 넘어간다', () => {

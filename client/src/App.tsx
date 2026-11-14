@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Display } from './Display';
 import { Game } from './Game';
 import { GlossaryProvider } from './glossary/GlossaryContext';
 import { GlossaryPage } from './glossary/GlossaryPage';
@@ -21,6 +22,7 @@ export function App() {
 }
 function Routes({ parts, query }: ReturnType<typeof parse>) {
   if (parts[0] === 'room' && /^\d{6}$/.test(parts[1] ?? '')) return <Game key={parts[1]} code={parts[1]} />;
+  if (parts[0] === 'display' && /^\d{6}$/.test(parts[1] ?? '')) return <Display key={parts[1]} code={parts[1]} />;
   if (parts[0] === 'lessons') return <Lessons lessonId={parts[1] ?? null} review={query} />;
   if (parts[0] === 'records') return <Records />;
   if (parts[0] === 'glossary') return <GlossaryPage key={`${parts[1] ?? ''}?${query}`} termId={parts[1] ?? null} query={query} />;

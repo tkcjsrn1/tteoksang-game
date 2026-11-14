@@ -368,6 +368,40 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await j.getByText('메모: 뉴스 보고 샀음').waitFor();
 });
 
+await step('학술제: 운영자 대형 화면(1920px)과 참가자 입장·시작', async () => {
+  await page.goto(base + '/');
+  await page.getByRole('button', { name: /학술제 운영자/ }).click();
+  await page.waitForURL(/#\/display\/\d{6}/);
+  const code = page.url().match(/display\/(\d{6})/)![1];
+  /* 대형 화면은 운영자 기기(같은 저장소)에서 1920px로 엽니다 */
+  const big = await ctx.newPage();
+  big.on('pageerror', e => errors.push(`대형 화면 pageerror: ${e.message}`));
+  await big.setViewportSize({ width: 1920, height: 1080 });
+  await big.goto(`${base}/#/display/${code}`);
+  await big.locator('.d-code').getByText(code).waitFor();
+  ok(await big.getByRole('img', { name: /입장 QR/ }).count() === 1, 'QR이 없음');
+  /* 참가자는 다른 기기(저장소가 다른 컨텍스트)에서 들어옵니다 */
+  const pctx = await browser.newContext({ viewport: { width: W, height: 844 } });
+  const phone = await pctx.newPage();
+  await phone.goto(`${base}/#/room/${code}`);
+  await phone.getByText('운영자가 대형 화면에서 시작하면').waitFor();
+  ok(await phone.getByRole('button', { name: '게임 시작' }).count() === 0, '참가자에게 시작 버튼이 보임');
+  /* 열쇠 없는 기기에서 연 대형 화면은 읽기 전용 */
+  const ro = await pctx.newPage();
+  await ro.goto(`${base}/#/display/${code}`);
+  await ro.locator('.d-code').waitFor();
+  ok(await ro.getByRole('button', { name: /게임 시작/ }).count() === 0, '열쇠 없는 대형 화면에 시작 버튼이 보임');
+  await big.getByRole('button', { name: /게임 시작 \(1명\)/ }).click();
+  await big.getByRole('region', { name: '이번 라운드 뉴스' }).waitFor();
+  await big.getByRole('region', { name: '상위 5명' }).waitFor();
+  ok(!/주문 가능|평가손익|보유/.test(await big.locator('main').innerText()), '대형 화면에 개인 자산 문구가 보임');
+  const sw = await big.evaluate(() => document.documentElement.scrollWidth);
+  ok(sw <= 1921, `대형 화면 가로 스크롤(${sw}px)`);
+  await phone.getByLabel(/^1라운드, 전체 \d+라운드$/).waitFor();
+  await pctx.close();
+  await big.close();
+});
+
 await browser.close();
 await hub.close();
 console.log(failed ? `결과: 실패 ${failed}건 (캡처: e2e-output/)` : '결과: 통과');

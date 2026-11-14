@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { navigate } from './App';
-import { createRoom, roomInfo, store } from './net';
+import { createRoom, operatorKey, roomInfo, store } from './net';
 import { TERMS } from '../../shared/glossary';
-import { CAPACITY_NOTE, cleanSettings, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
+import { CAPACITY_NOTE, cleanSettings, FESTIVAL_MAX_PLAYERS, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { RoomSettings } from '../../shared/types';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
@@ -36,6 +36,14 @@ export function Home() {
   const forMode = (mode: 'friend' | 'solo'): RoomSettings => mode === 'friend' ? settings
     : Object.fromEntries(Object.entries(settings).filter(([k]) => k !== 'maxPlayers')) as RoomSettings;
   const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, forMode(mode)); navigate(`/room/${r.code}`); });
+  /* 학술제 운영자: 친구 대전 설정 그대로, 정원은 서버가 버티는 상한인 80명으로 고정합니다.
+     운영자 열쇠는 이 기기에만 저장하고 대형 화면으로 갑니다. */
+  const festival = () => run(async () => {
+    const r = await createRoom('friend', { ...settings, maxPlayers: FESTIVAL_MAX_PLAYERS }, true);
+    if (!r.operatorToken) throw new Error('운영자 방을 만들지 못했습니다');
+    store.set(operatorKey(r.code), r.operatorToken);
+    navigate(`/display/${r.code}`);
+  });
   const stocks = settings.stocks ?? STOCKS_PER_GAME, rounds = settings.rounds ?? MODES.solo.rounds, trade = settings.trade ?? MODES.solo.trade;
   const level = settings.level ?? MODES.solo.level, caps = settings.maxPlayers ?? MODES.friend.maxPlayers;
   const minutes = Math.max(1, Math.round(rounds * (MODES.solo.news + trade + MODES.solo.recap) / 60));
@@ -100,6 +108,7 @@ export function Home() {
             <button className="ghost" disabled={busy} onClick={() => make('friend')}>친구 방 만들기</button>
             <button className="ghost" disabled={busy} aria-expanded={joining} onClick={() => setJoining(!joining)}>코드로 참가</button>
           </div>
+          <button className="link" style={{ alignSelf: 'center' }} disabled={busy} onClick={festival}>학술제 운영자 · 대형 화면과 QR 열기</button>
           {joining && <form className="sub-actions" onSubmit={e => { e.preventDefault(); if (code.length === 6) join(); }}>
             <label htmlFor="code" className="hint">친구에게 받은 6자리 방 코드</label>
             <input id="code" inputMode="numeric" autoComplete="off" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} placeholder="123456" />

@@ -93,7 +93,7 @@ export class Hub {
   newCode() {
     for (;;) { const c = String(randomInt(100000, 1000000)); if (!this.rooms.has(c)) return c; }
   }
-  createRoom(mode: GameMode, opts: { seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; settings?: RoomSettings } = {}) {
+  createRoom(mode: GameMode, opts: { seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; settings?: RoomSettings; operated?: boolean } = {}) {
     const room = GameRoom.create({ code: this.newCode(), mode, now: this.now(), ...opts });
     this.rooms.set(room.s.code, room);
     this.dirty.add(room.s.code);
@@ -218,6 +218,14 @@ export class Hub {
       const room = this.rooms.get(String(m.code));
       if (!room) return this.send(c, { t: 'error', reason: '방을 찾을 수 없습니다. 코드를 확인해 주세요' });
       c.room = room;
+      /* 운영자와 대형 화면은 참가자 자리를 차지하지 않고 관전자 목록에도 남지 않습니다. */
+      const staff: Role | null = room.isOperator(m.operatorToken) ? 'operator' : m.display === true ? 'display' : null;
+      if (staff) {
+        c.token = null; c.role = staff;
+        this.send(c, { t: 'welcome', token: null, role: staff, label: null, code: room.s.code });
+        this.sendView(c, now);
+        return;
+      }
       const j = room.join(m.token, now);
       c.token = j.token; c.role = j.role;
       this.send(c, { t: 'welcome', token: j.token, role: j.role, label: j.label, code: room.s.code });
@@ -234,7 +242,7 @@ export class Hub {
     if (!room) return this.send(c, { t: 'error', reason: '먼저 방에 들어와 주세요' });
     switch (m.t) {
       case 'start':
-        if (!room.canStart(c.token)) return this.send(c, { t: 'error', reason: '지금은 시작할 수 없습니다' });
+        if (!room.canStart(c.token, c.role === 'operator' ? room.s.operatorToken : null)) return this.send(c, { t: 'error', reason: '지금은 시작할 수 없습니다' });
         room.start(now); this.dirty.add(room.s.code); this.broadcast(room); return;
       case 'order': {
         const kind = m.kind === 'limit' ? 'limit' : 'market';
@@ -263,9 +271,13 @@ export class Hub {
       }
       case 'card': if (room.answerCard(c.token ?? '', m.choice, now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
       case 'rematch': {
-        if (room.s.status !== 'finished' || !room.player(c.token)) return;
+        if (room.s.status !== 'finished') return;
+        /* 운영자 방은 운영자만, 그 밖의 방은 참가자 누구나 다음 판을 엽니다. */
+        if (room.operated ? c.role !== 'operator' : !room.player(c.token)) return;
         if (!room.s.nextRoomCode) {
           const next = this.createRoom(room.s.mode, { excludedArcs: room.s.plan.arcIds, settings: room.s.settings });
+          /* 운영자는 같은 열쇠로 다음 판도 진행합니다(기기에 저장한 열쇠를 그대로 씀). */
+          if (room.operated) next.s.operatorToken = room.s.operatorToken;
           room.s.nextRoomCode = next.s.code;
           this.dirty.add(room.s.code);
         }
@@ -328,11 +340,16 @@ export class Hub {
             const recent = p.recentArcs.filter((x: unknown): x is string => typeof x === 'string').slice(0, RECENT_ARCS_MAX);
             if (recent.length > 0) extra.excludedArcs = recent;
           }
+          /* 운영자 방(학술제): 친구 대전에만 붙입니다. 열쇠는 만든 기기에만 한 번 돌려줍니다. */
+          if (p.operated === true) {
+            if (mode !== 'friend') return this.json(res, 400, { error: '운영자 방은 친구 대전에서만 만들 수 있습니다' });
+            extra.operated = true;
+          }
           if (this.opts.allowTestHooks) Object.assign(extra, { seed: p.seed, forced: p.forced, forcedArcs: p.forcedArcs });
         } catch { return this.json(res, 400, { error: '잘못된 요청입니다' }); }
         if (!this.allowCreate(req)) return this.json(res, 429, { error: '방을 너무 많이 만들었습니다. 잠시 후 다시 시도해 주세요' });
         const room = this.createRoom(mode, extra);
-        this.json(res, 201, { code: room.s.code, mode });
+        this.json(res, 201, room.operated ? { code: room.s.code, mode, operatorToken: room.s.operatorToken } : { code: room.s.code, mode });
       });
       return;
     }

@@ -99,7 +99,9 @@ export function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) 
         <button className="ghost" onClick={() => navigate('/records')}>내 기록</button>
         {view.nextRoomCode
           ? <button className="cta" onClick={() => navigate(`/room/${view.nextRoomCode}`)}>다음 판 대기실로</button>
-          : <button className="cta" onClick={() => send({ t: 'rematch' })}>{view.mode === 'solo' ? '한 판 더' : '같은 멤버로 한 판 더'}</button>}
+          : view.operated
+            ? <p className="hint full" style={{ textAlign: 'center' }}>운영자가 다음 판을 열면 여기에 입장 버튼이 나타납니다.</p>
+            : <button className="cta" onClick={() => send({ t: 'rematch' })}>{view.mode === 'solo' ? '한 판 더' : '같은 멤버로 한 판 더'}</button>}
         <button className="link full" onClick={() => navigate('/')}>처음으로</button>
       </div>
       <Disclaimer />
