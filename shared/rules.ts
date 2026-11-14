@@ -17,9 +17,12 @@ export const MODES: Record<GameMode, { rounds: number; news: number; trade: numb
 };
 
 /* 방을 만들 때 고를 수 있는 값. 고르지 않으면 MODES와 STOCKS_PER_GAME 기본값을 씁니다. */
-export const ROOM_OPTIONS: Record<'stocks' | 'rounds' | 'trade', readonly number[]> = {
-  stocks: [10, 20, 30, 50], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120]
+export const ROOM_OPTIONS: Record<'stocks' | 'rounds' | 'trade' | 'maxPlayers', readonly number[]> = {
+  stocks: [10, 20, 30, 50], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120], maxPlayers: [8, 20, 40, 80]
 };
+/* 정원은 친구 대전에만 씁니다. 학술제처럼 한 방에 많이 들어오는 자리를 위해 열어 둔 값이고,
+   기본값은 MODES.friend.maxPlayers(8명)입니다. 혼자 연습에는 적용하지 않습니다(서버가 거절). */
+export const CAPACITY_NOTE = '친구 방에만 적용돼요. 많은 인원이 한 방에서 할 때만 올리세요';
 /* 난이도. 쉬움은 시장가만 쓰고 어려운 장치를 감춥니다. 사건·속보·VI처럼 재미를 주는 부분은 그대로입니다. */
 export const LEVELS: readonly Level[] = ['easy', 'pro'];
 export const LEVEL_LABEL: Record<Level, string> = { easy: '쉬움', pro: '실전' };
@@ -38,7 +41,7 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
   const out: RoomSettings = {};
   for (const [key, choices] of Object.entries(ROOM_OPTIONS)) {
     const v = (raw as Record<string, unknown>)[key];
-    if (typeof v === 'number' && choices.includes(v)) out[key as 'stocks' | 'rounds' | 'trade'] = v;
+    if (typeof v === 'number' && choices.includes(v)) out[key as 'stocks' | 'rounds' | 'trade' | 'maxPlayers'] = v;
   }
   const level = (raw as Record<string, unknown>).level;
   if (isLevel(level)) out.level = level;

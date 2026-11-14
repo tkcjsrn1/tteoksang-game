@@ -389,7 +389,9 @@ export class GameRoom {
     if (side === 'buy') {
       p.cash -= gross + fee;
       const h = p.holdings[code] ?? (p.holdings[code] = { qty: 0, avgCost: 0, sinceRound: this.s.round });
-      h.avgCost = Math.round((h.avgCost * h.qty + gross) / (h.qty + qty));
+      /* 평균 단가에 매수 수수료를 넣습니다. 넣지 않으면 사자마자 평가손익이 0으로 보여
+         "자주 사고팔면 비용이 쌓인다"는 이 게임의 교훈과 화면이 어긋납니다. */
+      h.avgCost = Math.round((h.avgCost * h.qty + gross + fee) / (h.qty + qty));
       h.qty += qty;
     } else {
       const h = p.holdings[code]!;
@@ -581,7 +583,12 @@ export class GameRoom {
       p.results.push({
         round, rankBefore: rankBefore.get(p.id)!, rankAfter: this.rankOf(p), valueBefore, valueAfter, delta: valueAfter - valueBefore,
         fees: fills.reduce((a, f) => a + f.fee, 0),
-        slippage: fills.filter(f => f.kind !== 'limit').reduce((a, f) => a + Math.abs(f.price - (f.refPrice ?? f.price)) * f.qty, 0),
+        /* 슬리피지 = 체결가와 최우선 호가의 차이. 팔 때 최우선 매수 호가는 시세보다 한 칸(10원) 낮습니다.
+           예전에는 시세 기준이라 파는 쪽에 스프레드(주당 10원)가 섞여, 주문 전 미리보기(최우선 호가 기준)와 숫자가 달랐습니다. */
+        slippage: fills.filter(f => f.kind !== 'limit').reduce((a, f) => {
+          const ref = f.refPrice ?? f.price, best = f.side === 'sell' ? ref - TICK_WON : ref;
+          return a + Math.abs(f.price - best) * f.qty;
+        }, 0),
         contributions, best: contributions[0] ?? null,
         fills: fills.map(f => ({ code: f.code, side: f.side, qty: f.qty, price: f.price, fee: f.fee }))
       });

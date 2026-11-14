@@ -10,7 +10,7 @@ import { termById, termsIn } from '../../../shared/glossary';
 import { TermLink, useGlossary } from '../glossary/GlossaryContext';
 import { rememberArcs, store } from '../net';
 import { addRecord, parseRecords, RECORDS_KEY } from '../recordStore';
-import { BreakdownPanel, Confetti, dir, Disclaimer, pct, pctBp, PriceChart, StockAvatar, won } from '../ui';
+import { BreakdownPanel, Confetti, dir, Disclaimer, pct, pctBp, PriceChart, signedWon, StockAvatar, won } from '../ui';
 import { SectorBoard, Sheet } from './parts';
 
 export function BehaviorReport({ metrics }: { metrics: NonNullable<RoomView['report']>['metrics'] }) {
@@ -58,6 +58,8 @@ export function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) 
   }, [rep, view.code, view.mode, view.you.id, view.you.role, view.leaderboard]);
   /* 이번 판 사건을 적어 두어 다음 판에 같은 이야기가 또 나오지 않게 합니다. */
   useEffect(() => { if (view.arcIds) rememberArcs(view.arcIds); }, [view.arcIds]);
+  /* 내 평가액. 순위표에 "나와 얼마 차이"를 붙이는 데 씁니다 */
+  const myValue = view.leaderboard.find(l => l.playerId === view.you.id)?.value ?? null;
   return (
     <main className="final">
       <section className="sec final-head">
@@ -70,11 +72,18 @@ export function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) 
         </> : <h1 className="rank-big">결과 발표</h1>}
       </section>
       <section className="sec tight">
-        <ol className="rank-list">{view.leaderboard.map(l => <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''}>
-          <span className={`r${l.rank === 1 ? ' first' : ''}`}>{l.rank}</span>
-          <span className="who"><b>{l.playerId === view.you.id ? `나 · ${l.label}` : l.label}</b>{l.npcRule && <small>{l.npcRule}</small>}</span>
-          <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
-        </li>)}</ol>
+        <ol className="rank-list">{view.leaderboard.map(l => {
+          const me = l.playerId === view.you.id;
+          /* 내 평가액과의 차이. "3위"보다 "2위와 38만 원 차이"가 와닿습니다 */
+          const gap = myValue === null || me ? null : l.value - myValue;
+          return <li key={l.playerId} className={me ? 'me' : ''}>
+            <span className={`r${l.rank === 1 ? ' first' : ''}`}>{l.rank}</span>
+            <span className="who"><b>{me ? `나 · ${l.label}` : l.label}</b>{l.npcRule
+              ? <small>{l.npcRule}</small>
+              : gap !== null && <small className="gap">나와 {signedWon(gap)}</small>}</span>
+            <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
+          </li>;
+        })}</ol>
       </section>
       {rep && <TradeJournal view={view} fees={rep.fees} fallback={rep.majorTrades} />}
       {rep && rep.judgments.length > 0 && <section className="sec"><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></section>}

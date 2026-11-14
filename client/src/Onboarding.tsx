@@ -7,11 +7,11 @@ export const ONBOARDED_KEY = 'onboarded';
 export const needsOnboarding = () => store.get(ONBOARDED_KEY) !== '1';
 
 const SLIDES = [
-  { title: '같은 뉴스를 함께 봐요', text: '모두가 같은 가상 뉴스를 받습니다. 핵심은 "시장 기대"와 "단서"예요. 결과가 기대보다 좋을지 나쁠지 판단해 보세요.' },
-  { title: '장이 열리면 주문할 수 있어요', text: '시세가 1초마다 움직이고 중간에 속보가 뜨기도 해요. 시장가로 바로 사거나, 원하는 가격을 지정가로 걸어 둘 수 있어요.' },
-  { title: '살 때마다 비용이 빠져요', text: '수수료는 사고팔 때 0.10%, 팔 때는 증권거래세 0.20%가 더 붙어요. 한 번은 작아 보여도 자주 사고팔면 쌓입니다. 큰 주문은 호가가 비싼 쪽까지 사게 돼 평균 체결가가 불리해져요.' },
-  { title: '잃는 폭을 미리 정해 둘 수 있어요', text: '손절·익절을 걸어 두면 그 가격에 닿을 때 자동으로 팔려요. 가격이 갑자기 10% 넘게 튀면 그 종목만 15초 거래가 멈춥니다(변동성 완화장치).' },
-  { title: '장 마감 때 결과가 공개돼요', text: '뉴스의 실제 결과가 기대보다 좋았는지 나빴는지에 따라 주가가 크게 움직입니다. 무엇이 얼마나 영향을 줬는지 막대로 보여 주고, 판이 끝나면 매매일지에 내 거래를 모아 줘요.' }
+  { title: '같은 뉴스를 함께 봐요', text: '모두 같은 뉴스를 받아요. 핵심은 "시장 기대"와 "단서". 결과가 기대보다 좋을지 나쁠지 판단해 보세요.' },
+  { title: '장이 열리면 주문할 수 있어요', text: '시세가 1초마다 움직이고 속보도 떠요. 시장가로 바로 사거나 지정가로 걸어 둘 수 있어요.' },
+  { title: '살 때마다 비용이 빠져요', text: '수수료 0.10%(살 때·팔 때), 거래세 0.20%(팔 때). 자주 사고팔면 쌓여요. 큰 주문은 비싼 호가까지 사게 돼 평균 체결가가 불리해집니다.' },
+  { title: '잃는 폭을 미리 정해 둘 수 있어요', text: '손절·익절을 걸면 그 가격에 닿을 때 자동으로 팔려요. 값이 갑자기 10% 넘게 튀면 그 종목만 15초 멈춥니다(VI).' },
+  { title: '장 마감 때 결과가 공개돼요', text: '결과가 기대보다 좋았는지에 따라 주가가 크게 움직여요. 무엇이 얼마나 영향을 줬는지 막대로 보여 주고, 끝나면 매매일지가 남습니다.' }
 ] as const;
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
@@ -27,7 +27,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           <span className="onb-dots" role="img" aria-label={`${i + 1}번째 슬라이드, 전체 ${SLIDES.length}장`}>{SLIDES.map((_, k) => <i key={k} className={k === i ? 'on' : ''} />)}</span>
           <button className="link" onClick={finish}>건너뛰기</button>
         </div>
-        <div className="onb-art" aria-hidden="true">{i === 0 ? <ArtNews /> : i === 1 ? <ArtOrder /> : <ArtResult />}</div>
+        <div className="onb-art" aria-hidden="true">{ART[i]}</div>
         <h2 className="onb-title" tabIndex={-1} ref={titleRef}>{SLIDES[i].title}</h2>
         <p className="onb-text">{SLIDES[i].text}</p>
         <div className="onb-actions">
@@ -40,13 +40,35 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 }
 
 /* 카드 그림: 실제 화면을 단순하게 줄인 모형 */
+/* 슬라이드 순서대로 쓰는 그림. 장과 그림이 어긋나지 않게 배열로 묶어 둡니다 */
+const ART = [<ArtNews key="n" />, <ArtOrder key="o" />, <ArtFee key="f" />, <ArtStop key="s" />, <ArtResult key="r" />];
+function ArtFee() {
+  return (
+    <div className="art-card">
+      <div className="art-kv"><span>체결 금액</span><b>870,000원</b></div>
+      <div className="art-kv"><span>수수료 0.10%</span><span>-870원</span></div>
+      <div className="art-kv"><span>거래세 0.20% (팔 때)</span><span>-1,740원</span></div>
+      <b className="art-delta down">사고팔면 -2,610원</b>
+    </div>
+  );
+}
+function ArtStop() {
+  return (
+    <div className="art-card">
+      <div className="art-kv"><span>내 평균</span><b>8,700원</b></div>
+      <div className="art-kv"><span>손절가</span><span>8,200원</span></div>
+      <div className="art-kv"><span>익절가</span><span>9,600원</span></div>
+      <span className="art-btn">예약 걸어 두기</span>
+    </div>
+  );
+}
 function ArtNews() {
   return (
     <div className="art-card">
       <span className="chip">이번 뉴스</span>
-      <b>도르넴, 분기 실적 발표 하루 앞</b>
-      <div className="art-kv"><span>시장 기대</span><b>영업이익 120억</b></div>
-      <div className="art-kv"><span>단서</span><span>경쟁사 2곳 운임 인상</span></div>
+      <b>한빛제과, 신제품 출시 발표 예정</b>
+      <div className="art-kv"><span>시장 기대</span><b>매출 300억</b></div>
+      <div className="art-kv"><span>단서</span><span>원재료 값이 석 달째 하락</span></div>
     </div>
   );
 }
@@ -63,10 +85,10 @@ function ArtOrder() {
 function ArtResult() {
   return (
     <div className="art-card">
-      <div className="art-vs"><span>기대 120억</span><span>→</span><b>실제 140억</b></div>
-      <div className="art-bar"><span>사건 결과</span><i style={{ width: '70%' }} /><b>+450bp</b></div>
+      <div className="art-vs"><span>기대 300억</span><span>→</span><b>실제 330억</b></div>
+      <div className="art-bar"><span>사건 결과</span><i style={{ width: '70%' }} /><b>+380bp</b></div>
       <div className="art-bar"><span>시장 전체</span><i style={{ width: '6%' }} /><b>+20bp</b></div>
-      <b className="art-delta">+36,260원</b>
+      <b className="art-delta">+31,400원</b>
     </div>
   );
 }
