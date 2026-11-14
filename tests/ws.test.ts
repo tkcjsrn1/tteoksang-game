@@ -284,6 +284,8 @@ test('운영자 방: 운영자·대형 화면은 자리를 차지하지 않고, 
   assert.equal(bad.status, 400, '혼자 연습에는 운영자 방이 없음');
   const plain = await create({ mode: 'friend' }) as { code: string; operatorToken?: string };
   assert.equal(plain.operatorToken, undefined, '일반 방은 열쇠를 주지 않음');
+  const over = await fetch(`http://localhost:${port}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode: 'friend', operated: true, settings: { maxPlayers: 160 } }) });
+  assert.equal(over.status, 400, '80명을 넘는 정원은 거절');
   const made = await create({ mode: 'friend', operated: true, seed: 21, settings: { maxPlayers: 80, rounds: 3 } }) as { code: string; operatorToken: string };
   const { code, operatorToken: key } = made;
   assert.ok(key);

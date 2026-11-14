@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { navigate } from './App';
 import { createRoom, operatorKey, roomInfo, store } from './net';
 import { TERMS } from '../../shared/glossary';
-import { CAPACITY_NOTE, cleanSettings, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
+import { CAPACITY_NOTE, cleanSettings, FESTIVAL_MAX_PLAYERS, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { RoomSettings } from '../../shared/types';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
@@ -36,10 +36,10 @@ export function Home() {
   const forMode = (mode: 'friend' | 'solo'): RoomSettings => mode === 'friend' ? settings
     : Object.fromEntries(Object.entries(settings).filter(([k]) => k !== 'maxPlayers')) as RoomSettings;
   const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, forMode(mode)); navigate(`/room/${r.code}`); });
-  /* 학술제 운영자: 친구 대전 설정 그대로, 정원은 고른 값이 기본(8명)이면 80명으로 엽니다.
+  /* 학술제 운영자: 친구 대전 설정 그대로, 정원은 서버가 버티는 상한인 80명으로 고정합니다.
      운영자 열쇠는 이 기기에만 저장하고 대형 화면으로 갑니다. */
   const festival = () => run(async () => {
-    const r = await createRoom('friend', { ...settings, maxPlayers: (settings.maxPlayers ?? MODES.friend.maxPlayers) > MODES.friend.maxPlayers ? settings.maxPlayers : 80 }, true);
+    const r = await createRoom('friend', { ...settings, maxPlayers: FESTIVAL_MAX_PLAYERS }, true);
     if (!r.operatorToken) throw new Error('운영자 방을 만들지 못했습니다');
     store.set(operatorKey(r.code), r.operatorToken);
     navigate(`/display/${r.code}`);

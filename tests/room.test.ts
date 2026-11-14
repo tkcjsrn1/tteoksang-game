@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GameRoom } from '../server/src/room';
 import { ARCS } from '../server/src/content';
-import { GROUPS, lowerLimit, stockOf, STOCKS, feeOf } from '../shared/rules';
+import { FESTIVAL_MAX_PLAYERS, ROOM_OPTIONS, GROUPS, lowerLimit, stockOf, STOCKS, feeOf } from '../shared/rules';
 import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
@@ -499,4 +499,13 @@ test('운영자 방이 아니면 열쇠가 없고 기존처럼 방장이 시작�
   assert.equal(room.canStart(null, ''), false);
   assert.equal(room.canStart(a), true);
   assert.equal(room.view(a, 'player', T0).operated, false);
+});
+
+test('정원 상한은 80명이고, 고를 수 있는 가장 큰 정원과 같다', () => {
+  assert.equal(FESTIVAL_MAX_PLAYERS, 80);
+  assert.equal(Math.max(...ROOM_OPTIONS.maxPlayers), FESTIVAL_MAX_PLAYERS);
+  const room = GameRoom.create({ code: '808080', mode: 'friend', now: T0, seed: 1, settings: { maxPlayers: FESTIVAL_MAX_PLAYERS }, operated: true });
+  for (let i = 0; i < FESTIVAL_MAX_PLAYERS; i++) assert.equal(room.join(null, T0 + i).role, 'player');
+  assert.equal(room.join(null, T0 + 100).role, 'spectator', '81번째는 관전자');
+  assert.equal(room.humans.length, FESTIVAL_MAX_PLAYERS);
 });

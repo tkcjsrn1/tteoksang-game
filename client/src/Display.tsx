@@ -7,7 +7,7 @@ import QRCode from 'qrcode';
 import { LEVEL_LABEL, MODES } from '../../shared/rules';
 import type { LeaderRow, RoomView } from '../../shared/types';
 import { navigate } from './App';
-import { humanRanks, pickDisplayStocks } from './bigscreen';
+import { pickDisplayStocks } from './bigscreen';
 import { displayUrl, joinNote, operatorKey, store, useJoinUrl, useRoom, useSecondsLeft } from './net';
 import { arrow, dir, Disclaimer, formatCountdown, Logo, pct, pctBp } from './ui';
 
@@ -69,6 +69,7 @@ function DisplayLobby({ view, isOp, start, error }: { view: RoomView; isOp: bool
         <p className="d-code num" aria-label={`방 코드 ${view.code.split('').join(' ')}`}>{view.code}</p>
         <p className="d-count"><b className="num">{view.humanCount}</b><span className="num"> / {view.maxPlayers}명</span> 입장 <small>+ NPC 3명</small></p>
         <p className="d-meta">{view.stocks.length}종목 · {view.totalRounds}라운드 · 장 {view.tradeSeconds ?? cfg.trade}초 · {LEVEL_LABEL[view.level]} · 가상 자금 1,000만 원</p>
+        {view.humanCount >= view.maxPlayers && <p className="d-full">정원 {view.maxPlayers}명이 찼습니다. 지금부터 들어오는 사람은 관전만 할 수 있습니다.</p>}
         {recent.length > 0 && <ul className="d-joined" aria-label="방금 들어온 참가자">{recent.map(p => <li key={p.playerId}>{p.label}</li>)}</ul>}
         {isOp
           ? <div className="d-op">
@@ -120,40 +121,34 @@ function DisplayStocks({ view }: { view: RoomView }) {
     </section>
   );
 }
-const bestNpc = (rows: LeaderRow[]) => rows.filter(r => r.kind === 'npc').sort((a, b) => b.value - a.value)[0] ?? null;
-function NpcLine({ rows }: { rows: LeaderRow[] }) {
-  const n = bestNpc(rows);
-  return n ? <p className="d-npc">비교 · {n.label} <span className={`num ${dir(n.returnPct)}`}>{pct(n.returnPct)}</span></p> : null;
-}
+/** 순위는 게임 화면과 같이 NPC를 포함합니다(NPC를 이기는 것도 목표). NPC 줄은 흐리게 표시합니다 */
 function DisplayRank({ rows }: { rows: LeaderRow[] }) {
   return (
-    <section className="d-rank" aria-label="참가자 상위 5명">
-      <h2>참가자 상위 5명</h2>
-      <ol>{humanRanks(rows).slice(0, 5).map(l => (
-        <li key={l.playerId}>
+    <section className="d-rank" aria-label="상위 5명">
+      <h2>상위 5명 <small>NPC 포함</small></h2>
+      <ol>{rows.slice(0, 5).map(l => (
+        <li key={l.playerId} className={l.kind === 'npc' ? 'npc' : ''}>
           <b className="num d-pos">{l.rank}</b>
           <span className="d-name">{l.label}</span>
           <span className={`num ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
         </li>
       ))}</ol>
-      <NpcLine rows={rows} />
     </section>
   );
 }
 function DisplayFinal({ view, isOp, rematch }: { view: RoomView; isOp: boolean; rematch: () => void }) {
-  const humans = humanRanks(view.leaderboard);
-  const top = humans.slice(0, 5);
+  const top = view.leaderboard.slice(0, 5);
+  const humans = view.leaderboard.filter(l => l.kind === 'human');
   const beatNpc = humans.filter(h => view.leaderboard.filter(l => l.kind === 'npc').every(n => h.value > n.value)).length;
   return (
     <section className="d-final">
       <ol className="d-podium">{top.map(l => (
-        <li key={l.playerId} className={l.rank === 1 ? 'first' : ''}>
+        <li key={l.playerId} className={[l.rank === 1 ? 'first' : '', l.kind === 'npc' ? 'npc' : ''].join(' ').trim()}>
           <b className="num d-pos">{l.rank}위</b>
           <span className="d-name">{l.label}</span>
           <span className={`num d-ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
         </li>
       ))}</ol>
-      <NpcLine rows={view.leaderboard} />
       <p className="d-meta">참가 {humans.length}명 중 <b className="num">{beatNpc}</b>명이 NPC 3명을 모두 앞섰습니다. 내 매매일지와 행동 리포트는 각자 휴대폰에서 확인하세요.</p>
       {isOp && <div className="d-op">
         {view.nextRoomCode

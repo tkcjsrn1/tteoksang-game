@@ -396,7 +396,7 @@ await step('학술제: 운영자 대형 화면(1920px)과 참가자 입장·시�
   ok(await ro.getByRole('button', { name: /게임 시작/ }).count() === 0, '열쇠 없는 대형 화면에 시작 버튼이 보임');
   await big.getByRole('button', { name: /게임 시작 \(1명\)/ }).click();
   await big.getByRole('region', { name: '이번 라운드 뉴스' }).waitFor();
-  await big.getByRole('region', { name: '참가자 상위 5명' }).waitFor();
+  await big.getByRole('region', { name: '상위 5명' }).waitFor();
   ok(!/주문 가능|평가손익|보유/.test(await big.locator('main').innerText()), '대형 화면에 개인 자산 문구가 보임');
   const sw = await big.evaluate(() => document.documentElement.scrollWidth);
   ok(sw <= 1921, `대형 화면 가로 스크롤(${sw}px)`);

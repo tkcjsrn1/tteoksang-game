@@ -20,6 +20,9 @@ export const MODES: Record<GameMode, { rounds: number; news: number; trade: numb
 export const ROOM_OPTIONS: Record<'stocks' | 'rounds' | 'trade' | 'maxPlayers', readonly number[]> = {
   stocks: [10, 20, 30, 50], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120], maxPlayers: [8, 20, 40, 80]
 };
+/** 한 방 정원의 상한이자 학술제(운영자 방) 정원. 80명을 넘기면 Render 무료 서버 전송량이 버티기 어렵다고 보고 막습니다.
+    ROOM_OPTIONS.maxPlayers의 가장 큰 값과 같아야 합니다(테스트가 확인). 81번째부터 들어오는 사람은 관전자입니다. */
+export const FESTIVAL_MAX_PLAYERS = 80;
 /* 정원은 친구 대전에만 씁니다. 학술제처럼 한 방에 많이 들어오는 자리를 위해 열어 둔 값이고,
    기본값은 MODES.friend.maxPlayers(8명)입니다. 혼자 연습에는 적용하지 않습니다(서버가 거절). */
 export const CAPACITY_NOTE = '친구 방에만 적용돼요. 많은 인원이 한 방에서 할 때만 올리세요';
