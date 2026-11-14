@@ -40,7 +40,7 @@ export const NPC_RULES: Record<NpcType, { label: string; rule: string; decide: (
   },
   diversifier: {
     label: '분산형',
-    rule: '첫 라운드에 업종마다 변동이 가장 작은 종목 하나씩, 6종목을 15%씩 사고, 이후에는 한 종목이 평가액의 25%를 넘으면 초과분을 팝니다.',
+    rule: '첫 라운드에 이번 판 업종마다 변동이 가장 작은 종목을 하나씩 15%씩 사고, 이후에는 한 종목이 평가액의 25%를 넘으면 초과분을 팝니다.',
     decide: ({ round, prices, ctx }) => {
       const codes = Object.keys(prices) as StockCode[];
       if (round === 1) return pickDiversified(codes).map(code => ({ code, side: 'buy' as const, qty: Math.floor(ctx.cash * .15 / prices[code]) }));

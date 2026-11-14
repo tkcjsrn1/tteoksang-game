@@ -112,21 +112,18 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
   await settings.waitFor();
   await page.keyboard.press('Escape');
   await settings.waitFor({ state: 'hidden' });
-  const news = page.locator('main .news').first();
-  const newsBox = await news.boundingBox();
-  const balanceBox = await page.locator('main .wallet-label').first().boundingBox();
-  ok(newsBox && balanceBox && newsBox.y < balanceBox.y, '첫 라운드에서 내 평가액이 뉴스보다 앞에 있음');
-  const related = page.getByRole('button', { name: /종목 보기/ });
+  /* 실전 난이도는 튜토리얼(코치)을 건너뜁니다 */
+  ok(await page.locator('.coach').count() === 0, '실전 난이도에서 튜토리얼이 나옴');
+  await page.locator('main .news').first().waitFor();
+  /* 튜토리얼이 없어도 뉴스의 종목 보기 버튼은 있어야 합니다 */
+  const related = page.getByRole('button', { name: /종목 보기/ }).first();
   await related.click();
   const order = page.getByRole('dialog');
   await order.locator('#order-qty').waitFor();
   tutorialStock = await order.getByRole('heading').first().innerText();
   await order.getByRole('button', { name: '관심종목', exact: true }).click();
-  ok(!(await order.locator('.company').isVisible()), '첫 주문에서 기업 정보가 먼저 열려 있음');
-  await page.locator('.list-head .live-dot').waitFor({ state: 'attached' });
-  await order.getByRole('button', { name: '이번에는 지켜보기' }).click();
+  await order.getByRole('button', { name: '닫기', exact: true }).click();
   await order.waitFor({ state: 'detached' });
-  await page.getByText('4. 시세를 지켜봐요', { exact: true }).waitFor();
   await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
   ok(await page.locator('.sector-head').count() >= 1, '업종 머리줄 없음');
   await page.getByRole('button', { name: '모두 펼치기' }).click();

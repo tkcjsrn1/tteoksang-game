@@ -433,6 +433,20 @@ test('저장한 상태에서 그대로 복구한다', () => {
   assert.equal(restored.player(a)!.orders.G02, undefined);
 });
 
+test('작은 시장가 매도의 슬리피지는 0이다(스프레드는 슬리피지가 아님, 주문 전 미리보기와 같은 기준)', () => {
+  const { room, a } = setup({ seed: 11 });
+  const code = room.s.plan.stockCodes![0];
+  const t = toTrade(room);
+  assert.equal(room.placeOrder(a, 'buy10', code, 'buy', 10, t).ok, true);   // 10주는 호가 한 칸 안에서 체결
+  const ref = room.markPrice(code);
+  assert.equal(room.placeOrder(a, 'sell1', code, 'sell', 1, t).ok, true);
+  const p = room.player(a)!;
+  const sell = p.fills.find(f => f.requestId === 'sell1')!;
+  assert.equal(sell.price, ref - 10, '파는 쪽은 시세보다 한 칸 낮은 최우선 매수 호가에 체결(스프레드)');
+  next(room);
+  assert.equal(p.results[0].slippage, 0, '사고판 수량이 호가 한 칸 안이므로 슬리피지 0');
+});
+
 test('정원을 80명으로 열면 80명이 들어와 한 판을 끝까지 마친다', () => {
   const room = GameRoom.create({ code: '654321', mode: 'friend', now: T0, seed: 11, settings: { maxPlayers: 80 } });
   const toks = Array.from({ length: 80 }, (_, i) => room.join(null, T0 + i));
