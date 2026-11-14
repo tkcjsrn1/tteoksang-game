@@ -4,8 +4,10 @@ import { masterVolume, setMasterVolume, useHapticSetting, useMusicSetting, useSo
 import { useTheme } from './theme';
 import { useTextSize } from './text';
 
-export function SettingsButton() {
+/** onLeave를 주면 설정 창 맨 아래에 "메인 화면으로 나가기"가 생깁니다(게임 중에만 씁니다). */
+export function SettingsButton({ onLeave }: { onLeave?: () => void } = {}) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [confirming, setConfirming] = useState(false);
   const title = useId();
   const volumeId = useId();
   const [effects, setEffects] = useSoundSetting();
@@ -20,13 +22,13 @@ export function SettingsButton() {
     <button className="help-btn" type="button" title="설정" aria-label="설정" aria-haspopup="dialog" onClick={() => dialog.current?.showModal()}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="m10 3-.6 2.1-1.5.9-2.2-.5-2 3.4 1.6 1.5v1.8l-1.6 1.5 2 3.4 2.2-.5 1.5.9.6 2.1h4l.6-2.1 1.5-.9 2.2.5 2-3.4-1.6-1.5v-1.8l1.6-1.5-2-3.4-2.2.5-1.5-.9L14 3Z" />
-        <circle cx="12" cy="11.3" r="3" />
+        <circle cx="12" cy="12" r="3" />
       </svg>
     </button>
     <dialog ref={dialog} className="settings-dialog" aria-labelledby={title}>
       <div className="settings-head">
         <h2 className="h" id={title}>설정</h2>
-        <button className="ghost small" type="button" onClick={() => dialog.current?.close()}>닫기</button>
+        <button className="ghost small" type="button" onClick={() => { setConfirming(false); dialog.current?.close(); }}>닫기</button>
       </div>
       <label className="settings-row">
         다크 모드
@@ -56,6 +58,17 @@ export function SettingsButton() {
         <input id={volumeId} type="range" min="0" max="100" value={volume}
           onChange={e => { setMasterVolume(e.target.valueAsNumber); setVolume(e.target.valueAsNumber); }} />
       </div>
+      {onLeave && <div className="settings-leave">
+        {confirming
+          ? <>
+              <p className="hint">정말 홈으로 돌아가시겠어요? 나가도 방은 그대로 있어서, 코드로 다시 들어오면 이어서 할 수 있어요.</p>
+              <div className="btn-row">
+                <button className="ghost" type="button" onClick={() => setConfirming(false)}>아니요</button>
+                <button className="cta" type="button" onClick={() => { setConfirming(false); dialog.current?.close(); onLeave(); }}>예, 나갈래요</button>
+              </div>
+            </>
+          : <button className="link danger" type="button" onClick={() => setConfirming(true)}>메인 화면으로 나가기</button>}
+      </div>}
     </dialog>
   </>;
 }

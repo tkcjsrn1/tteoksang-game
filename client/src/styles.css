@@ -102,6 +102,8 @@ small { font-size: 0.82em; }
 .room-settings select { min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 6px; background: var(--panel); color: var(--fg); font-size: 15px; }
 /* 대기실 머리말: 왼쪽에 안내, 오른쪽 위에 나가기 */
 .rank-list .gap { color: var(--muted); font-variant-numeric: tabular-nums; }
+.settings-leave { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.link.danger { color: var(--down); font-weight: 600; }
 .lobby-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .back-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 6px 12px 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--fg-3); font-size: 14px; font-weight: 600; }
 .back-btn:hover { background: var(--panel-3); color: var(--fg); }
@@ -142,7 +144,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .status span { font-size: 13px; color: var(--muted); white-space: nowrap; }
 .clock { display: inline-flex; align-items: center; gap: 5px; background: var(--panel-2); color: var(--fg-2); font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 999px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .clock.soon { background: var(--up-soft); color: var(--up); }
-.help-btn { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--panel-2); font-weight: 800; color: var(--fg-3); }
+.help-btn { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--panel-2); font-weight: 800; color: var(--fg-3);
+  /* 아이콘이 글자 기준선에 얹혀 원 안에서 위로 뜨던 문제를 막습니다 */
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding: 0; }
 .timer { grid-column: 1 / -1; height: 4px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
 .timer i { display: block; height: 100%; background: var(--led); transition: width .25s linear; }
 .offline { margin: 8px 0 0; padding: 10px var(--gutter-r) 10px var(--gutter-l); font-size: 14px; background: var(--gold-soft); color: var(--warning); }

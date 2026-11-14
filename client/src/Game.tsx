@@ -38,7 +38,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
       <div className="lobby-head">
         <p className="course">{cfg.label} · 대기실</p>
         <button className="back-btn" aria-label="방 나가기" title="방 나가기"
-          onClick={() => { send({ t: 'leave' }); store.del(`room:${view.code}`); navigate('/'); }}>
+          onClick={() => { send({ t: 'leave' }); store.del(`room:${view.code}`); store.del(`favorites:${view.code}`); navigate('/'); }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
           나가기
         </button>
@@ -100,16 +100,19 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   const [tab, setTab] = useState<Tab>('market');
   const [detail, setDetail] = useState<StockCode | null>(null);
   const [help, setHelp] = useState(false);
+  /* 관심종목은 판마다 다릅니다. 한 판에 나오는 종목이 매번 달라지므로 방 코드별로 따로 기억합니다.
+     예전에는 전역 키 하나를 써서 새 판을 시작해도 지난 판의 관심종목이 남아 있었습니다. */
+  const favKey = `favorites:${view.code}`;
   const [favorites, setFavorites] = useState<StockCode[]>(() => {
     try {
-      const saved: unknown = JSON.parse(store.get('favorites') ?? '[]');
+      const saved: unknown = JSON.parse(store.get(favKey) ?? '[]');
       return Array.isArray(saved) ? saved.filter((code): code is StockCode => STOCKS.some(s => s.code === code)) : [];
     } catch { return []; }
   });
   const toggleFavorite = (code: StockCode) => {
     const next = favorites.includes(code) ? favorites.filter(c => c !== code) : [...favorites, code];
     setFavorites(next);
-    store.set('favorites', JSON.stringify(next));
+    store.set(favKey, JSON.stringify(next));
   };
   const favoriteStocks = view.stocks.filter(s => favorites.includes(s.code));
   const toast = useToast();
@@ -200,7 +203,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
           {clockLabel(view.phase, view.round, view.totalRounds)} {formatCountdown(seconds)}
         </span>}
-        <SettingsButton />
+        <SettingsButton onLeave={() => { send({ t: 'leave' }); store.del(`room:${view.code}`); store.del(favKey); navigate('/'); }} />
         <button className="help-btn" aria-label="도움말" onClick={() => setHelp(true)}>?</button>
         <div className="timer"><i style={{ width: `${view.phaseSeconds ? Math.min(100, left / view.phaseSeconds * 100) : 0}%` }} /></div>
       </header>
