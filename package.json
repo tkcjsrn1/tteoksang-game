@@ -19,6 +19,7 @@
     "balance": "tsx scripts/balance.ts",
     "cap:sync": "vite build && cap sync android",
     "smoke": "tsx scripts/smoke.ts",
+    "rehearsal": "tsx scripts/rehearsal.ts",
     "e2e": "tsx scripts/e2e.ts"
   },
   "dependencies": {
