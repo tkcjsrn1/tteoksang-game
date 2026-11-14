@@ -35,7 +35,14 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
   const canStart = view.you.isHost && view.humanCount >= view.minToStart;
   return (
     <main className="lobby">
-      <p className="course">{cfg.label} · 대기실</p>
+      <div className="lobby-head">
+        <p className="course">{cfg.label} · 대기실</p>
+        <button className="back-btn" aria-label="방 나가기" title="방 나가기"
+          onClick={() => { send({ t: 'leave' }); store.del(`room:${view.code}`); navigate('/'); }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
+          나가기
+        </button>
+      </div>
       <h1 className="code-big num">{view.code}</h1>
       <p className="lede">친구에게 코드나 링크를 보내 주세요. 이름은 바꿀 수 있고, 비워 두면 자동으로 드린 이름을 씁니다.</p>
       {qr && <img className="qr" src={qr} alt="입장 QR 코드" width="180" height="180" />}
@@ -58,7 +65,6 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
         <li>뉴스는 단서일 뿐입니다. 시장 기대와 실제 결과의 차이가 주가를 움직입니다.</li>
         <li>판을 끝내면 같은 멤버로 바로 다시 할 수 있습니다.</li>
       </ul>
-      <button className="link" onClick={() => { send({ t: 'leave' }); store.del(`room:${view.code}`); navigate('/'); }}>방 나가기</button>
       <Disclaimer />
     </main>
   );
@@ -86,6 +92,9 @@ function NameEditor({ view, send }: { view: RoomView; send: (m: ClientMsg) => vo
 }
 const PHASE_LABEL: Record<string, string> = { news: '뉴스 확인', trade: '장중 거래', settling: '결과 집계 중', recap: '라운드 결과' };
 const CLOCK_LABEL: Record<string, string> = { news: '장 시작까지', trade: '장 마감', settling: '', recap: '다음 라운드' };
+/* 마지막 라운드의 결과 시간에는 다음 라운드가 없습니다 */
+const clockLabel = (phase: string | null, round: number, total: number) =>
+  phase === 'recap' && round >= total ? '최종 결과까지' : CLOCK_LABEL[phase ?? 'news'];
 
 function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop }: PlayProps) {
   const [tab, setTab] = useState<Tab>('market');
@@ -187,9 +196,9 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
           <b>{PHASE_LABEL[view.phase ?? 'news']}</b>
           <span className="num" aria-label={`${view.round}라운드, 전체 ${view.totalRounds}라운드`}>{view.round}/{view.totalRounds}</span>
         </div>
-        {view.phase !== 'settling' && <span className={`clock${soon ? ' soon' : ''}`} role="timer" aria-label={`${CLOCK_LABEL[view.phase ?? 'news']} ${seconds}초`}>
+        {view.phase !== 'settling' && <span className={`clock${soon ? ' soon' : ''}`} role="timer" aria-label={`${clockLabel(view.phase, view.round, view.totalRounds)} ${seconds}초`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
-          {CLOCK_LABEL[view.phase ?? 'news']} {formatCountdown(seconds)}
+          {clockLabel(view.phase, view.round, view.totalRounds)} {formatCountdown(seconds)}
         </span>}
         <SettingsButton />
         <button className="help-btn" aria-label="도움말" onClick={() => setHelp(true)}>?</button>

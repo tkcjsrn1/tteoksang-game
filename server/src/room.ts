@@ -389,7 +389,9 @@ export class GameRoom {
     if (side === 'buy') {
       p.cash -= gross + fee;
       const h = p.holdings[code] ?? (p.holdings[code] = { qty: 0, avgCost: 0, sinceRound: this.s.round });
-      h.avgCost = Math.round((h.avgCost * h.qty + gross) / (h.qty + qty));
+      /* 평균 단가에 매수 수수료를 넣습니다. 넣지 않으면 사자마자 평가손익이 0으로 보여
+         "자주 사고팔면 비용이 쌓인다"는 이 게임의 교훈과 화면이 어긋납니다. */
+      h.avgCost = Math.round((h.avgCost * h.qty + gross + fee) / (h.qty + qty));
       h.qty += qty;
     } else {
       const h = p.holdings[code]!;

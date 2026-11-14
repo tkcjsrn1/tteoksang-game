@@ -207,7 +207,7 @@ export const TERMS: Term[] = [
   { id: 'avg-cost', term: '평균 단가', en: 'Average cost', category: 'asset',
     short: '내가 산 주식 1주의 평균 가격',
     body: '1만 원에 10주, 1만 2천 원에 10주를 샀다면 평균 단가는 1만 1천 원입니다. 지금 가격이 평균 단가보다 높으면 이익, 낮으면 손실입니다.',
-    game: '이 게임의 평균 단가에는 수수료를 넣지 않았습니다.',
+    game: '이 게임의 평균 단가에는 살 때 낸 수수료가 들어갑니다. 그래서 사자마자 평가손익이 수수료만큼 마이너스로 보입니다. 파는 쪽 수수료와 거래세는 팔 때 따로 빠집니다.',
     match: ['평균 단가', '평단'], related: ['unrealized-pnl', 'realized-pnl'] },
   { id: 'unrealized-pnl', term: '평가손익', category: 'asset',
     short: '팔지 않은 주식의 장부상 이익·손실',

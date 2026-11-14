@@ -27,7 +27,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           <span className="onb-dots" role="img" aria-label={`${i + 1}번째 슬라이드, 전체 ${SLIDES.length}장`}>{SLIDES.map((_, k) => <i key={k} className={k === i ? 'on' : ''} />)}</span>
           <button className="link" onClick={finish}>건너뛰기</button>
         </div>
-        <div className="onb-art" aria-hidden="true">{i === 0 ? <ArtNews /> : i === 1 ? <ArtOrder /> : <ArtResult />}</div>
+        <div className="onb-art" aria-hidden="true">{ART[i]}</div>
         <h2 className="onb-title" tabIndex={-1} ref={titleRef}>{SLIDES[i].title}</h2>
         <p className="onb-text">{SLIDES[i].text}</p>
         <div className="onb-actions">
@@ -40,13 +40,35 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 }
 
 /* 카드 그림: 실제 화면을 단순하게 줄인 모형 */
+/* 슬라이드 순서대로 쓰는 그림. 장과 그림이 어긋나지 않게 배열로 묶어 둡니다 */
+const ART = [<ArtNews key="n" />, <ArtOrder key="o" />, <ArtFee key="f" />, <ArtStop key="s" />, <ArtResult key="r" />];
+function ArtFee() {
+  return (
+    <div className="art-card">
+      <div className="art-kv"><span>체결 금액</span><b>870,000원</b></div>
+      <div className="art-kv"><span>수수료 0.10%</span><span>-870원</span></div>
+      <div className="art-kv"><span>거래세 0.20% (팔 때)</span><span>-1,740원</span></div>
+      <b className="art-delta down">사고팔면 -2,610원</b>
+    </div>
+  );
+}
+function ArtStop() {
+  return (
+    <div className="art-card">
+      <div className="art-kv"><span>내 평균</span><b>8,700원</b></div>
+      <div className="art-kv"><span>손절가</span><span>8,200원</span></div>
+      <div className="art-kv"><span>익절가</span><span>9,600원</span></div>
+      <span className="art-btn">예약 걸어 두기</span>
+    </div>
+  );
+}
 function ArtNews() {
   return (
     <div className="art-card">
       <span className="chip">이번 뉴스</span>
-      <b>도르넴, 분기 실적 발표 하루 앞</b>
-      <div className="art-kv"><span>시장 기대</span><b>영업이익 120억</b></div>
-      <div className="art-kv"><span>단서</span><span>경쟁사 2곳 운임 인상</span></div>
+      <b>한빛제과, 신제품 출시 발표 예정</b>
+      <div className="art-kv"><span>시장 기대</span><b>매출 300억</b></div>
+      <div className="art-kv"><span>단서</span><span>원재료 값이 석 달째 하락</span></div>
     </div>
   );
 }
@@ -63,10 +85,10 @@ function ArtOrder() {
 function ArtResult() {
   return (
     <div className="art-card">
-      <div className="art-vs"><span>기대 120억</span><span>→</span><b>실제 140억</b></div>
-      <div className="art-bar"><span>사건 결과</span><i style={{ width: '70%' }} /><b>+450bp</b></div>
+      <div className="art-vs"><span>기대 300억</span><span>→</span><b>실제 330억</b></div>
+      <div className="art-bar"><span>사건 결과</span><i style={{ width: '70%' }} /><b>+380bp</b></div>
       <div className="art-bar"><span>시장 전체</span><i style={{ width: '6%' }} /><b>+20bp</b></div>
-      <b className="art-delta">+36,260원</b>
+      <b className="art-delta">+31,400원</b>
     </div>
   );
 }
