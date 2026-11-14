@@ -347,14 +347,23 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
     }
   };
   const revealed = new Set<string>();
-  check('뉴스', revealed);
-  next(room); check('주문', revealed);
+  /* 결과 예측: 공개 전에는 맞았는지·집계가 어느 화면에도 나가지 않습니다 */
+  assert.equal(room.predict(a, 'up', 90, T0), true);
+  const noVerdict = (label: string) => {
+    for (const [tok, role] of [[a, 'player'], [null, 'spectator'], [null, 'operator'], [null, 'display']] as const) {
+      const v = room.view(tok, role, T0);
+      assert.equal(v.prediction?.correct ?? null, null, `${label}: 맞았는지 공개 전에 나감`);
+      assert.equal(v.crowd ?? null, null, `${label}: 예측 집계가 공개 전에 나감`);
+    }
+  };
+  check('뉴스', revealed); noVerdict('뉴스');
+  next(room); check('주문', revealed); noVerdict('주문');
   room.tick(room.s.phaseEndsAt!);
   assert.equal(room.s.phase, 'settling');
   const before = room.view(a, 'player', 0);
   assert.equal(before.stocks[0].history.length, 0, '정산 중에는 새 종료가가 나가지 않음');
   assert.equal(before.lastResult, null);
-  check('정산 중', revealed);
+  check('정산 중', revealed); noVerdict('정산 중');
   room.beginRecap(T0);
   const rec = room.view(a, 'player', 0);
   assert.ok(rec.news[0].cards[0].result);
@@ -414,7 +423,7 @@ test('행동 리포트: 기록이 부족하면 안내 문구, 충분하면 계�
   }
   assert.equal(room.s.settled.length, 5);
   const full = room.view(a, 'player', 0).report!.metrics;
-  assert.deepEqual(full.map(m => m.key), ['disposition', 'herding', 'overreaction']);
+  assert.deepEqual(full.map(m => m.key), ['disposition', 'herding', 'overreaction', 'overconfidence']);
   assert.equal(full.find(m => m.key === 'herding')!.available, true);
   assert.equal(full.find(m => m.key === 'overreaction')!.available, true);
   const none = room.view(idle, 'player', 0).report!.metrics;
@@ -553,4 +562,56 @@ test('대기실 시작 조건은 지금 접속 중인 사람으로 센다', () =
   assert.equal(room.canStart(a), false);
   room.join(b, T0 + 3);
   assert.equal(room.canStart(a), true);
+});
+
+test('결과 예측: 뉴스·주문 시간에만 고르고, 결과 공개 때 채점과 집계가 나온다', () => {
+  const { room, a, b } = setup();
+  room.start(T0);
+  assert.equal(room.s.phase, 'news');
+  /* 뉴스 시간에 고르고 주문 시간에 바꿀 수 있습니다. 확신도는 50·70·90만 */
+  assert.equal(room.predict(a, 'up', 70, T0), true);
+  assert.equal(room.predict(a, 'up', 60, T0), false);
+  assert.equal(room.predict(a, 'sideways' as 'up', 70, T0), false);
+  assert.equal(room.predict('nobody', 'up', 70, T0), false);
+  const va = room.view(a, 'player', T0).prediction!;
+  assert.deepEqual([va.choice, va.confidence, va.open, va.correct], ['up', 70, true, null]);
+  assert.equal(room.view(null, 'spectator', T0).prediction, null, '관전자에게는 예측 칸이 없음');
+  const end = toTrade(room);
+  assert.equal(room.predict(a, 'down', 90, end), true, '주문 시간에는 바꿀 수 있음');
+  assert.equal(room.predict(b, 'up', 50, end), true);
+  /* 다른 사람의 선택은 내 화면에 나오지 않습니다 */
+  assert.equal(room.view(a, 'player', end).prediction!.choice, 'down');
+  assert.equal(room.view(b, 'player', end).prediction!.choice, 'up');
+  room.tick(room.s.phaseEndsAt!);
+  assert.equal(room.predict(a, 'up', 90, room.s.phaseEndsAt ?? end + 5000), false, '정산이 시작되면 못 바꿈');
+  room.beginRecap(room.s.phaseEndsAt ?? end + 5000);
+  const first = room.s.plan.rounds[0].stages[0];
+  const beat = ARCS.flatMap(x => x.stages).find(s => s.id === first.stageId)!.outcomes.find(o => o.id === first.outcomeId)!.beat;
+  const ra = room.view(a, 'player', T0).prediction!, rb = room.view(b, 'player', T0).prediction!;
+  assert.equal(ra.correct, !beat);
+  assert.equal(rb.correct, beat);
+  assert.equal(ra.open, false);
+  const crowd = room.view(null, 'display', T0).crowd!;
+  assert.deepEqual(crowd, { up: 1, down: 1, beat });
+});
+
+test('결과 예측이 3건 이상이면 판 끝 리포트에 정답률과 과신이 나온다', () => {
+  const { room, a } = setup({ settings: { level: 'pro', rounds: 3 } });
+  room.start(T0);
+  let hits = 0;
+  while (room.s.status === 'playing') {
+    if (room.s.phase === 'news') {
+      const first = room.s.plan.rounds[room.s.round - 1].stages[0];
+      const beat = ARCS.flatMap(x => x.stages).find(s => s.id === first.stageId)!.outcomes.find(o => o.id === first.outcomeId)!.beat;
+      /* 첫 라운드만 일부러 틀립니다 */
+      const right = room.s.round !== 1;
+      if (right) hits++;
+      assert.equal(room.predict(a, (beat === right) ? 'up' : 'down', 90, room.s.phaseEndsAt! - 1), true);
+    }
+    next(room);
+  }
+  const m = room.view(a, 'player', T0).report!.metrics.find(x => x.key === 'overconfidence')!;
+  assert.equal(m.available, true);
+  assert.ok(m.value.startsWith(`정답 ${hits}/3`), m.value);
+  assert.ok(m.text.includes('더 자신 있게'), '확신도 90% · 정답률 67%면 과신');
 });

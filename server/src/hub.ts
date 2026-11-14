@@ -270,6 +270,7 @@ export class Hub {
         return;
       }
       case 'card': if (room.answerCard(c.token ?? '', m.choice, now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
+      case 'predict': if (room.predict(c.token ?? '', m.choice, m.confidence, now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
       case 'rematch': {
         if (room.s.status !== 'finished') return;
         /* 운영자 방은 운영자만, 그 밖의 방은 참가자 누구나 다음 판을 엽니다. */

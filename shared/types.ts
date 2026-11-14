@@ -82,6 +82,17 @@ export interface StockView {
   /** 변동성 완화장치(VI)로 멈춘 동안 남은 초. 멈추지 않았으면 없음 */
   haltLeft?: number;
 }
+/** 결과 예측. 이번 라운드 첫 뉴스의 결과가 시장 기대보다 좋을지 고릅니다.
+    correct는 결과 공개(recap) 전에는 늘 null입니다. 결말 자체는 담지 않습니다. */
+export interface PredictionView {
+  stageId: string; headline: string;
+  choice: 'up' | 'down' | null; confidence: number | null;
+  /** 지금 고르거나 바꿀 수 있는지(뉴스 시간과 주문 시간) */
+  open: boolean;
+  correct: boolean | null;
+}
+/** 결과 공개 뒤에만 채우는 예측 집계(대형 화면·결과 화면용). 누가 무엇을 골랐는지는 담지 않습니다. */
+export interface CrowdView { up: number; down: number; beat: boolean }
 export interface CardView {
   id: string; title: string; body: string; concept: string;
   options: { key: 'A' | 'B'; label: string }[];
@@ -145,6 +156,10 @@ export interface RoomView {
   /** 다음 라운드 발표 예정(일정 예고). 마지막 라운드에는 빈 배열 */
   schedule: ScheduleItem[];
   card: CardView | null;
+  /** 결과 예측. 참가자에게만, 판이 진행 중일 때만 */
+  prediction?: PredictionView | null;
+  /** 결과 공개(recap) 때만: 이번 라운드 예측 집계 */
+  crowd?: CrowdView | null;
   portfolio: Portfolio | null;
   lastResult: RoundResult | null;
   dividend?: DividendView | null;
@@ -162,6 +177,7 @@ export type ClientMsg =
   | { t: 'cancel'; requestId: string; code: StockCode }
   | { t: 'stop'; requestId: string; code: StockCode; stop: number | null; take: number | null }
   | { t: 'card'; choice: 'A' | 'B' }
+  | { t: 'predict'; choice: 'up' | 'down'; confidence: number }
   | { t: 'rename'; label: string }
   | { t: 'rematch' }
   | { t: 'leave' }

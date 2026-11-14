@@ -1,5 +1,5 @@
 /* 판이 끝난 뒤 개인에게만 보내는 리포트. 지표는 해당 판에서 관찰한 행동만 설명합니다. */
-import { START_CASH, stockOf } from '../../shared/rules';
+import { MIN_PREDICTIONS, START_CASH, stockOf } from '../../shared/rules';
 import type { FinalReport, Metric } from '../../shared/types';
 import { cardById } from './content';
 import type { GameRoom, Player } from './room';
@@ -37,6 +37,16 @@ export function buildMetrics(p: Player): Metric[] {
     const hit = followed.length ? followed.filter(b => b.beat).length / followed.length : 0;
     out.push({ ...over, available: true, value: `헤드라인 추종 ${pct(r)} · 적중 ${followed.length ? pct(hit) : '—'}`, text: r > .5 ? `이번 판에서는 매수 금액의 절반 이상을 좋아 보이는 헤드라인에 넣었어요. 그중 기대를 넘은 결과는 ${followed.length ? pct(hit) : '없음'}이었어요.` : '이번 판에서는 헤드라인과 다른 근거로 산 금액이 더 많았어요.' });
   } else out.push(missing(over));
+
+  /* 결과 예측과 과신: 결과 공개 전에 고른 확신도의 평균과 실제 정답률을 나란히 봅니다 */
+  const preds = Object.values(p.predictions ?? {}).filter(x => x.correct !== null);
+  const conf = { key: 'overconfidence', title: '예측과 과신', formula: '평균 확신도 − 실제 정답률. 확신도는 결과 공개 전에 고른 50·70·90%', minObservations: `예측 ${MIN_PREDICTIONS}건 이상` };
+  if (preds.length >= MIN_PREDICTIONS) {
+    const c = preds.reduce((a, x) => a + x.confidence, 0) / preds.length / 100;
+    const hits = preds.filter(x => x.correct).length, h = hits / preds.length;
+    out.push({ ...conf, available: true, value: `정답 ${hits}/${preds.length} (${pct(h)}) · 평균 확신도 ${pct(c)}`,
+      text: c - h > .1 ? '이번 판에서는 실제로 맞힌 것보다 더 자신 있게 예측했어요.' : c - h < -.1 ? '이번 판에서는 실제로 맞힌 것보다 조심스럽게 예측했어요.' : '이번 판에서는 확신한 만큼 맞혔어요.' });
+  } else out.push(missing(conf));
 
   return out;
 }

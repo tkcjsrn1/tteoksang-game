@@ -188,7 +188,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   }, [trigKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const stock = detail ? view.stocks.find(s => s.code === detail)! : null;
   const news = view.phase === 'news' || view.phase === 'trade'
-    ? <CurrentNews view={view} onOpen={setDetail} />
+    ? <CurrentNews view={view} onOpen={setDetail} send={send} />
     : null;
   return (
     <div className="game">

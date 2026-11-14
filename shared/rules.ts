@@ -33,6 +33,10 @@ export const LEVEL_NOTE: Record<Level, string> = {
   easy: '시장가로만 사고팝니다. 호가창·지정가·손절·익절은 숨깁니다',
   pro: '호가창·지정가·손절·익절까지 모두 씁니다'
 };
+/** 결과 예측 확신도(%) 선택지. 과신 지표 = 평균 확신도 − 실제 정답률 */
+export const CONFIDENCES = [50, 70, 90] as const;
+/** 과신 지표를 보여 주는 최소 예측 수 */
+export const MIN_PREDICTIONS = 3;
 export const isLevel = (v: unknown): v is Level => v === 'easy' || v === 'pro';
 /** 한 판에 나오는 종목 수 기본값 */
 export const STOCKS_PER_GAME = 10;
