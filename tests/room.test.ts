@@ -473,3 +473,30 @@ test('정원을 80명으로 열면 80명이 들어와 한 판을 끝까지 마�
   assert.ok(vals.every((x, i) => i === 0 || vals[i - 1] >= x), '평가액 내림차순');
   assert.equal(room.s.players.filter(p => p.cash < 0).length, 0, '현금이 음수인 참가자');
 });
+
+test('대기실에서 탭을 닫은 자리는 인원에서 빠지고, 꽉 차면 새 사람에게 넘어간다', () => {
+  const room = GameRoom.create({ code: '777777', mode: 'friend', now: T0, seed: 3, settings: { maxPlayers: 8 } });
+  const tokens = Array.from({ length: 8 }, (_, i) => room.join(null, T0 + i).token);
+  assert.equal(room.view(tokens[0], 'player', T0 + 10).humanCount, 8);
+  room.disconnect(tokens[3], T0 + 11);
+  /* 끊긴 자리는 대기실 인원에서 빠집니다 */
+  assert.equal(room.view(tokens[0], 'player', T0 + 12).humanCount, 7);
+  /* 정원이 찼어도 끊긴 자리가 있으면 새로 온 사람은 관전자가 아니라 참가자입니다 */
+  const late = room.join(null, T0 + 13);
+  assert.equal(late.role, 'player');
+  assert.equal(room.humans.length, 8);
+  assert.equal(room.player(tokens[3]), null);
+  /* 빈자리가 없으면 그때는 관전자입니다 */
+  assert.equal(room.join(null, T0 + 14).role, 'spectator');
+  /* 끊기지 않은 사람은 그대로 다시 들어옵니다 */
+  assert.equal(room.join(tokens[0], T0 + 15).role, 'player');
+});
+
+test('대기실 시작 조건은 지금 접속 중인 사람으로 센다', () => {
+  const { room, a, b } = setup();
+  assert.equal(room.canStart(a), true);
+  room.disconnect(b, T0 + 2);
+  assert.equal(room.canStart(a), false);
+  room.join(b, T0 + 3);
+  assert.equal(room.canStart(a), true);
+});
