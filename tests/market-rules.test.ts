@@ -1,7 +1,7 @@
 /* 실제 시장 규칙에서 가져온 것들: VI(변동성 완화장치), 발표 일정 예고, 난이도(쉬움·실전) */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { GameRoom } from '../server/src/room';
+import { GameRoom, gameCodes } from '../server/src/room';
 import { cleanSettings, VI_BP, VI_SECONDS, viDirection } from '../shared/rules';
 import { stageById } from '../server/src/content';
 import type { StockCode } from '../shared/types';
@@ -68,12 +68,14 @@ test('VI 발동: 그 종목만 멈추고 주문·손절·지정가가 모두 막
 
 test('VI는 한 라운드에 종목마다 한 번만 걸린다', () => {
   const { room, t } = trading(11);
-  forceVi(room, 'G01', 2, 1);
-  const first = room.s.live!.halts!.G01;
+  /* 판마다 종목이 달라서 이 판에 실제로 나온 종목으로 확인합니다 */
+  const C = gameCodes(room.s.plan)[0];
+  forceVi(room, C, 2, 1);
+  const first = room.s.live!.halts![C];
   room.tick(t + (2 + VI_SECONDS) * 1000);
-  assert.equal(room.haltLeft('G01'), 0);
-  forceVi(room, 'G01', 2 + VI_SECONDS + 2, -1);
-  assert.deepEqual(room.s.live!.halts!.G01, first, '두 번째는 걸리지 않음');
+  assert.equal(room.haltLeft(C), 0);
+  forceVi(room, C, 2 + VI_SECONDS + 2, -1);
+  assert.deepEqual(room.s.live!.halts![C], first, '두 번째는 걸리지 않음');
 });
 
 test('발표 일정: 다음 라운드 종목만 알려 주고 헤드라인·결과는 담지 않는다', () => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { GameRoom } from '../server/src/room';
+import { GameRoom, gameCodes } from '../server/src/room';
 import { ARCS } from '../server/src/content';
 import { FESTIVAL_MAX_PLAYERS, ROOM_OPTIONS, GROUPS, lowerLimit, stockOf, STOCKS, feeOf } from '../shared/rules';
 import type { StockCode } from '../shared/types';
@@ -113,17 +113,19 @@ test('지정가 예약: 변경에 실패하면 원래 예약을 유지하고, �
   assert.ok(r.fill && r.fill.price <= high && r.fill.price === room.markPrice('G02'));
 });
 test('끝까지 시세가 닿지 않은 예약은 마감 때 자동 취소되고 예약금이 풀린다', () => {
+  /* 판마다 종목이 달라서 이 판에 실제로 나온 종목으로 확인합니다 */
   const { room, a } = setup();
   const end = toTrade(room);
   const p = room.player(a)!;
-  const path = room.s.live!.paths.G03;
+  const C = gameCodes(room.s.plan)[0];
+  const path = room.s.live!.paths[C];
   const never = Math.floor((Math.min(...path) - 100) / 10) * 10;
-  assert.ok(never >= lowerLimit(room.s.prices.G03), '이 시드는 하한가까지 여유가 있음');
-  assert.equal(room.placeOrder(a, 'n1', 'G03', 'buy', 5, end, 'limit', never).ok, true);
+  assert.ok(never >= lowerLimit(room.s.prices[C]), '이 시드는 하한가까지 여유가 있음');
+  assert.equal(room.placeOrder(a, 'n1', C, 'buy', 5, end, 'limit', never).ok, true);
   const cash = p.cash;
   next(room);
-  assert.equal(p.orders.G03, undefined);
-  assert.equal(p.holdings.G03, undefined);
+  assert.equal(p.orders[C], undefined);
+  assert.equal(p.holdings[C], undefined);
   assert.equal(p.cash, cash);
 });
 test('시장가: 산 주식은 바로 팔 수 있고, 판 돈으로 바로 살 수 있다. 없는 주식은 못 판다', () => {
@@ -194,13 +196,15 @@ test('슬리피지는 큰 시장가 주문을 낸 사람에게만 적용되고 �
   const run = (bigQty: number) => {
     const { room, a, b } = setup({ seed: 11 });
     const t = toTrade(room);
-    const ref = room.markPrice('G03');
-    assert.equal(room.placeOrder(a, 'big', 'G03', 'buy', bigQty, t).ok, true);
-    assert.equal(room.placeOrder(b, 'small', 'G03', 'buy', 10, t).ok, true);
+    /* 900주를 살 수 있게 이 판에서 가장 싼 종목으로 확인합니다 */
+    const C = gameCodes(room.s.plan).sort((x, y) => room.markPrice(x) - room.markPrice(y))[0];
+    const ref = room.markPrice(C);
+    assert.equal(room.placeOrder(a, 'big', C, 'buy', bigQty, t).ok, true);
+    assert.equal(room.placeOrder(b, 'small', C, 'buy', 10, t).ok, true);
     const pa = room.player(a)!, pb = room.player(b)!;
-    const path = room.s.live!.paths.G03.slice();
+    const path = room.s.live!.paths[C].slice();
     next(room);
-    return { room, pa, pb, ref, path, h: room.s.history.G03[0] };
+    return { room, pa, pb, ref, path, C, h: room.s.history[C][0] };
   };
   const big = run(900), small = run(1);
   const fa = big.pa.fills[0], fb = big.pb.fills[0];
@@ -214,7 +218,7 @@ test('슬리피지는 큰 시장가 주문을 낸 사람에게만 적용되고 �
   assert.deepEqual(big.path, small.path);
   assert.equal(big.h.closePrice, small.h.closePrice);
   /* 거래량: 참가자 + NPC 체결 수량 */
-  const npcQty = (room: GameRoom) => room.s.players.filter(p => p.kind === 'npc').flatMap(p => p.fills).filter(f => f.code === 'G03').reduce((x, f) => x + f.qty, 0);
+  const npcQty = (room: GameRoom) => room.s.players.filter(p => p.kind === 'npc').flatMap(p => p.fills).filter(f => f.code === big.C).reduce((x, f) => x + f.qty, 0);
   assert.equal(big.h.volume, 900 + 10 + npcQty(big.room));
   assert.equal(big.h.buyQty! + big.h.sellQty!, big.h.volume);
   /* 고가·저가는 장중 시세와 종료가에서 나옵니다(연출 아님) */

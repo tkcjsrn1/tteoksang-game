@@ -15,7 +15,7 @@ export { STOCKS_PER_GAME };
 
 /** 이번 판 사건이 다루거나 결과로 움직이는 종목은 반드시 넣고, 그 업종의 같은 업종 종목을 한 개씩 먼저 고른 뒤
     나머지를 무작위로 채웁니다. 업종 동조화를 화면에서 바로 볼 수 있게 하려는 순서입니다.
-    (업종 10개에 모두 사건이 생긴 뒤로, 대장주 전부가 아니라 이번 판 사건의 종목만 넣습니다.) */
+    (모든 업종에 사건이 생긴 뒤로, 대장주 전부가 아니라 이번 판 사건의 종목만 넣습니다.) */
 export function pickStocks(arcs: Arc[], rnd: () => number, count = STOCKS_PER_GAME): StockCode[] {
   const must = [...new Set(arcs.flatMap(a => a.stages.flatMap(st =>
     [...st.targets, ...st.outcomes.flatMap(o => o.impacts.map(i => i.code))])))];
