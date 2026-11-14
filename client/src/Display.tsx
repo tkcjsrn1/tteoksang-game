@@ -55,7 +55,8 @@ function DisplayLobby({ view, isOp, start, error }: { view: RoomView; isOp: bool
   const [qr, setQr] = useState('');
   const { url, note } = useJoinUrl(view.code);
   useEffect(() => { QRCode.toDataURL(url, { margin: 1, width: 640 }).then(setQr).catch(() => setQr('')); }, [url]);
-  const humans = view.leaderboard.filter(p => p.kind === 'human');
+  /* 대기실에서 탭을 닫은 사람은 자리를 내놓으므로(#15) 접속 중인 사람만 보여 줍니다 */
+  const humans = view.leaderboard.filter(p => p.kind === 'human' && p.connected);
   const recent = humans.slice(-24).reverse();
   const cfg = MODES[view.mode];
   const ready = view.humanCount >= view.minToStart;

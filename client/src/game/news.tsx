@@ -169,18 +169,9 @@ export function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode)
       <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료·세금 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 ${won(r.slippage)}(체결가에 포함)` : ''}</p>
     </div>}
     {fire && <Confetti key={view.round} />}
-    {view.leaderboard.length > 1 && <div className="panel">
-      <p className="wallet-label">순위 변화</p>
-      <ol className="rank-moves">{view.leaderboard.map(l => { const move = l.prevRank - l.rank; return (
-        <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''} style={{ '--from': `${move * 100}%` } as CSSProperties}>
-          <span className="r">{l.rank}</span>
-          <b>{l.playerId === view.you.id ? `나 · ${l.label}` : l.label}</b>
-          <span className={`mv ${move > 0 ? 'up' : move < 0 ? 'down' : 'flat'}`} aria-label={move > 0 ? `${move}계단 올라감` : move < 0 ? `${-move}계단 내려감` : '순위 그대로'}>{move > 0 ? `▲${move}` : move < 0 ? `▼${-move}` : '–'}</span>
-          <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
-        </li>); })}</ol>
-    </div>}
     {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
     {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
+    {view.leaderboard.length > 1 && <RankMoves view={view} />}
     <div className="panel flush">
       <div className="list-head"><span>종목별 결과 · 눌러서 이유 보기</span></div>
       <div className="board">{movers.map(s => <button key={s.code} className="row" onClick={() => onOpen(s.code)}>
@@ -191,6 +182,29 @@ export function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode)
     </div>
     <div className="panel"><button className="ghost" onClick={() => navigate(lessonLink(view))}>이 변동을 읽는 법 (차트 연습실)</button></div>
   </>);
+}
+/** 순위 변화. 사람이 많은 방에서는 상위 5명과 나만 먼저 보여 주고 나머지는 펼쳐 봅니다.
+    결과 시간이 20초라 '기대 vs 실제' 설명이 긴 순위표에 밀리지 않게 설명 뒤에 둡니다. */
+const RANK_TOP = 5;
+function RankMoves({ view }: { view: RoomView }) {
+  const all = view.leaderboard;
+  const row = (l: RoomView['leaderboard'][number]) => { const move = l.prevRank - l.rank; return (
+    <li key={l.playerId} className={l.playerId === view.you.id ? 'me' : ''} style={{ '--from': `${move * 100}%` } as CSSProperties}>
+      <span className="r">{l.rank}</span>
+      <b>{l.playerId === view.you.id ? `나 · ${l.label}` : l.label}</b>
+      <span className={`mv ${move > 0 ? 'up' : move < 0 ? 'down' : 'flat'}`} aria-label={move > 0 ? `${move}계단 올라감` : move < 0 ? `${-move}계단 내려감` : '순위 그대로'}>{move > 0 ? `▲${move}` : move < 0 ? `▼${-move}` : '–'}</span>
+      <span className={`ret ${dir(l.returnPct)}`}>{pct(l.returnPct)}</span>
+    </li>); };
+  const short = all.length > RANK_TOP + 1;
+  const top = short ? all.slice(0, RANK_TOP) : all;
+  const me = short ? all.find((l, i) => i >= RANK_TOP && l.playerId === view.you.id) : undefined;
+  return (
+    <div className="panel">
+      <p className="wallet-label">순위 변화</p>
+      <ol className="rank-moves">{top.map(row)}{me && row(me)}</ol>
+      {short && <details className="more"><summary>전체 순위 {all.length}명 보기</summary><ol className="rank-moves">{all.map(row)}</ol></details>}
+    </div>
+  );
 }
 /** 사건 하나의 결과: 기대와 실제를 나란히, 주인공 종목의 등락을 막대로 나눠 보여 줍니다. */
 export function RecapNews({ card, result, stock }: { card: NewsCard; result: NewsResult; stock: StockView }) {

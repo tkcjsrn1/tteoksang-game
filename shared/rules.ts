@@ -166,7 +166,7 @@ export function perOf(code: StockCode, price: number): number | null {
 export const dividendYieldBp = (code: StockCode, price: number) => Math.round(fundOf(code).dps * 10000 / price);
 /** 배당 기준일 라운드(이 라운드 장 마감 때 가진 주식에 배당). 다음 라운드 시작 때 배당금 입금과 배당락. */
 /* ---------- 변동성 완화장치(VI) ----------
-   실제 정적 VI는 전일 종가 대비 ±10%에서 2분 단일가 매매로 바뀝니다.
+   실제 정적 VI는 기준가격 대비 ±10%에서 2분 단일가 매매로 바뀝니다.
    이 게임은 한 라운드가 짧아서, 시가 대비 ±10%에서 그 종목만 VI_SECONDS초 동안 거래를 멈춥니다. */
 export const VI_BP = 1000;
 export const VI_SECONDS = 15;

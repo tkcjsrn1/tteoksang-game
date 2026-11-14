@@ -101,8 +101,12 @@ export class Hub {
   }
 
   /* ---------- 타이머 ---------- */
+  /** 다음 타이머에서 방 전체에 한 번 보낼 방들(입장·퇴장이 몰릴 때 묶어 보내기) */
+  private later = new Set<GameRoom>();
   private loop() {
     const now = this.now();
+    for (const room of this.later) if (this.rooms.get(room.s.code) === room) this.broadcast(room);
+    this.later.clear();
     for (const room of this.rooms.values()) {
       if (this.busy.has(room.s.code)) continue;
       // 재시작 때 불러온 정산 중인 방은 계산을 되풀이하지 않고 저장부터 이어갑니다.
@@ -202,7 +206,7 @@ export class Hub {
       this.conns.delete(c);
       if (c.room && c.token && c.role === 'player') {
         const stillOn = [...this.conns].some(o => o.room === c.room && o.token === c.token);
-        if (!stillOn) { c.room.disconnect(c.token, this.now()); this.broadcast(c.room); }
+        if (!stillOn) { c.room.disconnect(c.token, this.now()); this.later.add(c.room); }
       }
     });
     ws.on('error', () => {});
@@ -228,7 +232,10 @@ export class Hub {
       /* 혼자 연습은 입장 즉시 시작합니다. */
       if (room.s.mode === 'solo' && room.s.status === 'lobby') room.start(now);
       this.dirty.add(room.s.code);
-      this.broadcast(room);
+      /* 들어온 사람에게는 바로 보내고, 나머지에게는 타이머(0.1초)에서 한 번에 모아 보냅니다.
+         80명이 몰려 들어올 때 입장 한 번마다 방 전체에 보내면 80×80번이 됩니다. */
+      this.sendView(c, now);
+      this.later.add(room);
       return;
     }
     const room = c.room;

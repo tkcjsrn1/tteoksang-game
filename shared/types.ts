@@ -133,6 +133,7 @@ export interface RoomView {
   /** 난이도. 쉬움(easy)에서는 호가창·지정가·손절·익절·슬리피지 숫자를 감춥니다. */
   level: Level;
   you: { id: string | null; label: string | null; role: Role; isHost: boolean };
+  /** 대기실에서는 지금 접속 중인 참가자 수, 시작한 뒤에는 참가자 전체 수 */
   humanCount: number; maxPlayers: number; minToStart: number; startCash: number;
   /** 운영자가 진행하는 방이면 true. 참가자 중 방장이 없고, 시작·재대전은 운영자만 합니다 */
   operated: boolean;
