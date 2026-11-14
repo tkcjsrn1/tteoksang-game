@@ -21,7 +21,8 @@ export function coachTarget(view: RoomView): StockCode | null {
 
 /** 지금 보여 줄 단계. 안내가 끝났거나 해당 없으면 null */
 export function coachStep(view: RoomView, openStock: StockCode | null, watching = false): CoachStep | null {
-  if (view.mode !== 'solo' || view.status !== 'playing' || view.round !== 1 || view.you.role !== 'player') return null;
+  /* 실전을 고른 사람은 이미 알고 고른 것이라 안내를 띄우지 않습니다 */
+  if (view.mode !== 'solo' || view.level === 'pro' || view.status !== 'playing' || view.round !== 1 || view.you.role !== 'player') return null;
   const target = coachTarget(view);
   const name = view.stocks.find(s => s.code === target)?.name ?? '뉴스에 나온 종목';
   const hasOrder = (view.portfolio?.orders.length ?? 0) > 0 || !!view.portfolio?.fillLog.some(f => f.round === view.round);
@@ -29,8 +30,7 @@ export function coachStep(view: RoomView, openStock: StockCode | null, watching 
   if (view.phase === 'news') return step(1, '시장 기대와 단서를 읽어요',
     '“시장 기대”가 기준점입니다. 실제 결과가 이보다 좋으면 오르고, 나쁘면 내립니다. “단서”는 결과가 어느 쪽일지 알려 주는 힌트예요. 밑줄 친 낱말을 누르면 뜻이 나옵니다.');
   if (view.phase === 'trade' && hasOrder) return step(4, '주문 완료! 시세를 지켜봐요',
-    '가격은 1초마다 움직이고, 마감 때 뉴스의 실제 결과가 공개되면 크게 움직입니다. 그 전까지 더 사거나 팔 수 있어요.'
-    + (view.level === 'pro' ? ' 원하는 가격을 정해 걸어 두는 “지정가” 주문도 있어요.' : ''));
+    '가격은 1초마다 움직이고, 마감 때 뉴스의 실제 결과가 공개되면 크게 움직입니다. 그 전까지 더 사거나 팔 수 있어요.');
   if (view.phase === 'trade' && !openStock && watching) return step(4, '시세를 지켜봐요',
     '장 마감 뒤 시장 기대와 실제 결과를 비교해 보세요. 마감 전에는 언제든 종목을 다시 열어 주문할 수 있어요.');
   if (view.phase === 'trade' && openStock) return step(3, '매수할지 지켜볼지 골라요',
