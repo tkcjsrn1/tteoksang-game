@@ -240,9 +240,11 @@ test('재접속, 중복 요청, 관전, 방장 이탈', async () => {
   const { code } = await create({ mode: 'friend', seed: 12 });
   const a = await (await new Client().connect()).hello(code);
   const b = await (await new Client().connect()).hello(code);
-  await until(() => b.view!.humanCount === 2);
+  /* 시작 조건은 접속 중인 사람 수라서, a가 나가도 두 명이 남게 c를 둡니다 */
+  const c = await (await new Client().connect()).hello(code);
+  await until(() => b.view!.humanCount === 3);
   a.close();
-  await until(() => b.view!.you.isHost);
+  await until(() => b.view!.you.isHost && b.view!.humanCount === 2);
   b.send({ t: 'start' });
   const room = hub.rooms.get(code)!;
   await until(() => room.s.status === 'playing');
@@ -267,7 +269,7 @@ test('재접속, 중복 요청, 관전, 방장 이탈', async () => {
   b.close();
   await advance(room, [a3, spec]);
   assert.equal(a3.view!.phase, 'news', '방장이 나가도 진행');
-  [a3, spec].forEach(c => c.close());
+  [a3, spec, c].forEach(x => x.close());
 });
 
 test('혼자 연습은 즉시 시작하고, 없어진 모드로는 방이 친구 대전으로 만들어진다', async () => {

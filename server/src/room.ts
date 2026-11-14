@@ -82,6 +82,8 @@ export class GameRoom {
   /** 이번 판 종목 정의(업종 순서). */
   get stocks(): StockDef[] { return gameCodes(this.s.plan).map(stockOf); }
   get humans() { return this.s.players.filter(p => p.kind === 'human'); }
+  /** 지금 접속 중인 참가자 수. 대기실 인원 표시와 시작 조건에 씁니다. */
+  get online() { return this.humans.filter(p => p.connected).length; }
   get config() { return { ...MODES[this.s.mode], ...this.s.settings }; }
   player(tokenValue: string | null | undefined) { return tokenValue ? this.s.players.find(p => p.token === tokenValue) ?? null : null; }
 
@@ -90,6 +92,11 @@ export class GameRoom {
     const existing = this.player(tokenValue);
     if (existing) { existing.connected = true; this.fixHost(); return { token: existing.token, role: 'player', label: existing.label }; }
     if (tokenValue && this.s.spectators.includes(tokenValue)) return { token: tokenValue, role: 'spectator', label: null };
+    /* 대기실이 꽉 찼으면 접속이 끊긴 자리(탭을 닫은 사람)를 먼저 비웁니다. 80명 방에서 새로고침만으로 자리가 다 차는 것을 막습니다. */
+    if (this.s.status === 'lobby' && this.humans.length >= this.config.maxPlayers) {
+      const gone = this.humans.filter(p => !p.connected).sort((x, y) => x.joinedAt - y.joinedAt)[0];
+      if (gone) this.s.players = this.s.players.filter(x => x !== gone);
+    }
     if (this.s.status !== 'lobby' || this.humans.length >= this.config.maxPlayers) {
       const t = token(); this.s.spectators.push(t);
       return { token: t, role: 'spectator', label: null };
@@ -147,7 +154,7 @@ export class GameRoom {
 
   canStart(tokenValue: string | null | undefined) {
     if (this.s.status !== 'lobby') return false;
-    if (this.humans.length < this.config.minToStart) return false;
+    if (this.online < this.config.minToStart) return false;
     return this.player(tokenValue)?.id === this.s.hostId;
   }
   start(now: number) {
@@ -687,7 +694,7 @@ export class GameRoom {
       code: this.s.code, mode: this.s.mode, status: this.s.status, phase: this.s.phase, round: this.s.round, totalRounds: cfg.rounds,
       phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade, level: cfg.level,
       you: { id: p?.id ?? null, label: p?.label ?? null, role, isHost: !!p && p.id === this.s.hostId },
-      humanCount: this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
+      humanCount: this.s.status === 'lobby' ? this.online : this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: cfg.minToStart, startCash: START_CASH,
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */
       leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
       stocks, news: this.newsView(), schedule: this.scheduleView(), breakingAt, card: this.cardView(p),
