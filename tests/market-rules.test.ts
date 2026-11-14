@@ -137,3 +137,10 @@ test('기기에 저장한 설정: 난이도는 easy·pro만 받는다', () => {
   assert.deepEqual(cleanSettings('{"level":"hard"}'), {});
   assert.deepEqual(cleanSettings('{"level":1}'), {});
 });
+
+test('기기에 저장한 설정: 정원은 고를 수 있는 값만 받는다', () => {
+  assert.deepEqual(cleanSettings('{"maxPlayers":80}'), { maxPlayers: 80 });
+  assert.deepEqual(cleanSettings('{"maxPlayers":8}'), { maxPlayers: 8 });
+  assert.deepEqual(cleanSettings('{"maxPlayers":7}'), {});      // 목록에 없는 값
+  assert.deepEqual(cleanSettings('{"maxPlayers":"80"}'), {});   // 숫자가 아님
+});
