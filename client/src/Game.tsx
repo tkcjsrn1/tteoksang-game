@@ -41,7 +41,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
       {qr && <img className="qr" src={qr} alt="입장 QR 코드" width="180" height="180" />}
       {note !== 'ok' && <p className="hint">{joinNote(note)}</p>}
       <button className="ghost" onClick={copy}>초대 링크 복사</button>
-      <dl className="kv">
+      <dl className="kv rows">
         <dt>내 이름</dt><dd>{view.you.role === 'player' ? <NameEditor view={view} send={send} /> : '관전 중'}</dd>
         <dt>시작 자금</dt><dd className="num">{won(view.startCash)}</dd>
         <dt>진행</dt><dd>{view.stocks.length}종목 · {view.totalRounds}라운드 · 뉴스 {cfg.news}초, 장 {view.tradeSeconds ?? cfg.trade}초, 결과 {cfg.recap}초</dd>
