@@ -9,7 +9,7 @@
 
 ![Node 22+](https://img.shields.io/badge/node-22%2B-3182F6)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)
-![tests](https://img.shields.io/badge/tests-passing-1F9D5C)
+[![CI](https://github.com/tkcjsrn1/tteoksang-game/actions/workflows/ci.yml/badge.svg)](https://github.com/tkcjsrn1/tteoksang-game/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/license-MIT-8B95A1)
 
 <img src="docs/screenshots/home.png" width="180" alt="홈 화면"> <img src="docs/screenshots/news.png" width="180" alt="뉴스와 업종별 종목"> <img src="docs/screenshots/order.png" width="180" alt="주문 화면과 슬리피지"> <img src="docs/screenshots/result.png" width="180" alt="라운드 결과와 봉 재생">
