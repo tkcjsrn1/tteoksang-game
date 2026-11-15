@@ -7,6 +7,7 @@ import { buzz, play, useCountUp } from '../fx';
 import { Rich, TermLink } from '../glossary/GlossaryContext';
 import { arrow, bpText, CandleReplay, Confetti, dir, Disclaimer, pct, pctBp, signedWon, StockAvatar, won } from '../ui';
 import { intradayBp } from '../live';
+import { CONFIDENCES } from '../../../shared/rules';
 import { lessonLink, Sheet } from './parts';
 
 export function NewsBody({ card, result, compact = false, action }: { card: NewsCard; result: NewsResult | null; compact?: boolean; action?: React.ReactNode }) {
@@ -45,14 +46,48 @@ export function NewsBody({ card, result, compact = false, action }: { card: News
     </article>
   );
 }
-export function CurrentNews({ view, onOpen }: { view: RoomView; onOpen?: (code: StockCode) => void }) {
+export function CurrentNews({ view, onOpen, send }: { view: RoomView; onOpen?: (code: StockCode) => void; send?: (m: ClientMsg) => void }) {
   const now = view.news[view.news.length - 1];
   if (!now) return null;
   return <div className="panel">{now.cards.map(({ card }, i) => {
     const stock = i === 0 && onOpen ? view.stocks.find(s => s.code === card.targets[0]) : null;
     return <NewsBody key={card.stageId} card={card} result={null} compact
       action={stock && onOpen && <button className="ghost blue" onClick={() => onOpen(stock.code)}>{stock.name} 종목 보기</button>} />;
-  })}</div>;
+  })}
+  {send && view.prediction?.open && <Predict view={view} send={send} />}
+  </div>;
+}
+/** 결과 예측. 뉴스를 읽고 결과가 시장 기대보다 좋을지 고릅니다. 점수와 상관없고, 판이 끝나면 정답률과 확신도를 비교합니다. */
+export function Predict({ view, send }: { view: RoomView; send: (m: ClientMsg) => void }) {
+  const p = view.prediction!;
+  const pick = (choice: 'up' | 'down', confidence: number) => send({ t: 'predict', choice, confidence });
+  const conf = p.confidence ?? 70;
+  const two = view.news[view.news.length - 1]?.cards.length > 1;
+  return (
+    <div className="predict" role="group" aria-label="결과 예측">
+      <p className="predict-q"><span className="chip">예측</span> {two ? '첫 번째 뉴스의 결과가' : '이 뉴스의 결과가'} 시장 기대보다 좋을까요?</p>
+      <div className="seg">
+        <button aria-pressed={p.choice === 'up'} onClick={() => pick('up', conf)}>기대보다 좋다</button>
+        <button aria-pressed={p.choice === 'down'} onClick={() => pick('down', conf)}>기대보다 나쁘다</button>
+      </div>
+      {p.choice && <div className="seg conf" aria-label="확신도">{CONFIDENCES.map(c =>
+        <button key={c} aria-pressed={p.confidence === c} onClick={() => pick(p.choice!, c)}>{c === 50 ? '반반' : c === 70 ? '꽤 확신' : '거의 확실'} {c}%</button>)}</div>}
+      <p className="hint">{p.choice ? '결과 공개 전까지 바꿀 수 있어요. 점수와는 상관없어요.' : '점수와는 상관없어요. 판이 끝나면 내 정답률을 보여 드려요.'}</p>
+    </div>
+  );
+}
+/** 결과 시간: 내 예측이 맞았는지와 참가자 전체가 어떻게 골랐는지 */
+function PredictResult({ view }: { view: RoomView }) {
+  const p = view.prediction, c = view.crowd;
+  if (!p?.choice && !c) return null;
+  const total = c ? c.up + c.down : 0;
+  const upPct = total ? Math.round(c!.up / total * 100) : 0;
+  return (
+    <div className={`panel predict-result ${p?.correct ? 'hit' : p?.correct === false ? 'miss' : ''}`}>
+      {p?.choice && p.correct !== null && <p className="predict-verdict"><b>{p.correct ? '예측이 맞았어요' : '예측이 빗나갔어요'}</b> · {p.choice === 'up' ? '기대보다 좋다' : '기대보다 나쁘다'}, 확신 {p.confidence}%</p>}
+      {c && total > 1 && <p className="hint">참가자 {total}명 중 {upPct}%가 '기대보다 좋다'를 골랐고, 결과는 기대보다 {c.beat ? '좋았어요' : '나빴어요'}.</p>}
+    </div>
+  );
 }
 /** 내 투자 행동 리포트. 관찰이 모자라 계산하지 못한 지표는 카드로 늘어놓지 않고 한 줄로 줄입니다. */
 
@@ -169,6 +204,7 @@ export function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode)
       <p className="hint">{r.best ? `${r.best.name} ${signedWon(r.best.won)}` : '보유 종목 없음'}{r.fees ? ` · 수수료·세금 −${won(r.fees)}` : ''}{r.slippage ? ` · 슬리피지 ${won(r.slippage)}(체결가에 포함)` : ''}</p>
     </div>}
     {fire && <Confetti key={view.round} />}
+    <PredictResult view={view} />
     {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
     {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
     {view.leaderboard.length > 1 && <RankMoves view={view} />}

@@ -125,6 +125,11 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
   await order.getByRole('button', { name: '닫기', exact: true }).click();
   await order.waitFor({ state: 'detached' });
   await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
+  /* 결과 예측: 뉴스 시간에 고르고, 고르면 확신도가 나옵니다 */
+  const predict = page.getByRole('group', { name: '결과 예측' });
+  await predict.getByRole('button', { name: '기대보다 좋다' }).click();
+  await predict.getByRole('button', { name: /거의 확실/ }).click();
+  await predict.getByRole('button', { name: /거의 확실/ }).and(page.locator('[aria-pressed="true"]')).waitFor();
   ok(await page.locator('.sector-head').count() >= 1, '업종 머리줄 없음');
   await page.getByRole('button', { name: '모두 펼치기' }).click();
   ok(await page.locator('.sectors button.row').count() === 30, '종목이 30개가 아님');

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { GameRoom } from '../server/src/room';
+import { GameRoom, gameCodes } from '../server/src/room';
 import { ARCS } from '../server/src/content';
 import { FESTIVAL_MAX_PLAYERS, ROOM_OPTIONS, GROUPS, lowerLimit, stockOf, STOCKS, feeOf } from '../shared/rules';
 import type { StockCode } from '../shared/types';
@@ -113,17 +113,19 @@ test('지정가 예약: 변경에 실패하면 원래 예약을 유지하고, �
   assert.ok(r.fill && r.fill.price <= high && r.fill.price === room.markPrice('G02'));
 });
 test('끝까지 시세가 닿지 않은 예약은 마감 때 자동 취소되고 예약금이 풀린다', () => {
+  /* 판마다 종목이 달라서 이 판에 실제로 나온 종목으로 확인합니다 */
   const { room, a } = setup();
   const end = toTrade(room);
   const p = room.player(a)!;
-  const path = room.s.live!.paths.G03;
+  const C = gameCodes(room.s.plan)[0];
+  const path = room.s.live!.paths[C];
   const never = Math.floor((Math.min(...path) - 100) / 10) * 10;
-  assert.ok(never >= lowerLimit(room.s.prices.G03), '이 시드는 하한가까지 여유가 있음');
-  assert.equal(room.placeOrder(a, 'n1', 'G03', 'buy', 5, end, 'limit', never).ok, true);
+  assert.ok(never >= lowerLimit(room.s.prices[C]), '이 시드는 하한가까지 여유가 있음');
+  assert.equal(room.placeOrder(a, 'n1', C, 'buy', 5, end, 'limit', never).ok, true);
   const cash = p.cash;
   next(room);
-  assert.equal(p.orders.G03, undefined);
-  assert.equal(p.holdings.G03, undefined);
+  assert.equal(p.orders[C], undefined);
+  assert.equal(p.holdings[C], undefined);
   assert.equal(p.cash, cash);
 });
 test('시장가: 산 주식은 바로 팔 수 있고, 판 돈으로 바로 살 수 있다. 없는 주식은 못 판다', () => {
@@ -194,13 +196,15 @@ test('슬리피지는 큰 시장가 주문을 낸 사람에게만 적용되고 �
   const run = (bigQty: number) => {
     const { room, a, b } = setup({ seed: 11 });
     const t = toTrade(room);
-    const ref = room.markPrice('G03');
-    assert.equal(room.placeOrder(a, 'big', 'G03', 'buy', bigQty, t).ok, true);
-    assert.equal(room.placeOrder(b, 'small', 'G03', 'buy', 10, t).ok, true);
+    /* 900주를 살 수 있게 이 판에서 가장 싼 종목으로 확인합니다 */
+    const C = gameCodes(room.s.plan).sort((x, y) => room.markPrice(x) - room.markPrice(y))[0];
+    const ref = room.markPrice(C);
+    assert.equal(room.placeOrder(a, 'big', C, 'buy', bigQty, t).ok, true);
+    assert.equal(room.placeOrder(b, 'small', C, 'buy', 10, t).ok, true);
     const pa = room.player(a)!, pb = room.player(b)!;
-    const path = room.s.live!.paths.G03.slice();
+    const path = room.s.live!.paths[C].slice();
     next(room);
-    return { room, pa, pb, ref, path, h: room.s.history.G03[0] };
+    return { room, pa, pb, ref, path, C, h: room.s.history[C][0] };
   };
   const big = run(900), small = run(1);
   const fa = big.pa.fills[0], fb = big.pb.fills[0];
@@ -214,7 +218,7 @@ test('슬리피지는 큰 시장가 주문을 낸 사람에게만 적용되고 �
   assert.deepEqual(big.path, small.path);
   assert.equal(big.h.closePrice, small.h.closePrice);
   /* 거래량: 참가자 + NPC 체결 수량 */
-  const npcQty = (room: GameRoom) => room.s.players.filter(p => p.kind === 'npc').flatMap(p => p.fills).filter(f => f.code === 'G03').reduce((x, f) => x + f.qty, 0);
+  const npcQty = (room: GameRoom) => room.s.players.filter(p => p.kind === 'npc').flatMap(p => p.fills).filter(f => f.code === big.C).reduce((x, f) => x + f.qty, 0);
   assert.equal(big.h.volume, 900 + 10 + npcQty(big.room));
   assert.equal(big.h.buyQty! + big.h.sellQty!, big.h.volume);
   /* 고가·저가는 장중 시세와 종료가에서 나옵니다(연출 아님) */
@@ -343,14 +347,23 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
     }
   };
   const revealed = new Set<string>();
-  check('뉴스', revealed);
-  next(room); check('주문', revealed);
+  /* 결과 예측: 공개 전에는 맞았는지·집계가 어느 화면에도 나가지 않습니다 */
+  assert.equal(room.predict(a, 'up', 90, T0), true);
+  const noVerdict = (label: string) => {
+    for (const [tok, role] of [[a, 'player'], [null, 'spectator'], [null, 'operator'], [null, 'display']] as const) {
+      const v = room.view(tok, role, T0);
+      assert.equal(v.prediction?.correct ?? null, null, `${label}: 맞았는지 공개 전에 나감`);
+      assert.equal(v.crowd ?? null, null, `${label}: 예측 집계가 공개 전에 나감`);
+    }
+  };
+  check('뉴스', revealed); noVerdict('뉴스');
+  next(room); check('주문', revealed); noVerdict('주문');
   room.tick(room.s.phaseEndsAt!);
   assert.equal(room.s.phase, 'settling');
   const before = room.view(a, 'player', 0);
   assert.equal(before.stocks[0].history.length, 0, '정산 중에는 새 종료가가 나가지 않음');
   assert.equal(before.lastResult, null);
-  check('정산 중', revealed);
+  check('정산 중', revealed); noVerdict('정산 중');
   room.beginRecap(T0);
   const rec = room.view(a, 'player', 0);
   assert.ok(rec.news[0].cards[0].result);
@@ -410,7 +423,7 @@ test('행동 리포트: 기록이 부족하면 안내 문구, 충분하면 계�
   }
   assert.equal(room.s.settled.length, 5);
   const full = room.view(a, 'player', 0).report!.metrics;
-  assert.deepEqual(full.map(m => m.key), ['disposition', 'herding', 'overreaction']);
+  assert.deepEqual(full.map(m => m.key), ['disposition', 'herding', 'overreaction', 'overconfidence']);
   assert.equal(full.find(m => m.key === 'herding')!.available, true);
   assert.equal(full.find(m => m.key === 'overreaction')!.available, true);
   const none = room.view(idle, 'player', 0).report!.metrics;
@@ -549,4 +562,56 @@ test('대기실 시작 조건은 지금 접속 중인 사람으로 센다', () =
   assert.equal(room.canStart(a), false);
   room.join(b, T0 + 3);
   assert.equal(room.canStart(a), true);
+});
+
+test('결과 예측: 뉴스·주문 시간에만 고르고, 결과 공개 때 채점과 집계가 나온다', () => {
+  const { room, a, b } = setup();
+  room.start(T0);
+  assert.equal(room.s.phase, 'news');
+  /* 뉴스 시간에 고르고 주문 시간에 바꿀 수 있습니다. 확신도는 50·70·90만 */
+  assert.equal(room.predict(a, 'up', 70, T0), true);
+  assert.equal(room.predict(a, 'up', 60, T0), false);
+  assert.equal(room.predict(a, 'sideways' as 'up', 70, T0), false);
+  assert.equal(room.predict('nobody', 'up', 70, T0), false);
+  const va = room.view(a, 'player', T0).prediction!;
+  assert.deepEqual([va.choice, va.confidence, va.open, va.correct], ['up', 70, true, null]);
+  assert.equal(room.view(null, 'spectator', T0).prediction, null, '관전자에게는 예측 칸이 없음');
+  const end = toTrade(room);
+  assert.equal(room.predict(a, 'down', 90, end), true, '주문 시간에는 바꿀 수 있음');
+  assert.equal(room.predict(b, 'up', 50, end), true);
+  /* 다른 사람의 선택은 내 화면에 나오지 않습니다 */
+  assert.equal(room.view(a, 'player', end).prediction!.choice, 'down');
+  assert.equal(room.view(b, 'player', end).prediction!.choice, 'up');
+  room.tick(room.s.phaseEndsAt!);
+  assert.equal(room.predict(a, 'up', 90, room.s.phaseEndsAt ?? end + 5000), false, '정산이 시작되면 못 바꿈');
+  room.beginRecap(room.s.phaseEndsAt ?? end + 5000);
+  const first = room.s.plan.rounds[0].stages[0];
+  const beat = ARCS.flatMap(x => x.stages).find(s => s.id === first.stageId)!.outcomes.find(o => o.id === first.outcomeId)!.beat;
+  const ra = room.view(a, 'player', T0).prediction!, rb = room.view(b, 'player', T0).prediction!;
+  assert.equal(ra.correct, !beat);
+  assert.equal(rb.correct, beat);
+  assert.equal(ra.open, false);
+  const crowd = room.view(null, 'display', T0).crowd!;
+  assert.deepEqual(crowd, { up: 1, down: 1, beat });
+});
+
+test('결과 예측이 3건 이상이면 판 끝 리포트에 정답률과 과신이 나온다', () => {
+  const { room, a } = setup({ settings: { level: 'pro', rounds: 3 } });
+  room.start(T0);
+  let hits = 0;
+  while (room.s.status === 'playing') {
+    if (room.s.phase === 'news') {
+      const first = room.s.plan.rounds[room.s.round - 1].stages[0];
+      const beat = ARCS.flatMap(x => x.stages).find(s => s.id === first.stageId)!.outcomes.find(o => o.id === first.outcomeId)!.beat;
+      /* 첫 라운드만 일부러 틀립니다 */
+      const right = room.s.round !== 1;
+      if (right) hits++;
+      assert.equal(room.predict(a, (beat === right) ? 'up' : 'down', 90, room.s.phaseEndsAt! - 1), true);
+    }
+    next(room);
+  }
+  const m = room.view(a, 'player', T0).report!.metrics.find(x => x.key === 'overconfidence')!;
+  assert.equal(m.available, true);
+  assert.ok(m.value.startsWith(`정답 ${hits}/3`), m.value);
+  assert.ok(m.text.includes('더 자신 있게'), '확신도 90% · 정답률 67%면 과신');
 });

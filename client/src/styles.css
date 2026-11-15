@@ -678,3 +678,20 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
   .d-clock { margin-left: 0; justify-items: start; }
 }
 @media (prefers-reduced-motion: reduce) { .d-joined li { animation: none; } }
+
+/* 결과 예측: 뉴스 카드 아래에 붙습니다. 맞힘·틀림은 오름·내림 색을 쓰지 않습니다(빨강·파랑은 가격 등락 전용). */
+.predict { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.predict-q { font-weight: 700; line-height: 1.45; }
+.predict-q .chip { margin-right: 4px; }
+.predict .seg.conf button { font-size: 13px; padding: 8px 4px; }
+.predict-result { display: flex; flex-direction: column; gap: 4px; }
+.predict-result.hit { border-left: 4px solid var(--led); }
+.predict-result.miss { border-left: 4px solid var(--faint); }
+.predict-verdict b { font-weight: 800; }
+/* 대형 화면: 결과 공개 뒤 참가자 예측 집계 */
+.d-crowd { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
+.d-crowd-bar { display: flex; height: 48px; border-radius: 12px; overflow: hidden; background: var(--line); font-weight: 700; font-size: 18px; }
+.d-crowd-bar span { display: flex; align-items: center; padding: 0 14px; white-space: nowrap; min-width: 0; overflow: hidden; }
+.d-crowd-bar span:first-child { background: var(--led); color: #fff; }
+.d-crowd-bar span:last-child { flex: 1; justify-content: flex-end; color: var(--fg); }
+.d-crowd-note { font-size: 22px; }

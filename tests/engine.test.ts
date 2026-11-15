@@ -4,7 +4,7 @@ import { aggregate, buildCandle, movingAverage } from '../shared/candles';
 import { chargeOf, checkOrder, computeClose, feeOf, GROUPS, lowerLimit, marketFill, maxBuyQty, MODES, quoteBook, stockOf, STOCKS, upperLimit, taxOf } from '../shared/rules';
 import { ARCS, CARDS } from '../server/src/content';
 import { buildPlan, STOCKS_PER_GAME } from '../server/src/plan';
-import { pickDiversified } from '../server/src/npc';
+import { NPC_RULES, pickDiversified } from '../server/src/npc';
 
 test('기획서 예시 계산: 12,400원 +780bp는 13,370원, +7.82%', () => {
   const b = computeClose(1, 12400, [{ stageId: 'x', label: 'L', bp: 900, reason: 'r' }], -50, -70);
@@ -188,10 +188,11 @@ test('모드별 라운드 구성과 변동 범위', () => {
     assert.ok(p.rounds.every(r => Math.abs(r.marketBp) <= 50 && (Object.entries(r.stockBp) as [`G${number}`, number][]).every(([c, x]) => Math.abs(x) <= stockOf(c).maxMoveBp)));
   }
 });
-test('종목 풀 50개, 업종 10개 × 5종목, 판마다 기본 10종목', () => {
-  assert.equal(STOCKS.length, 50);
-  assert.equal(new Set(STOCKS.map(s => s.code)).size, 50);
-  assert.equal(new Set(STOCKS.map(s => s.name)).size, 50);
+test('종목 풀 60개, 업종 12개 × 5종목, 판마다 기본 10종목', () => {
+  assert.equal(STOCKS.length, 60);
+  assert.equal(new Set(STOCKS.map(s => s.code)).size, 60);
+  assert.equal(new Set(STOCKS.map(s => s.name)).size, 60);
+  assert.equal(Object.keys(GROUPS).length, 12);
   for (const [g, def] of Object.entries(GROUPS)) {
     const members = STOCKS.filter(s => s.group === g);
     assert.equal(members.length, 5, g);
@@ -270,4 +271,15 @@ test('기업 정보: 시가총액·PER·배당수익률·지수 계산', async (
   assert.equal(dividendYieldBp('G06', 10200), 343);
   /* 시작 가격 기준 PER은 3~60배 안(적자 제외) */
   for (const st of STOCKS) { const p = perOf(st.code, st.start); if (p !== null) assert.ok(p >= 3 && p <= 60, `${st.code} ${p}`); }
+});
+
+test('분산형 NPC는 업종이 많은 판에서도 첫 라운드에 현금보다 많이 사지 않는다', () => {
+  /* 종목 60개 판이면 업종이 12개라 15%씩 사면 180%가 되어 뒤쪽 주문이 전부 거절됐습니다 */
+  const prices = Object.fromEntries(STOCKS.map(s => [s.code, s.start])) as Record<`G${number}`, number>;
+  const cash = 10_000_000;
+  const orders = NPC_RULES.diversifier.decide({ round: 1, signals: {}, prices, lastChangeBp: {}, ctx: { cash, holdings: {}, orders: {} } });
+  assert.equal(orders.length, Object.keys(GROUPS).length);
+  const spend = orders.reduce((a, o) => a + o.qty * prices[o.code], 0);
+  assert.ok(spend <= cash * 0.9, `첫 라운드 매수 ${spend}원이 현금의 90%를 넘음`);
+  assert.ok(orders.every(o => o.qty > 0));
 });
