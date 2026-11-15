@@ -1,7 +1,7 @@
 /* 장중 시세 메시지(tick)를 화면 상태에 반영하는 계산을 확인합니다. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { applyTick, intradayBp } from '../client/src/live';
+import { applyTick, intradayBp, walletChange } from '../client/src/live';
 import { GameRoom } from '../server/src/room';
 
 const T0 = 1_000_000;
@@ -43,4 +43,26 @@ test('놓친 칸은 직전 값으로 채우고, 다른 라운드·다른 단계�
   assert.equal(applyTick(v, { t: 'tick', round: room.s.round + 1, k: 1, prices: { [g.code]: 1 } }), v);
   assert.equal(applyTick({ ...v, phase: 'recap' }, { t: 'tick', round: room.s.round, k: 1, prices: { [g.code]: 1 } })!.stocks[0].price, g.price);
   assert.equal(applyTick(null, { t: 'tick', round: 1, k: 1, prices: {} }), null);
+});
+
+test('내 평가액의 수익률은 원 금액과 같은 시점의 평가액으로 계산한다(직전 라운드 순위표 값이 아님)', () => {
+  const { room, tok, t } = trading();
+  let v = room.view(tok, 'player', t);
+  for (let k = 1; k <= 30; k++) {
+    room.tick(t + k * 1000);
+    const prices = Object.fromEntries(room.stocks.map(s => [s.code, room.markPrice(s.code)]));
+    v = applyTick(v, { t: 'tick', round: room.s.round, k, prices })!;
+  }
+  const me = v.leaderboard.find(l => l.playerId === v.you.id)!;
+  const w = walletChange(v, me);
+  /* 원 금액과 수익률이 같은 평가액에서 나와야 부호와 크기가 맞습니다 */
+  assert.equal(w.value, v.portfolio!.value);
+  assert.equal(w.diff, v.portfolio!.value - v.startCash);
+  assert.ok(Math.abs(w.pct - (w.value / v.startCash - 1) * 100) < 1e-9);
+  /* 장중에 가격이 움직이면 순위표의 수익률(직전 정산 기준)과 달라질 수 있습니다 */
+  if (v.portfolio!.value !== me.value) assert.notEqual(w.pct, me.returnPct);
+  /* 포트폴리오가 없으면(관전 등) 순위표 값을 씁니다 */
+  const noPf = walletChange({ ...v, portfolio: null }, me);
+  assert.equal(noPf.value, me.value);
+  assert.equal(noPf.pct, me.returnPct);
 });

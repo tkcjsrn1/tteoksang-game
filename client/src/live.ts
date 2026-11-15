@@ -1,6 +1,6 @@
 /* 장중 시세 메시지(tick)를 화면 상태에 반영합니다. 서버는 1초마다 종목 가격만 보내고,
    여기서 종목 가격·장중 시세 목록·내 평가액을 다시 계산합니다. React와 떼어 두어 테스트합니다. */
-import type { RoomView, ServerMsg, StockView } from '../../shared/types';
+import type { LeaderRow, RoomView, ServerMsg, StockView } from '../../shared/types';
 
 type Tick = Extract<ServerMsg, { t: 'tick' }>;
 
@@ -20,6 +20,14 @@ export function applyTick(v: RoomView | null, m: Tick): RoomView | null {
   const holdings = pf.holdings.map(h => { const price = priceOf(h.code); return { ...h, price, pnl: h.qty * (price - h.avgCost) }; });
   const value = pf.cash + holdings.reduce((a, h) => a + h.qty * h.price, 0);
   return { ...v, stocks, portfolio: { ...pf, holdings, value, returnPct: (value / v.startCash - 1) * 100 } };
+}
+
+/** 내 평가액 칸의 숫자. 원 금액과 수익률을 같은 평가액에서 계산합니다.
+    순위표의 수익률은 직전 정산 기준이라 장중에 쓰면 원 금액과 부호가 어긋날 수 있습니다. */
+export function walletChange(v: RoomView, me: LeaderRow) {
+  const value = v.portfolio?.value ?? me.value;
+  const pct = v.portfolio ? v.portfolio.returnPct : me.returnPct;
+  return { value, diff: value - v.startCash, pct };
 }
 
 /** 오늘(이번 라운드) 등락률(bp). 시가 대비 지금 가격 */
