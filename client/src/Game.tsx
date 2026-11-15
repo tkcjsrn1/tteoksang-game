@@ -9,6 +9,7 @@ import { SettingsButton } from './Settings';
 import { TermLink } from './glossary/GlossaryContext';
 import { store, useRoom, useSecondsLeft, joinNote, useJoinUrl } from './net';
 import { defaultOpenGroups } from './sectors';
+import { walletChange } from './live';
 import { dir, Disclaimer, formatCountdown, pct, pctBp, signedWon, StockAvatar, useToast, won } from './ui';
 import { Coach, SectorBoard, StockRow, Sheet, TAB_ICON, type PlayProps, type Tab } from './game/parts';
 import { BreakingPopup, Card, CurrentNews, DividendNotice, NewsLog, Recap, SchedulePanel, ViNotice } from './game/news';
@@ -280,14 +281,14 @@ function HelpSheet({ phase, level, onClose, onReplayTutorial }: { phase: RoomVie
 function Standing({ view }: { view: RoomView }) {
   const me = view.leaderboard.find(l => l.playerId === view.you.id);
   if (!me) return <div className="panel"><ol className="mini-rank">{view.leaderboard.slice(0, 5).map(l => <li key={l.playerId}>{l.rank}위 {l.label} <span className={dir(l.returnPct)}>{pct(l.returnPct)}</span></li>)}</ol></div>;
-  const value = view.portfolio?.value ?? me.value;
+  const { value, diff, pct: ret } = walletChange(view, me);
   const other = view.leaderboard.find(l => l.playerId !== me.playerId && (me.rank === 1 ? l.rank >= 1 : l.rank === 1));
   const gap = other ? value - other.value : 0;
   return (
     <div className="panel standing">
       <p className="wallet-label"><TermLink id="portfolio-value">내 평가액</TermLink> · {view.leaderboard.length}명 중 {me.rank}위</p>
       <p className="wallet-value">{won(value)}</p>
-      <p className={`wallet-change ${dir(value - view.startCash)}`}>{signedWon(value - view.startCash)} ({pct(me.returnPct)})</p>
+      <p className={`wallet-change ${dir(diff)}`}>{signedWon(diff)} ({pct(ret)})</p>
       <div className="stat-pair">
         <div className="stat"><small><TermLink id="cash">주문 가능</TermLink></small><b>{won(view.portfolio?.available ?? 0)}</b></div>
         <div className="stat"><small>{me.rank === 1 ? '2위보다' : '1위와 차이'}</small><b className={dir(gap)}>{signedWon(gap)}</b></div>
