@@ -14,12 +14,13 @@ after(async () => { await hub.close(); });
 class Client {
   ws!: WebSocket; view: RoomView | null = null; token: string | null = null; role: string | null = null; acks = new Map<string, { ok: boolean; reason?: string; fill?: unknown }>(); ackCount = 0; errors: string[] = [];
   ticks: Extract<ServerMsg, { t: 'tick' }>[] = [];
+  views = 0;
   async connect() {
     this.ws = new WebSocket(`ws://localhost:${port}/ws`);
     await new Promise((r, j) => { this.ws.once('open', r); this.ws.once('error', j); });
     this.ws.on('message', d => {
       const m = JSON.parse(d.toString()) as ServerMsg;
-      if (m.t === 'view') this.view = m.view;
+      if (m.t === 'view') { this.view = m.view; this.views++; }
       if (m.t === 'welcome') { this.token = m.token; this.role = m.role; }
       if (m.t === 'ack') { this.acks.set(m.requestId, { ok: m.ok, reason: m.reason, fill: m.fill }); this.ackCount++; }
       if (m.t === 'tick') this.ticks.push(m);
@@ -407,4 +408,21 @@ test('오래 손대지 않은 방은 다시 켤 때 불러오지 않고 지운�
     await until(() => !store.rooms.has('666666'), 2000);
     assert.ok(store.rooms.has('555555'), '최근 방 기록을 지우면 안 됩니다');
   } finally { await hub.close(); }
+});
+
+test('대기실에서 여러 명이 한꺼번에 이름을 바꾸면 방 전체 화면은 모아서 보낸다', async () => {
+  /* 학술제처럼 사람이 많을 때 이름 바꾸기 한 번마다 방 전체에 보내면 n×n번이 됩니다(입장과 같은 문제) */
+  const { code } = await create({ mode: 'friend', settings: { maxPlayers: 20 } });
+  const n = 12;
+  const cs = await Promise.all(Array.from({ length: n }, () => new Client().connect()));
+  for (const c of cs) await c.hello(code);
+  await until(() => cs.every(c => c.view?.humanCount === n));
+  await new Promise(r => setTimeout(r, 250));
+  for (const c of cs) c.views = 0;
+  cs.forEach((c, i) => c.send({ t: 'rename', label: `참가자${i + 1}` }));
+  /* 모두가 모든 사람의 새 이름을 보게 됩니다 */
+  await until(() => cs.every(c => cs.every((_, i) => c.view!.leaderboard.some(l => l.label === `참가자${i + 1}`))));
+  const total = cs.reduce((a, c) => a + c.views, 0);
+  assert.ok(total < (n * n) / 2, `이름 바꾸기 ${n}번에 화면 ${total}번 전송(즉시 보내면 ${n * n}번)`);
+  for (const c of cs) c.close();
 });
