@@ -165,6 +165,8 @@ export interface RoomView {
   crowd?: CrowdView | null;
   /** 판이 끝난 뒤에만: 라운드별 참가자 예측 정답 수(사람만, 이름 없이 합계). 판을 하며 단서 읽기가 늘었는지 봅니다 */
   predictionTrend?: PredictionTrendRow[];
+  /** 결과 공개(recap) 때만, 운영자 방이 아닐 때: '다 봤어요'를 누른 사람 수(접속 중인 사람 기준)와 내가 눌렀는지 */
+  recapDone?: { done: number; total: number; me: boolean } | null;
   /** 발표·시연용 빠른 판이면 'demo' */
   pace?: Pace;
   portfolio: Portfolio | null;
@@ -189,6 +191,8 @@ export type ClientMsg =
   | { t: 'rematch' }
   /** 운영자만: 지금 단계(뉴스·장·결과)를 바로 끝내고 다음으로 넘깁니다. 시간이 다 된 것과 같은 경로로 진행합니다 */
   | { t: 'skip' }
+  /** 결과 화면 '다 봤어요'. 혼자 연습은 바로, 친구 대전은 접속 중인 사람 모두가 누르면 다음으로 넘어갑니다 */
+  | { t: 'done' }
   | { t: 'leave' }
   | { t: 'ping' };
 

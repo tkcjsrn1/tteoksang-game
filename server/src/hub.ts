@@ -276,6 +276,10 @@ export class Hub {
         if (c.role !== 'operator') return this.send(c, { t: 'error', reason: '운영자만 단계를 넘길 수 있습니다' });
         if (!room.skipPhase(now)) return this.send(c, { t: 'error', reason: '지금은 넘길 단계가 없습니다' });
         return;
+      case 'done':
+        /* 방 전체에 "3/5명 준비"가 보이도록 모아서 보냅니다. 모두 눌렀으면 다음 타이머에서 넘어갑니다 */
+        if (room.markDone(c.token, now)) { this.dirty.add(room.s.code); this.sendView(c, now); this.later.add(room); }
+        return;
       case 'rematch': {
         if (room.s.status !== 'finished') return;
         /* 운영자 방은 운영자만, 그 밖의 방은 참가자 누구나 다음 판을 엽니다. */

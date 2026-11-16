@@ -30,6 +30,8 @@ export interface Player {
   /** 라운드별 결과 예측. correct는 정산 때 채웁니다. 예전 저장 데이터에는 없습니다 */
   predictions?: Record<number, Prediction>;
   observations: Observation[];
+  /** 결과 화면에서 '다 봤어요'를 누른 마지막 라운드 */
+  doneRound?: number;
   /** 받은 배당금. 예전 저장 데이터에는 없습니다 */
   dividends?: DividendPaid[];
   /** 손절·익절 자동 주문. 예전 저장 데이터에는 없습니다 */
@@ -173,7 +175,29 @@ export class GameRoom {
     if (!p) return;
     p.connected = false;
     this.fixHost();
+    /* 결과 화면에서 기다리던 사람이 나가면, 남은 사람이 모두 '다 봤어요'를 눌렀는지 다시 봅니다 */
+    this.finishRecapIfAllDone(now);
     this.touch(now);
+  }
+  /** 결과 화면 '다 봤어요'. 운영자 방은 운영자가 진행하므로 받지 않습니다 */
+  markDone(tokenValue: string | null, now: number): boolean {
+    const p = this.player(tokenValue);
+    if (!p || p.kind !== 'human' || this.operated || this.s.status !== 'playing' || this.s.phase !== 'recap') return false;
+    p.doneRound = this.s.round;
+    this.finishRecapIfAllDone(now);
+    this.touch(now);
+    return true;
+  }
+  /** 접속 중인 사람이 모두 '다 봤어요'를 눌렀으면 결과 단계를 바로 끝냅니다(시간이 다 된 것과 같은 경로) */
+  private finishRecapIfAllDone(now: number) {
+    if (this.operated || this.s.status !== 'playing' || this.s.phase !== 'recap') return;
+    const on = this.humans.filter(h => h.connected);
+    if (on.length && on.every(h => h.doneRound === this.s.round)) this.skipPhase(now);
+  }
+  private recapDoneView(p: Player | null) {
+    if (this.operated || this.s.status !== 'playing' || this.s.phase !== 'recap') return null;
+    const on = this.humans.filter(h => h.connected);
+    return { done: on.filter(h => h.doneRound === this.s.round).length, total: on.length, me: !!p && p.doneRound === this.s.round };
   }
   /** 시작 전에 직접 나가면 자리를 비웁니다. 시작 후에는 접속만 끊기고 주문은 그대로 체결됩니다. */
   leave(tokenValue: string, now: number) {
@@ -772,6 +796,7 @@ export class GameRoom {
       leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
       stocks, news: this.newsView(), schedule: this.scheduleView(), breakingAt, card: this.cardView(p), prediction: this.predictionView(p, now), crowd: this.crowdView(),
       predictionTrend: this.s.status === 'finished' ? this.predictionTrend() : undefined, pace: this.s.settings?.pace,
+      recapDone: this.recapDoneView(p),
       portfolio: p ? {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),

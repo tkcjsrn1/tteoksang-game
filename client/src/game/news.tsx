@@ -188,7 +188,7 @@ export function NewsLog({ view }: { view: RoomView }) {
   return <div className="panel"><h2 className="h">뉴스</h2>{view.news.slice().reverse().map(r => <div key={r.round}><p className="round-tag">라운드 {r.round}</p>{r.cards.map(c => <NewsBody key={c.card.stageId} card={c.card} result={c.result} />)}</div>)}</div>;
 }
 
-export function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) => void }) {
+export function Recap({ view, onOpen, send }: { view: RoomView; onOpen: (c: StockCode) => void; send?: (m: ClientMsg) => void }) {
   const r = view.lastResult;
   const now = view.news[view.news.length - 1];
   const movers = view.stocks.slice().sort((a, b) => Math.abs(b.lastChangeBp ?? 0) - Math.abs(a.lastChangeBp ?? 0));
@@ -217,7 +217,27 @@ export function Recap({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode)
       </button>)}</div>
     </div>
     <div className="panel"><button className="ghost" onClick={() => navigate(lessonLink(view))}>이 변동을 읽는 법 (차트 연습실)</button></div>
+    {send && <RecapDone view={view} send={send} />}
   </>);
+}
+/** 결과 화면 '다 봤어요'. 화면 아래(탭 위)에 붙어 있어 어디까지 읽었든 바로 누를 수 있습니다.
+    혼자 연습은 바로 다음으로, 친구 대전은 접속 중인 사람 모두가 누르면 넘어갑니다. 운영자 방에는 없습니다(운영자가 진행). */
+function RecapDone({ view, send }: { view: RoomView; send: (m: ClientMsg) => void }) {
+  const d = view.recapDone;
+  if (!d || view.you.role !== 'player') return null;
+  const last = view.round >= view.totalRounds;
+  const where = last ? '최종 결과' : '다음 라운드';
+  const alone = d.total <= 1;
+  return (
+    <div className="recap-done" role="group" aria-label="결과 다 봤어요">
+      {d.me
+        ? <p className="hint" role="status">다른 참가자를 기다리는 중이에요 ({d.done}/{d.total}명). 모두 누르거나 시간이 다 되면 {where}로 넘어가요.</p>
+        : <>
+            <button className="cta" onClick={() => send({ t: 'done' })}>{alone ? `${where}로 ▶` : '다 봤어요 ▶'}</button>
+            {!alone && <p className="hint">{d.done}/{d.total}명이 다 봤어요. 모두 누르면 바로 {where}로 넘어가요.</p>}
+          </>}
+    </div>
+  );
 }
 /** 순위 변화. 사람이 많은 방에서는 상위 5명과 나만 먼저 보여 주고 나머지는 펼쳐 봅니다.
     결과 시간이 20초라 '기대 vs 실제' 설명이 긴 순위표에 밀리지 않게 설명 뒤에 둡니다. */

@@ -355,6 +355,7 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
       assert.equal(v.prediction?.correct ?? null, null, `${label}: 맞았는지 공개 전에 나감`);
       assert.equal(v.crowd ?? null, null, `${label}: 예측 집계가 공개 전에 나감`);
       assert.equal(v.predictionTrend, undefined, `${label}: 라운드별 정답 수는 판이 끝난 뒤에만`);
+      assert.equal(v.recapDone ?? null, null, `${label}: '다 봤어요' 집계는 결과 화면에서만`);
     }
   };
   check('뉴스', revealed); noVerdict('뉴스');
@@ -669,4 +670,48 @@ test('판이 끝나면 라운드별 예측 정답 수(사람만, 합계)를 보�
   assert.deepEqual(v.predictionTrend, answers.map((xs, i) => ({ round: i + 1, total: xs.length, correct: xs.filter(Boolean).length })));
   assert.deepEqual(v.predictionTrend!.map(r => r.total), [2, 1, 2]);
   assert.equal(JSON.stringify(v.predictionTrend).includes(room.player(a)!.id), false, '누가 맞혔는지는 담지 않음');
+});
+
+test("'다 봤어요': 혼자 연습은 바로, 친구 대전은 접속 중인 사람 모두가 누르면 다음 라운드로 넘어간다", () => {
+  /* 혼자 연습 */
+  const solo = GameRoom.create({ code: '818181', mode: 'solo', now: T0, seed: 2 });
+  const me = solo.join(null, T0).token;
+  solo.start(T0);
+  assert.equal(solo.markDone(me, T0), false, '뉴스 때는 못 누름');
+  while (solo.s.phase !== 'recap') next(solo);
+  const at = solo.s.phaseEndsAt! - 10_000;
+  assert.equal(solo.markDone(me, at), true);
+  solo.tick(at);
+  assert.deepEqual([solo.s.round, solo.s.phase], [2, 'news']);
+
+  /* 친구 대전: a만 누르면 그대로, b까지 누르면 넘어감 */
+  const { room, a, b } = setup();
+  room.start(T0);
+  while (room.s.phase !== 'recap') next(room);
+  const t = room.s.phaseEndsAt! - 10_000;
+  assert.equal(room.markDone(a, t), true);
+  room.tick(t);
+  assert.equal(room.s.phase, 'recap', '한 명만 눌렀으면 기다림');
+  assert.deepEqual(room.view(a, 'player', t).recapDone, { done: 1, total: 2, me: true });
+  assert.deepEqual(room.view(b, 'player', t).recapDone, { done: 1, total: 2, me: false });
+  assert.equal(room.markDone(b, t), true);
+  room.tick(t);
+  assert.deepEqual([room.s.round, room.s.phase], [2, 'news']);
+
+  /* 누른 사람만 남고 나머지가 나가면 넘어감 */
+  while (room.s.phase !== 'recap') next(room);
+  const t2 = room.s.phaseEndsAt! - 10_000;
+  room.markDone(a, t2);
+  room.disconnect(b, t2);
+  room.tick(t2);
+  assert.deepEqual([room.s.round, room.s.phase], [3, 'news']);
+});
+
+test("운영자 방에서는 '다 봤어요'를 받지 않는다(운영자가 진행)", () => {
+  const room = GameRoom.create({ code: '828282', mode: 'friend', now: T0, seed: 2, operated: true });
+  const a = room.join(null, T0).token;
+  room.start(T0);
+  while (room.s.phase !== 'recap') next(room);
+  assert.equal(room.markDone(a, room.s.phaseEndsAt! - 1000), false);
+  assert.equal(room.view(a, 'player', T0).recapDone, null);
 });
