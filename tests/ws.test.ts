@@ -89,7 +89,7 @@ test('혼자 연습은 선택한 종목 수·라운드·장 시간을 적용하�
 test('범위를 벗어난 게임 설정은 방을 만들기 전에 거절한다', async () => {
   const count = hub.rooms.size;
   /* 정원(maxPlayers)은 친구 대전에만 있는 설정입니다. 혼자 연습에 보내면 거절합니다 */
-  for (const settings of [{ stocks: 31 }, { rounds: '5' }, { trade: 0 }, { unknown: 1 }, { level: 'hard' }, { level: 1 }, { maxPlayers: 80 }, null]) {
+  for (const settings of [{ stocks: 31 }, { rounds: '5' }, { trade: 0 }, { unknown: 1 }, { level: 'hard' }, { level: 1 }, { maxPlayers: 80 }, { pace: 'fast' }, { pace: 1 }, null]) {
     const r = await fetch(`http://localhost:${port}/api/rooms`, { method: 'POST', body: JSON.stringify({ mode: 'solo', settings }) });
     assert.equal(r.status, 400);
   }
@@ -480,4 +480,22 @@ test('서버를 다시 켜면 불러온 방의 참가자는 모두 끊긴 상태
     assert.equal(room.s.hostId, joined.id, '원래 방장이 안 돌아오면 접속한 사람이 방장');
     ws.terminate();
   } finally { await h2.close(); }
+});
+
+test('다음 단계(skip)는 운영자만 보낼 수 있고, 보내면 다음 단계로 넘어간다', async () => {
+  const made = await create({ mode: 'friend', operated: true, settings: { rounds: 3 } }) as { code: string; operatorToken: string };
+  const room = hub.rooms.get(made.code)!;
+  const op = await new Client().connect();
+  op.send({ t: 'hello', code: made.code, operatorToken: made.operatorToken, display: true });
+  await until(() => op.role === 'operator' && op.view !== null);
+  const p = await (await new Client().connect()).hello(made.code);
+  op.send({ t: 'start' });
+  await until(() => room.s.status === 'playing' && p.view?.phase === 'news');
+  const errs = p.errors.length;
+  p.send({ t: 'skip' });
+  await until(() => p.errors.length > errs);
+  assert.equal(room.s.phase, 'news', '참가자는 넘길 수 없음');
+  op.send({ t: 'skip' });
+  await until(() => p.view?.phase === 'trade');
+  op.close(); p.close();
 });

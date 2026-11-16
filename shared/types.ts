@@ -4,7 +4,9 @@ export type StockCode = `G${number}`;
 export type GameMode = 'friend' | 'solo';
 /** 난이도. easy(쉬움)는 시장가만 쓰고 호가창·지정가·손절·익절·슬리피지 숫자를 감춥니다. pro(실전)는 전부 보여 줍니다. */
 export type Level = 'easy' | 'pro';
-export interface RoomSettings { stocks?: number; rounds?: number; trade?: number; maxPlayers?: number; level?: Level }
+/** 진행 빠르기. demo = 발표·시연용 빠른 판(3라운드, 뉴스 15초·장 30초·결과 15초). 라운드 수·장 시간 설정보다 우선합니다 */
+export type Pace = 'normal' | 'demo';
+export interface RoomSettings { stocks?: number; rounds?: number; trade?: number; maxPlayers?: number; level?: Level; pace?: Pace }
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 export type Side = 'buy' | 'sell';
@@ -137,6 +139,7 @@ export interface DividendPaid { round: number; code: StockCode; qty: number; dps
 export interface DividendView { recordRound: number; status: 'before' | 'upcoming' | 'record' | 'ex' | 'done'; items: { code: StockCode; name: string; dps: number }[] }
 /** 다음 라운드에 발표가 예정된 종목. 결과는 담지 않습니다 */
 export interface ScheduleItem { round: number; code: StockCode; name: string; arcTitle: string }
+export interface PredictionTrendRow { round: number; total: number; correct: number }
 export interface RoomView {
   code: string; mode: GameMode; status: RoomStatus; phase: Phase | null;
   round: number; totalRounds: number;
@@ -160,6 +163,10 @@ export interface RoomView {
   prediction?: PredictionView | null;
   /** 결과 공개(recap) 때만: 이번 라운드 예측 집계 */
   crowd?: CrowdView | null;
+  /** 판이 끝난 뒤에만: 라운드별 참가자 예측 정답 수(사람만, 이름 없이 합계). 판을 하며 단서 읽기가 늘었는지 봅니다 */
+  predictionTrend?: PredictionTrendRow[];
+  /** 발표·시연용 빠른 판이면 'demo' */
+  pace?: Pace;
   portfolio: Portfolio | null;
   lastResult: RoundResult | null;
   dividend?: DividendView | null;
@@ -180,6 +187,8 @@ export type ClientMsg =
   | { t: 'predict'; choice: 'up' | 'down'; confidence: number }
   | { t: 'rename'; label: string }
   | { t: 'rematch' }
+  /** 운영자만: 지금 단계(뉴스·장·결과)를 바로 끝내고 다음으로 넘깁니다. 시간이 다 된 것과 같은 경로로 진행합니다 */
+  | { t: 'skip' }
   | { t: 'leave' }
   | { t: 'ping' };
 

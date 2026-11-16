@@ -1,5 +1,5 @@
 /* 가격과 주문 규칙. 정수만 사용합니다. 100bp = 1%p */
-import type { EventImpact, GameMode, Holding, Level, Order, PriceBreakdown, RoomSettings, Side, StockCode } from './types';
+import type { EventImpact, GameMode, Holding, Level, Order, Pace, PriceBreakdown, RoomSettings, Side, StockCode } from './types';
 
 export const DISCLAIMER = '게임용 가상 정보이며 투자 조언이 아닙니다';
 export const START_CASH = 10_000_000;
@@ -16,6 +16,14 @@ export const MODES: Record<GameMode, { rounds: number; news: number; trade: numb
   solo:     { rounds: 5,  news: 20, trade: 90, recap: 30, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 3, level: 'easy', label: '혼자 연습' }
 };
 
+/** 발표·시연용 빠른 판. 한 판 약 3분이라 발표 시간 안에 처음부터 최종 결과까지 보여 줄 수 있습니다 */
+export const DEMO_PACE = { rounds: 3, news: 15, trade: 30, recap: 15 } as const;
+export const isPace = (v: unknown): v is Pace => v === 'normal' || v === 'demo';
+/** 모드 기본값 + 방 설정 + (발표용이면) 빠른 판 값. 서버의 방 진행과 판 구성(plan)이 같은 값을 쓰도록 한곳에 둡니다 */
+export function gameConfig(mode: GameMode, settings?: RoomSettings) {
+  const base = { ...MODES[mode], ...settings };
+  return settings?.pace === 'demo' ? { ...base, ...DEMO_PACE } : base;
+}
 /* 방을 만들 때 고를 수 있는 값. 고르지 않으면 MODES와 STOCKS_PER_GAME 기본값을 씁니다. */
 export const ROOM_OPTIONS: Record<'stocks' | 'rounds' | 'trade' | 'maxPlayers', readonly number[]> = {
   stocks: [10, 20, 30, 60], rounds: [3, 5, 8, 10], trade: [45, 60, 90, 120], maxPlayers: [8, 20, 40, 80]
@@ -52,6 +60,8 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
   }
   const level = (raw as Record<string, unknown>).level;
   if (isLevel(level)) out.level = level;
+  const pace = (raw as Record<string, unknown>).pace;
+  if (isPace(pace)) out.pace = pace;
   return out;
 }
 

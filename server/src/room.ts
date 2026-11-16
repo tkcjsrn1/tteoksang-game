@@ -1,8 +1,8 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { cleanLabel, CONFIDENCES, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, MODES, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
-import type { CardView, Contribution, CrowdView, PredictionView, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
+import { cleanLabel, CONFIDENCES, gameConfig, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import type { CardView, Contribution, CrowdView, PredictionTrendRow, PredictionView, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
 import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
@@ -92,7 +92,23 @@ export class GameRoom {
   get humans() { return this.s.players.filter(p => p.kind === 'human'); }
   /** 지금 접속 중인 참가자 수. 대기실 인원 표시와 시작 조건에 씁니다. */
   get online() { return this.humans.filter(p => p.connected).length; }
-  get config() { return { ...MODES[this.s.mode], ...this.s.settings }; }
+  get config() { return gameConfig(this.s.mode, this.s.settings); }
+  /** 운영자의 '다음 단계': 뉴스·장·결과 단계의 남은 시간을 0으로 만들어, 다음 타이머(0.1초)에서 시간이 다 된 것과 같은 경로로 넘깁니다 */
+  skipPhase(now: number): boolean {
+    const s = this.s;
+    if (s.status !== 'playing' || s.phaseEndsAt === null || (s.phase !== 'news' && s.phase !== 'trade' && s.phase !== 'recap')) return false;
+    if (s.phaseEndsAt > now) s.phaseEndsAt = now;
+    return true;
+  }
+  /** 라운드별 예측 정답 수(사람만). 결과가 정해진 라운드만 셉니다 */
+  private predictionTrend(): PredictionTrendRow[] {
+    const rows: PredictionTrendRow[] = [];
+    for (let r = 1; r <= this.s.round; r++) {
+      const picks = this.humans.map(p => p.predictions?.[r]).filter(x => x && x.correct !== null);
+      rows.push({ round: r, total: picks.length, correct: picks.filter(x => x!.correct).length });
+    }
+    return rows;
+  }
   /** 운영자가 진행하는 방인가 */
   get operated() { return !!this.s.operatorToken; }
   /** 운영자 열쇠가 맞는가. 길이가 다르거나 비어 있으면 거짓 */
@@ -775,6 +791,7 @@ export class GameRoom {
       /* 정산 중에는 순위도 공개 전 값을 씁니다. */
       leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
       stocks, news: this.newsView(), schedule: this.scheduleView(), breakingAt, card: this.cardView(p), prediction: this.predictionView(p, now), crowd: this.crowdView(),
+      predictionTrend: this.s.status === 'finished' ? this.predictionTrend() : undefined, pace: this.s.settings?.pace,
       portfolio: p ? {
         cash: p.cash, reserved, available: p.cash - reserved, value, returnPct: (value / START_CASH - 1) * 100, fees: p.fees,
         holdings: this.stocks.filter(st => p.holdings[st.code]).map(st => { const h = p.holdings[st.code]!; const price = priceOf(st.code); const so = p.stops?.[st.code]; return { code: st.code, name: st.name, qty: h.qty, avgCost: h.avgCost, price, pnl: h.qty * (price - h.avgCost), stop: so?.stop ?? null, take: so?.take ?? null }; }),

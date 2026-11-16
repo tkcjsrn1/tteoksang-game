@@ -10,6 +10,7 @@ import { navigate } from './App';
 import { pickDisplayStocks } from './bigscreen';
 import { displayUrl, joinNote, operatorKey, store, useJoinUrl, useRoom, useSecondsLeft } from './net';
 import { arrow, dir, Disclaimer, formatCountdown, Logo, pct, pctBp } from './ui';
+import { PredictionTrend } from './game/final';
 
 const PHASE: Record<string, string> = { news: '뉴스 확인 · 주문은 장이 열리면', trade: '장중 거래', settling: '결과 집계 중', recap: '라운드 결과' };
 const CLOCK: Record<string, string> = { news: '장 시작까지', trade: '장 마감까지', settling: '', recap: '다음 라운드까지' };
@@ -32,11 +33,13 @@ export function Display({ code }: { code: string }) {
       <header className="d-top">
         <Logo />
         {view.status === 'finished'
-          ? <span className="d-phase">최종 결과</span>
+          ? <h1 className="d-phase">최종 결과</h1>
           : <span className="d-phase"><b className="num">R{view.round}</b><span className="d-of num">/{view.totalRounds}</span> {PHASE[view.phase ?? 'news']}</span>}
         <span className="d-people num">참가 {view.humanCount}명</span>
         {view.status !== 'finished' && view.phase !== 'settling' &&
           <span className="d-clock"><small>{clock}</small><b className="num" aria-live="off">{formatCountdown(Math.ceil(left))}</b></span>}
+        {isOp && view.status === 'playing' && view.phase !== 'settling' &&
+          <button className="ghost d-skip" onClick={() => send({ t: 'skip' })} title="남은 시간을 기다리지 않고 다음 단계로">다음 단계 ▶</button>}
       </header>
       {view.status === 'finished'
         ? <DisplayFinal view={view} isOp={isOp} rematch={() => send({ t: 'rematch' })} />
@@ -165,6 +168,7 @@ function DisplayFinal({ view, isOp, rematch }: { view: RoomView; isOp: boolean; 
         </li>
       ))}</ol>
       <p className="d-meta">참가 {humans.length}명 중 <b className="num">{beatNpc}</b>명이 NPC 3명을 모두 앞섰습니다. 내 매매일지와 행동 리포트는 각자 휴대폰에서 확인하세요.</p>
+      <PredictionTrend rows={view.predictionTrend} big />
       {isOp && <div className="d-op">
         {view.nextRoomCode
           ? <a className="cta" href={`#/display/${view.nextRoomCode}`} onClick={() => { const k = store.get(operatorKey(view.code)); if (k) store.set(operatorKey(view.nextRoomCode!), k); }}>다음 판 대형 화면 열기</a>
