@@ -9,10 +9,16 @@ export function applyTick(v: RoomView | null, m: Tick): RoomView | null {
   const stocks: StockView[] = v.stocks.map(s => {
     const p = m.prices[s.code];
     if (p === undefined) return s;
+    const prevK = (s.ticks?.length ?? 1) - 1;
     const ticks = (s.ticks ?? [s.openPrice]).slice(0, m.k + 1);
     while (ticks.length < m.k) ticks.push(ticks[ticks.length - 1]);   // 놓친 칸은 직전 값으로 채움
     ticks[m.k] = p;
-    return { ...s, price: p, ticks };
+    const next: StockView = { ...s, price: p, ticks };
+    /* VI 남은 시간도 지난 초만큼 줄입니다. 서버는 VI가 걸릴 때만 화면 전체를 보내서,
+       예전에는 '10초 뒤 재개'가 그대로 멈춰 있고 풀린 뒤에도 안내가 남아 있었습니다. */
+    const halt = s.haltLeft ? viLeft(s.haltLeft, prevK, m.k) : 0;
+    if (halt) next.haltLeft = halt; else delete next.haltLeft;
+    return next;
   });
   const leaderboard = m.board ? applyBoard(v.leaderboard, m.board, v.startCash) : v.leaderboard;
   const pf = v.portfolio;
@@ -21,6 +27,11 @@ export function applyTick(v: RoomView | null, m: Tick): RoomView | null {
   const holdings = pf.holdings.map(h => { const price = priceOf(h.code); return { ...h, price, pnl: h.qty * (price - h.avgCost) }; });
   const value = pf.cash + holdings.reduce((a, h) => a + h.qty * h.price, 0);
   return { ...v, stocks, leaderboard, portfolio: { ...pf, holdings, value, returnPct: (value / v.startCash - 1) * 100 } };
+}
+
+/** VI로 멈춘 종목의 남은 초. 화면을 받은 칸(prevK)에서 k칸까지 지난 만큼 줄이고, 다 지나면 0 */
+export function viLeft(left: number, prevK: number, k: number): number {
+  return Math.max(0, left - Math.max(0, k - prevK));
 }
 
 /** 시세 메시지에 실려 온 [id, 평가액]으로 순위표의 평가액·수익률·순위를 다시 매깁니다.
