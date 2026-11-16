@@ -408,3 +408,58 @@ test('오래 손대지 않은 방은 다시 켤 때 불러오지 않고 지운�
     assert.ok(store.rooms.has('555555'), '최근 방 기록을 지우면 안 됩니다');
   } finally { await hub.close(); }
 });
+
+test('한 연결이 입장 요청을 반복해도 참가자는 한 명이다(유령 참가자로 정원 채우기 방지)', async () => {
+  const { code } = await create({ mode: 'friend', settings: { maxPlayers: 8 } });
+  const c = await new Client().connect();
+  await c.hello(code);
+  const first = c.token;
+  for (let i = 0; i < 5; i++) c.send({ t: 'hello', code, token: null });
+  await new Promise(r => setTimeout(r, 300));
+  const room = hub.rooms.get(code)!;
+  assert.equal(room.humans.length, 1, `참가자 ${room.humans.length}명`);
+  assert.equal(c.token, first, '같은 자리로 다시 붙어야 합니다');
+  c.close();
+  await until(() => room.humans.every(p => !p.connected));
+});
+
+test('요청 ID가 없거나 너무 길면 주문을 받지 않는다', async () => {
+  const { code } = await create({ mode: 'friend' });
+  const a = await (await new Client().connect()).hello(code);
+  const b = await (await new Client().connect()).hello(code);
+  a.send({ t: 'start' });
+  const room = hub.rooms.get(code)!;
+  await until(() => room.s.status === 'playing');
+  await advance(room, [a, b]);
+  const stock = a.view!.stocks[0].code;
+  const errs = a.errors.length;
+  a.send({ t: 'order', code: stock, side: 'buy', qty: 1 } as unknown as ClientMsg);
+  a.send({ t: 'order', requestId: 'x'.repeat(65), code: stock, side: 'buy', qty: 1 });
+  await until(() => a.errors.length >= errs + 2);
+  const p = room.player(a.token)!;
+  assert.equal(Object.keys(p.requests).length, 0, `저장된 요청: ${Object.keys(p.requests).map(k => k.slice(0, 10))}`);
+  /* 정상 주문은 그대로 됩니다 */
+  assert.equal((await a.order('ok-1', stock, 'buy', 1)).ok, true);
+  a.close(); b.close();
+});
+
+test('서버를 다시 켜면 불러온 방의 참가자는 모두 끊긴 상태로 시작하고, 새로 들어온 사람이 방장이 된다', async () => {
+  const store = new MemoryStore();
+  const t0 = Date.now();
+  const r = GameRoom.create({ code: '777777', mode: 'friend', now: t0, seed: 5 });
+  r.join(null, t0);                     // 방장(접속 중으로 저장됨)
+  await store.saveRoom(r.s);
+  const h2 = new Hub({ store });
+  const p2 = await h2.listen(0);
+  try {
+    const room = h2.rooms.get('777777')!;
+    assert.ok(room.humans.every(p => !p.connected), '재시작 직후에는 아무도 연결되어 있지 않습니다');
+    const ws = new WebSocket(`ws://localhost:${p2}/ws`);
+    await new Promise((res, rej) => { ws.once('open', res); ws.once('error', rej); });
+    ws.send(JSON.stringify({ t: 'hello', code: '777777', token: null }));
+    await until(() => room.humans.length === 2);
+    const joined = room.humans.find(p => p.connected)!;
+    assert.equal(room.s.hostId, joined.id, '원래 방장이 안 돌아오면 접속한 사람이 방장');
+    ws.terminate();
+  } finally { await h2.close(); }
+});
