@@ -615,3 +615,16 @@ test('결과 예측이 3건 이상이면 판 끝 리포트에 정답률과 과�
   assert.ok(m.value.startsWith(`정답 ${hits}/3`), m.value);
   assert.ok(m.text.includes('더 자신 있게'), '확신도 90% · 정답률 67%면 과신');
 });
+
+test('혼자 연습에서는 NPC를 따라 산 것을 군집 행동으로 세지 않는다(사람끼리만 셈)', () => {
+  const room = GameRoom.create({ code: '616161', mode: 'solo', now: T0, seed: 11 });
+  const me = room.join(null, T0).token;
+  const t = toTrade(room);
+  /* NPC가 무엇을 샀든, 내가 산 종목 하나 */
+  const code = gameCodes(room.s.plan)[0];
+  assert.equal(room.placeOrder(me, 'm1', code, 'buy', 10, t).ok, true);
+  next(room);
+  const obs = room.player(me)!.observations.at(-1)!;
+  assert.ok(obs.buys.length > 0);
+  assert.ok(obs.buys.every(b => b.herd === null), `혼자 연습인데 군집 행동 판정: ${JSON.stringify(obs.buys)}`);
+});
