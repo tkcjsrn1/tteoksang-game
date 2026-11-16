@@ -114,7 +114,7 @@ function Crowd({ crowd, first }: { crowd: NonNullable<RoomView['crowd']>; first:
   const up = Math.round(crowd.up / total * 100);
   const right = crowd.beat ? up : 100 - up;
   return (
-    <div className="d-crowd" aria-label="참가자 예측">
+    <div className="d-crowd" role="group" aria-label="참가자 예측">
       <p className="d-tag">결과 공개 전 참가자 예측{first ? ' (첫 번째 뉴스)' : ''} · {total}명</p>
       <div className="d-crowd-bar"><span style={{ width: `${up}%` }}>기대보다 좋다 {up}%</span><span>기대보다 나쁘다 {100 - up}%</span></div>
       <p className="d-crowd-note">결과는 기대보다 <b>{crowd.beat ? '좋았습니다' : '나빴습니다'}</b> · {right}%가 맞혔어요</p>
