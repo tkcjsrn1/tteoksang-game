@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, MODES, STOCKS } from '../../shared/rules';
+import { DEMO_PACE, LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, MODES, STOCKS } from '../../shared/rules';
 import type { ClientMsg, NewsCard, RoomView, StockCode } from '../../shared/types';
 import { navigate } from './App';
 import { coachStep } from './coach';
@@ -32,7 +32,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
   useEffect(() => { QRCode.toDataURL(url, { margin: 1, width: 220 }).then(setQr).catch(() => setQr('')); }, [url]);
   const humans = view.leaderboard.filter(p => p.kind === 'human');
   const copy = () => navigator.clipboard?.writeText(url);
-  const cfg = MODES[view.mode];
+  const cfg = view.pace === 'demo' ? { ...MODES[view.mode], ...DEMO_PACE } : MODES[view.mode];
   const canStart = view.you.isHost && view.humanCount >= view.minToStart;
   return (
     <main className="lobby">
@@ -52,7 +52,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
       <dl className="kv rows">
         <dt>내 이름</dt><dd>{view.you.role === 'player' ? <NameEditor view={view} send={send} /> : '관전 중'}</dd>
         <dt>시작 자금</dt><dd className="num">{won(view.startCash)}</dd>
-        <dt>진행</dt><dd>{view.stocks.length}종목 · {view.totalRounds}라운드 · 뉴스 {cfg.news}초, 장 {view.tradeSeconds ?? cfg.trade}초, 결과 {cfg.recap}초</dd>
+        <dt>진행</dt><dd>{view.pace === 'demo' ? '발표용 빠른 판 · ' : ''}{view.stocks.length}종목 · {view.totalRounds}라운드 · 뉴스 {cfg.news}초, 장 {view.tradeSeconds ?? cfg.trade}초, 결과 {cfg.recap}초</dd>
         <dt>난이도</dt><dd>{LEVEL_LABEL[view.level]} <small className="hint">· {LEVEL_NOTE[view.level]}</small></dd>
       </dl>
       <h2 className="h">입장 {view.humanCount}/{view.maxPlayers}명 + NPC 3명</h2>
