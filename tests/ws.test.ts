@@ -384,8 +384,10 @@ test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시�
   assert.equal(f.price, limit);
   assert.equal(f.kind, 'limit');
   assert.equal(a.view!.portfolio!.orders.length, 0);
-  /* 시세 메시지에는 다른 사람 주문·결말이 없습니다 */
-  assert.deepEqual(Object.keys(t).sort(), ['k', 'prices', 'round', 't']);
+  /* 시세 메시지에는 다른 사람 주문·결말이 없습니다. 순위용 평가액(board)만 함께 옵니다 */
+  assert.deepEqual(Object.keys(t).sort(), ['board', 'k', 'prices', 'round', 't']);
+  assert.deepEqual(t.board!.map(([id]) => id).sort(), room.s.players.map(p => p.id).sort());
+  assert.ok(t.board!.every(([, v]) => Number.isInteger(v)));
   [a, b].forEach(c => c.close());
 });
 
