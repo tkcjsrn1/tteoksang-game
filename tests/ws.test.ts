@@ -425,6 +425,8 @@ test('대기실에서 여러 명이 한꺼번에 이름을 바꾸면 방 전체 
   const total = cs.reduce((a, c) => a + c.views, 0);
   assert.ok(total < (n * n) / 2, `이름 바꾸기 ${n}번에 화면 ${total}번 전송(즉시 보내면 ${n * n}번)`);
   for (const c of cs) c.close();
+});
+
 test('한 연결이 입장 요청을 반복해도 참가자는 한 명이다(유령 참가자로 정원 채우기 방지)', async () => {
   const { code } = await create({ mode: 'friend', settings: { maxPlayers: 8 } });
   const c = await new Client().connect();
