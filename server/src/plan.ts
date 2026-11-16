@@ -1,5 +1,5 @@
 /* 시드로 게임 전체 시나리오를 미리 확정합니다. 같은 시드와 설정이면 같은 결말과 변동이 나옵니다. */
-import { GROUPS, MARKET_MAX_BP, MODES,  stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
+import { gameConfig, GROUPS, MARKET_MAX_BP, stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { GameMode, RoomSettings, StockCode } from '../../shared/types';
 import { ARCS, CARDS, type Arc, type Outcome, type Stage } from './content';
 
@@ -66,7 +66,7 @@ function shuffled<T>(a: T[], rnd: () => number): T[] {
 }
 
 export function buildPlan(seed: number, mode: GameMode, excludedArcs: string[] = [], forced?: ForcedOutcomes, forcedArcs?: string[], settings?: RoomSettings): GamePlan {
-  const rnd = mulberry(seed), cfg = { ...MODES[mode], ...settings };
+  const rnd = mulberry(seed), cfg = gameConfig(mode, settings);
   const arcCount = Math.max(cfg.arcs, Math.ceil(cfg.rounds / 3));
   const fresh = shuffled(ARCS.filter(a => !excludedArcs.includes(a.id)), rnd);
   const old = shuffled(ARCS.filter(a => excludedArcs.includes(a.id)), rnd);

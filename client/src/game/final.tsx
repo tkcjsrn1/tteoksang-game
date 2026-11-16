@@ -1,7 +1,7 @@
 /* 판이 끝난 뒤 화면: 결과, 투자 행동 리포트, 매매일지, 이번 판에 나온 용어.
    Game.tsx에서 옮겼습니다(2026-11). 옮기기만 했고 동작은 그대로입니다. */
 import { useEffect, useMemo, useState } from 'react';
-import type { ClientMsg, RoomView, Side, StockCode } from '../../../shared/types';
+import type { ClientMsg, PredictionTrendRow, RoomView, Side, StockCode } from '../../../shared/types';
 import { MODES, stockOf } from '../../../shared/rules';
 import { navigate } from '../App';
 import { play, revealTone, useCountUp } from '../fx';
@@ -36,6 +36,26 @@ export function BehaviorReport({ metrics }: { metrics: NonNullable<RoomView['rep
         </div>
       ))}</div>
       {missing.length > 0 && <p className="hint">{names}은 거래가 더 쌓이면 나와요.</p>}
+    </section>
+  );
+}
+
+/** 라운드별 예측 정답률(참가자 전체 합계). 판을 하며 단서 읽기가 나아졌는지 보는 자료입니다. 예측이 하나도 없으면 감춥니다 */
+export function PredictionTrend({ rows, big = false }: { rows?: PredictionTrendRow[]; big?: boolean }) {
+  if (!rows || !rows.some(r => r.total > 0)) return null;
+  const rate = (r: PredictionTrendRow) => r.total ? Math.round(r.correct / r.total * 100) : null;
+  return (
+    <section className={big ? 'd-trend' : 'sec trend'} aria-label="라운드별 예측 정답률">
+      <h2 className="h">라운드별 예측 정답률</h2>
+      <ol className="trend-bars">{rows.map(r => {
+        const p = rate(r);
+        return <li key={r.round}>
+          <span className="num">{r.round}R</span>
+          <span className="trend-bar" aria-hidden="true"><i style={{ width: `${p ?? 0}%` }} /></span>
+          <span className="num">{p === null ? '예측 없음' : `${p}% (${r.correct}/${r.total})`}</span>
+        </li>;
+      })}</ol>
+      <p className="hint">뉴스를 읽고 결과가 시장 기대보다 좋을지 나쁠지 맞힌 비율이에요. 라운드마다 사건이 달라서 정답률이 오르내릴 수 있어요.</p>
     </section>
   );
 }
@@ -88,6 +108,7 @@ export function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) 
       {rep && <TradeJournal view={view} fees={rep.fees} fallback={rep.majorTrades} />}
       {rep && rep.judgments.length > 0 && <section className="sec"><h2 className="h">내 판단 기록</h2><ul className="list">{rep.judgments.map((j, i) => <li key={i}><span>{j.title}<small>{j.choice} · {j.concept}</small></span></li>)}</ul></section>}
       {rep && <BehaviorReport metrics={rep.metrics} />}
+      <PredictionTrend rows={view.predictionTrend} />
       <GameTerms view={view} />
       <section className="sec tight">
         <div className="list-head"><span>종목 그래프 다시 보기</span><span>처음 대비</span></div>

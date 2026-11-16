@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { navigate } from './App';
 import { createRoom, operatorKey, roomInfo, store } from './net';
 import { TERMS } from '../../shared/glossary';
-import { CAPACITY_NOTE, cleanSettings, FESTIVAL_MAX_PLAYERS, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
+import { CAPACITY_NOTE, cleanSettings, DEMO_PACE, FESTIVAL_MAX_PLAYERS, LEVEL_LABEL, LEVEL_NOTE, LEVELS, MODES, ROOM_OPTIONS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { RoomSettings } from '../../shared/types';
 import { useGlossary } from './glossary/GlossaryContext';
 import { parseRecords, RECORDS_KEY } from './recordStore';
@@ -44,9 +44,12 @@ export function Home() {
     store.set(operatorKey(r.code), r.operatorToken);
     navigate(`/display/${r.code}`);
   });
-  const stocks = settings.stocks ?? STOCKS_PER_GAME, rounds = settings.rounds ?? MODES.solo.rounds, trade = settings.trade ?? MODES.solo.trade;
+  const demo = settings.pace === 'demo';
+  const stocks = settings.stocks ?? STOCKS_PER_GAME;
+  const rounds = demo ? DEMO_PACE.rounds : settings.rounds ?? MODES.solo.rounds, trade = demo ? DEMO_PACE.trade : settings.trade ?? MODES.solo.trade;
   const level = settings.level ?? MODES.solo.level, caps = settings.maxPlayers ?? MODES.friend.maxPlayers;
-  const minutes = Math.max(1, Math.round(rounds * (MODES.solo.news + trade + MODES.solo.recap) / 60));
+  const news = demo ? DEMO_PACE.news : MODES.solo.news, recap = demo ? DEMO_PACE.recap : MODES.solo.recap;
+  const minutes = Math.max(1, Math.round(rounds * (news + trade + recap) / 60));
   const pick = (o: RoomSettings) => { const next = { ...settings, ...o }; setSettings(next); store.set('settings', JSON.stringify(next)); };
   const join = () => run(async () => { await roomInfo(code); navigate(`/room/${code}`); });
   /* 튜토리얼: 게임 방법 카드를 처음부터 보여 주고, 혼자 연습 첫 라운드에 단계 안내를 다시 켭니다. */
@@ -68,7 +71,7 @@ export function Home() {
         <p className="lede">가상 기업과 가상 자금 1,000만 원으로 하는 주식 게임</p>
         <div className="home-actions">
           <details className="game-opts">
-            <summary>게임 설정 · {LEVEL_LABEL[level]} · {stocks}종목 · {rounds}라운드 · 장 {trade}초{caps !== MODES.friend.maxPlayers ? ` · 정원 ${caps}명` : ''} <small className="hint">(한 판 약 {minutes}분)</small></summary>
+            <summary>게임 설정 · {demo ? '발표용 빠른 판 · ' : ''}{LEVEL_LABEL[level]} · {stocks}종목 · {rounds}라운드 · 장 {trade}초{caps !== MODES.friend.maxPlayers ? ` · 정원 ${caps}명` : ''} <small className="hint">(한 판 약 {minutes}분)</small></summary>
             <div className="room-settings" role="group" aria-label="혼자 연습과 친구 대전 설정">
               <label>난이도
                 <select value={level} onChange={e => pick({ level: e.target.value as typeof level })}>
@@ -81,16 +84,21 @@ export function Home() {
                 </select>
               </label>
               <label>라운드 수
-                <select value={rounds} onChange={e => pick({ rounds: Number(e.target.value) })}>
+                <select value={rounds} disabled={demo} onChange={e => pick({ rounds: Number(e.target.value) })}>
                   {ROOM_OPTIONS.rounds.map(n => <option key={n} value={n}>{n}회</option>)}
                 </select>
               </label>
               <label>장 시간
-                <select value={trade} onChange={e => pick({ trade: Number(e.target.value) })}>
-                  {ROOM_OPTIONS.trade.map(n => <option key={n} value={n}>{n}초</option>)}
+                <select value={trade} disabled={demo} onChange={e => pick({ trade: Number(e.target.value) })}>
+                  {(demo ? [DEMO_PACE.trade] : ROOM_OPTIONS.trade).map(n => <option key={n} value={n}>{n}초</option>)}
                 </select>
               </label>
             </div>
+            <label className="check">
+              <input type="checkbox" checked={demo} onChange={e => pick({ pace: e.target.checked ? 'demo' : 'normal' })} />
+              발표용 빠른 판 ({DEMO_PACE.rounds}라운드 · 뉴스 {DEMO_PACE.news}초 · 장 {DEMO_PACE.trade}초 · 결과 {DEMO_PACE.recap}초)
+            </label>
+            {demo && <p className="hint">발표·시연에서 처음부터 최종 결과까지 한 번에 보여 줄 때 쓰세요. 연습할 때는 끄는 것을 권합니다.</p>}
             <p className="hint">{LEVEL_LABEL[level]}: {LEVEL_NOTE[level]}. 뉴스·속보·돌발 사건은 두 난이도에서 똑같이 나와요.</p>
             <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다. 처음이라면 쉬움·10종목·5라운드를 권합니다.</p>
             <div className="room-extra" role="group" aria-label="친구 방 정원">

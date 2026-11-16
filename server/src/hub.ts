@@ -5,7 +5,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
-import { isLevel, MODES, ROOM_OPTIONS } from '../../shared/rules';
+import { isLevel, isPace, MODES, ROOM_OPTIONS } from '../../shared/rules';
 import type { ClientMsg, GameMode, Role, RoomSettings, ServerMsg, StockCode } from '../../shared/types';
 import type { ForcedOutcomes } from './plan';
 import { GameRoom } from './room';
@@ -271,6 +271,11 @@ export class Hub {
       }
       case 'card': if (room.answerCard(c.token ?? '', m.choice, now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
       case 'predict': if (room.predict(c.token ?? '', m.choice, m.confidence, now)) { this.dirty.add(room.s.code); this.sendView(c, now); } return;
+      case 'skip':
+        /* 운영자(대형 화면 열쇠)만. 발표·학술제에서 설명이 끝났는데 남은 초를 기다리지 않게 합니다 */
+        if (c.role !== 'operator') return this.send(c, { t: 'error', reason: '운영자만 단계를 넘길 수 있습니다' });
+        if (!room.skipPhase(now)) return this.send(c, { t: 'error', reason: '지금은 넘길 단계가 없습니다' });
+        return;
       case 'rematch': {
         if (room.s.status !== 'finished') return;
         /* 운영자 방은 운영자만, 그 밖의 방은 참가자 누구나 다음 판을 엽니다. */
@@ -325,6 +330,8 @@ export class Hub {
             const settings: unknown = p.settings;
             const okSetting = ([key, value]: [string, unknown]) => key === 'level'
               ? isLevel(value)
+              : key === 'pace'
+                ? isPace(value)
               /* 정원은 친구 대전에만 있습니다. 혼자 연습에 보내면 거절합니다(화면에서도 감춤) */
               : key === 'maxPlayers' && mode !== 'friend'
                 ? false

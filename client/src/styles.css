@@ -695,3 +695,18 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .d-crowd-bar span:first-child { background: var(--led); color: #fff; }
 .d-crowd-bar span:last-child { flex: 1; justify-content: flex-end; color: var(--fg); }
 .d-crowd-note { font-size: 22px; }
+
+/* 발표용 빠른 판 체크, 라운드별 예측 정답률, 운영자 '다음 단계' */
+.check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; }
+.check input { width: 18px; height: 18px; accent-color: var(--led-2); }
+.trend-bars { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 8px; }
+.trend-bars li { display: grid; grid-template-columns: 2.5em 1fr 7.5em; align-items: center; gap: 10px; }
+.trend-bars li > :last-child { text-align: right; }
+.trend-bar { height: 10px; border-radius: 6px; background: var(--line); overflow: hidden; }
+.trend-bar i { display: block; height: 100%; background: var(--led-2); }
+.d-trend { width: min(720px, 100%); text-align: left; }
+.d-trend .trend-bars li { font-size: clamp(16px, 1.2vw, 24px); grid-template-columns: 3em 1fr 8em; }
+.d-trend .h { font-size: clamp(16px, 1.2vw, 24px); }
+h1.d-phase { margin: 0; font: inherit; }
+.d-trend .trend-bar { height: 16px; }
+.d-skip { font-size: clamp(14px, 1vw, 20px); padding: 8px 16px; }

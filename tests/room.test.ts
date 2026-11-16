@@ -354,6 +354,7 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
       const v = room.view(tok, role, T0);
       assert.equal(v.prediction?.correct ?? null, null, `${label}: 맞았는지 공개 전에 나감`);
       assert.equal(v.crowd ?? null, null, `${label}: 예측 집계가 공개 전에 나감`);
+      assert.equal(v.predictionTrend, undefined, `${label}: 라운드별 정답 수는 판이 끝난 뒤에만`);
     }
   };
   check('뉴스', revealed); noVerdict('뉴스');
@@ -614,4 +615,58 @@ test('결과 예측이 3건 이상이면 판 끝 리포트에 정답률과 과�
   assert.equal(m.available, true);
   assert.ok(m.value.startsWith(`정답 ${hits}/3`), m.value);
   assert.ok(m.text.includes('더 자신 있게'), '확신도 90% · 정답률 67%면 과신');
+});
+
+test('발표용 빠른 판은 3라운드, 뉴스 15초·장 30초·결과 15초로 진행하고 라운드 수·장 시간 설정보다 우선한다', () => {
+  const room = GameRoom.create({ code: '717171', mode: 'friend', now: T0, seed: 4, settings: { pace: 'demo', rounds: 10, trade: 120 } });
+  room.join(null, T0); room.join(null, T0 + 1);
+  assert.equal(room.s.plan.rounds.length, 3, '판 구성도 3라운드');
+  room.start(T0);
+  assert.equal(room.s.phaseSeconds, 15);
+  next(room); assert.equal(room.s.phase, 'trade'); assert.equal(room.s.phaseSeconds, 30);
+  next(room); assert.equal(room.s.phase, 'recap'); assert.equal(room.s.phaseSeconds, 15);
+  assert.equal(room.view(null, 'display', T0).totalRounds, 3);
+  assert.equal(room.view(null, 'display', T0).pace, 'demo');
+});
+
+test('운영자의 다음 단계: 뉴스·장·결과를 시간이 다 된 것과 같은 경로로 넘기고, 대기실·정산 중에는 넘기지 않는다', () => {
+  const room = GameRoom.create({ code: '727272', mode: 'friend', now: T0, seed: 4, operated: true, settings: { rounds: 3 } });
+  const a = room.join(null, T0).token;
+  assert.equal(room.skipPhase(T0), false, '대기실');
+  room.start(T0);
+  const step = (at: number) => { assert.equal(room.skipPhase(at), true); const r = room.tick(at); if (r === 'settled') { assert.equal(room.skipPhase(at), false, '정산 중'); room.beginRecap(at); } };
+  step(T0 + 1000);
+  assert.equal(room.s.phase, 'trade');
+  const t = room.s.live!.startedAt;
+  room.tick(t + 3000);
+  assert.equal(room.placeOrder(a, 'k1', gameCodes(room.s.plan)[0], 'buy', 10, t + 3000).ok, true);
+  step(t + 4000);
+  assert.equal(room.s.phase, 'recap', '장을 넘기면 바로 정산·결과');
+  assert.equal(room.s.settled.includes(1), true);
+  assert.ok(room.player(a)!.results.length === 1, '체결은 정산에 반영');
+  step(t + 5000);
+  assert.deepEqual([room.s.round, room.s.phase], [2, 'news'], '결과를 넘기면 다음 라운드 뉴스');
+  /* 끝까지 넘기면 최종 결과 */
+  while (room.s.status === 'playing') step(room.s.phaseEndsAt! - 1);
+  assert.equal(room.s.status, 'finished');
+  assert.equal(room.skipPhase(T0 + 999_999), false, '끝난 판');
+});
+
+test('판이 끝나면 라운드별 예측 정답 수(사람만, 합계)를 보여 준다', () => {
+  const { room, a, b } = setup({ settings: { rounds: 3 } });
+  room.start(T0);
+  const answers: boolean[][] = [];
+  while (room.s.status === 'playing') {
+    if (room.s.phase === 'news') {
+      const now = room.s.newsStartedAt;
+      assert.equal(room.predict(a, 'up', 70, now), true);
+      if (room.s.round !== 2) assert.equal(room.predict(b, 'down', 50, now), true);   // 2라운드는 b가 예측 안 함
+    }
+    next(room);
+    if (room.s.phase === 'recap') answers.push([a, b].map(t => room.player(t)!.predictions?.[room.s.round]?.correct).filter(x => x !== undefined) as boolean[]);
+  }
+  const v = room.view(a, 'player', T0);
+  assert.deepEqual(v.predictionTrend, answers.map((xs, i) => ({ round: i + 1, total: xs.length, correct: xs.filter(Boolean).length })));
+  assert.deepEqual(v.predictionTrend!.map(r => r.total), [2, 1, 2]);
+  assert.equal(JSON.stringify(v.predictionTrend).includes(room.player(a)!.id), false, '누가 맞혔는지는 담지 않음');
 });
