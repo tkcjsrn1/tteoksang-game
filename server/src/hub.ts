@@ -289,7 +289,9 @@ export class Hub {
         const res = room.rename(c.token ?? '', String(m.label ?? ''), now);
         if (!res.ok) { this.send(c, { t: 'error', reason: res.reason ?? '이름을 바꾸지 못했습니다' }); return; }
         this.dirty.add(room.s.code);
-        this.broadcast(room);
+        /* 입장과 같이: 바꾼 사람에게는 바로, 나머지에게는 타이머(0.1초)에서 한 번에 모아 보냅니다 */
+        this.sendView(c, now);
+        this.later.add(room);
         return;
       }
       case 'leave':
