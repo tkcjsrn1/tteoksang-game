@@ -153,7 +153,7 @@ export function PriceChart({ stock, totalRounds, selected, onSelect, live = fals
   const colorOf = (c: { open: number; close: number }) => c.close > c.open ? 'var(--up)' : c.close < c.open ? 'var(--down)' : 'var(--faint)';
   return (
     <figure className="chart-fig">
-      <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${stock.name} 라운드별 봉 차트`}>
+      <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="group" aria-label={`${stock.name} 라운드별 봉 차트`}>
         <line x1={L} x2={W - R} y1={y(stock.startPrice)} y2={y(stock.startPrice)} stroke="var(--chev)" strokeDasharray="3 3" strokeWidth=".8" />
         <text x={W - R + 6} y={y(stock.startPrice) + 4} fontSize="11" fill="var(--muted)">시작 {stock.startPrice.toLocaleString('ko-KR')}</text>
         {Array.from({ length: totalRounds }, (_, i) => i + 1).filter(r => totalRounds <= 5 || r % 2 === 1).map(r => <text key={r} x={x(r)} y={H - 6} fontSize="11" textAnchor="middle" fill="var(--muted)">R{r}</text>)}

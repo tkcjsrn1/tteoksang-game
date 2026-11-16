@@ -692,7 +692,7 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 .d-crowd { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
 .d-crowd-bar { display: flex; height: 48px; border-radius: 12px; overflow: hidden; background: var(--line); font-weight: 700; font-size: 18px; }
 .d-crowd-bar span { display: flex; align-items: center; padding: 0 14px; white-space: nowrap; min-width: 0; overflow: hidden; }
-.d-crowd-bar span:first-child { background: var(--led); color: #fff; }
+.d-crowd-bar span:first-child { background: var(--led-2); color: var(--led-ink); }
 .d-crowd-bar span:last-child { flex: 1; justify-content: flex-end; color: var(--fg); }
 .d-crowd-note { font-size: 22px; }
 
