@@ -197,6 +197,8 @@ export type ServerMsg =
   | { t: 'view'; view: RoomView }
   | { t: 'ack'; requestId: string; ok: boolean; reason?: string; fill?: FillInfo | null }
   /** 장중 시세 한 칸(1초). k는 주문 시간 시작부터 지난 초 */
-  | { t: 'tick'; round: number; k: number; prices: Partial<Record<StockCode, number>> }
+  | { t: 'tick'; round: number; k: number; prices: Partial<Record<StockCode, number>>;
+      /** 장중 순위용 [참가자 id, 지금 평가액]. 사람이 많은 방에서는 몇 초에 한 번만 실립니다 */
+      board?: [string, number][] }
   | { t: 'error'; reason: string }
   | { t: 'pong' };
