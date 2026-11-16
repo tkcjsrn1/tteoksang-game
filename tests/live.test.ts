@@ -1,7 +1,7 @@
 /* 장중 시세 메시지(tick)를 화면 상태에 반영하는 계산을 확인합니다. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { applyBoard, applyTick, intradayBp, walletChange } from '../client/src/live';
+import { applyBoard, applyTick, intradayBp, viLeft, walletChange } from '../client/src/live';
 import { GameRoom } from '../server/src/room';
 
 const T0 = 1_000_000;
@@ -99,4 +99,22 @@ test('정산 중 순위는 내 평가액과 같은 공개 전 가격으로 매�
   const me = v.leaderboard.find(l => l.playerId === v.you.id)!;
   assert.equal(me.value, v.portfolio!.value);
   assert.deepEqual(v.leaderboard.map(r => r.rank), [...v.leaderboard].map(r => 1 + v.leaderboard.filter(x => x.value > r.value).length));
+});
+
+test('VI 남은 시간은 시세가 올 때마다 줄고, 다 지나면 안내가 사라진다', () => {
+  const { room, tok, t } = trading();
+  const v0 = room.view(tok, 'player', t);
+  const code = v0.stocks[0].code;
+  /* 서버가 k=0에 '5초 뒤 재개'로 보낸 화면이라고 둡니다 */
+  let v = { ...v0, stocks: v0.stocks.map((s, i) => i === 0 ? { ...s, haltLeft: 5 } : s) };
+  const tick = (k: number) => { v = applyTick(v, { t: 'tick', round: room.s.round, k, prices: Object.fromEntries(v.stocks.map(s => [s.code, s.price])) })!; };
+  tick(2);
+  assert.equal(v.stocks.find(s => s.code === code)!.haltLeft, 3);
+  tick(2);
+  assert.equal(v.stocks.find(s => s.code === code)!.haltLeft, 3, '같은 칸이 다시 와도 두 번 줄이지 않음');
+  tick(5);
+  assert.equal(v.stocks.find(s => s.code === code)!.haltLeft, undefined, '다 지나면 VI 안내에서 빠짐');
+  assert.ok(v.stocks.slice(1).every(s => !s.haltLeft), '다른 종목은 그대로');
+  assert.equal(viLeft(4, 3, 9), 0);
+  assert.equal(viLeft(4, 3, 3), 4);
 });
