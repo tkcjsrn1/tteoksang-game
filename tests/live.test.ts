@@ -75,7 +75,8 @@ test('장중 순위는 시세와 같은 시점의 평가액으로 매겨진다(�
     const prices = Object.fromEntries(room.stocks.map(s => [s.code, room.markPrice(s.code)]));
     v = applyTick(v, { t: 'tick', round: room.s.round, k, prices, board: room.tickBoard() })!;
   }
-  const pick = (rows: typeof v.leaderboard) => rows.map(r => [r.playerId, r.value, r.rank, r.prevRank]);
+  /* prevRank(직전 라운드 끝 순위)는 결과 화면에서만 쓰고, 결과 화면은 전체 화면을 새로 받으므로 장중에는 비교하지 않습니다 */
+  const pick = (rows: typeof v.leaderboard) => rows.map(r => [r.playerId, r.value, r.rank]);
   assert.deepEqual(pick(v.leaderboard), pick(room.leaderboard()));
   const me = v.leaderboard.find(l => l.playerId === v.you.id)!;
   assert.equal(me.value, v.portfolio!.value, '내 순위 줄의 평가액과 내 평가액 칸이 같은 시점');
