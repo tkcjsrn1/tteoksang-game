@@ -3,6 +3,9 @@
 # 사람이 플레이 중일 때나 발표 당일에는 돌리지 마세요.
 name: Rehearsal
 on:
+  # 이 브랜치에 푸시하면 기본값(80명·3라운드)으로 한 번 돕니다. main에 머지하기 전 시험용
+  push:
+    branches: [chore/rehearsal-workflow]
   workflow_dispatch:
     inputs:
       url:
@@ -32,10 +35,10 @@ jobs:
       # 무료 서버가 잠들어 있으면 깨우는 데 1분 가까이 걸립니다
       # 입력값은 환경 변수로만 넘깁니다(명령에 바로 끼워 넣지 않음)
       - name: 서버 깨우기와 버전 확인
-        env: { URL: "${{ inputs.url }}" }
+        env: { URL: "${{ inputs.url || 'https://tteoksang-game.onrender.com' }}" }
         run: |
           for i in $(seq 1 12); do curl -sf --max-time 30 "$URL/api/health" && break; sleep 10; done
           echo
       - name: 리허설
-        env: { URL: "${{ inputs.url }}", PLAYERS: "${{ inputs.players }}", ROUNDS: "${{ inputs.rounds }}" }
+        env: { URL: "${{ inputs.url || 'https://tteoksang-game.onrender.com' }}", PLAYERS: "${{ inputs.players || '80' }}", ROUNDS: "${{ inputs.rounds || '3' }}" }
         run: npm run rehearsal -- "$URL" "$PLAYERS" "$ROUNDS"
