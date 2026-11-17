@@ -46,7 +46,7 @@ function Dictionary({ focus }: { focus: string | null }) {
             </button>
             {openId === t.id && <div className="term-detail">
               <p>{t.body}</p>
-              {t.game && <p className="term-game"><b>이 게임에서는</b> {t.game}</p>}
+              {t.game && <p className="term-game"><b>게임 규칙</b> {t.game}</p>}
               {t.related.length > 0 && <p className="hint">관련: {t.related.map((r, i) => <span key={r}>{i ? ', ' : ''}<TermLink id={r} /></span>)}</p>}
             </div>}
           </li>
