@@ -256,8 +256,12 @@ await step('지정가 매도 예약과 취소', async () => {
   ok(/매도 예약$/.test((await go.textContent()) ?? ''), '지정가 버튼 문구가 "…매도 예약"이 아님');
   await go.click();
   await page.getByText(/지정가 예약 완료/).first().waitFor({ timeout: 5_000 });
+  /* 하단 '내 자산' 탭에 예약 주문 수 배지가 붙습니다 */
+  const assetsTab = page.locator('nav.tabs button', { hasText: '내 자산' });
+  await assetsTab.locator('.tab-badge').getByText('1', { exact: true }).waitFor({ timeout: 3_000 });
   await page.getByRole('button', { name: '예약 취소' }).click();
   await page.getByText('예약을 취소했습니다').first().waitFor({ timeout: 5_000 });
+  await assetsTab.locator('.tab-badge').waitFor({ state: 'detached', timeout: 3_000 });
   await page.keyboard.press('Escape');
 });
 
