@@ -124,6 +124,13 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
   await order.getByRole('button', { name: '관심종목', exact: true }).click();
   await order.getByRole('button', { name: '닫기', exact: true }).click();
   await order.waitFor({ state: 'detached' });
+  /* 게임 중 종목 창에서 뒤로가기: 창만 닫히고 게임에 남습니다 */
+  const gameUrl = page.url();
+  await related.click();
+  await order.locator('#order-qty').waitFor();
+  await page.goBack();
+  await order.waitFor({ state: 'detached' });
+  ok(page.url() === gameUrl && await page.getByLabel(/라운드, 전체 3라운드/).count() === 1, '종목 창 뒤로가기로 게임에서 나감');
   await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
   /* 결과 예측: 뉴스 시간에 고르고, 고르면 확신도가 나옵니다 */
   const predict = page.getByRole('group', { name: '결과 예측' });
@@ -313,6 +320,20 @@ await step('용어 설명 창 열고 닫기', async () => {
   ok(await sheet.count() === 1, '조금 끌었는데 용어 창이 닫힘');
   await drag(220);
   await sheet.waitFor({ state: 'detached' });
+  /* 휴대폰 뒤로가기와 PC Esc는 창만 닫고 화면은 그대로 둡니다 */
+  const here = page.url();
+  await page.locator('button.gl-term').first().click();
+  await sheet.waitFor();
+  await page.goBack();
+  await sheet.waitFor({ state: 'detached' });
+  ok(page.url() === here && await page.getByPlaceholder(/용어 검색/).count() === 1, '뒤로가기가 창이 아니라 화면을 닫음');
+  await page.locator('button.gl-term').first().click();
+  await sheet.waitFor();
+  await page.keyboard.press('Escape');
+  await sheet.waitFor({ state: 'detached' });
+  /* 버튼으로 닫은 뒤 뒤로가기 한 번이면 이전 화면으로 갑니다(창 기록이 남지 않음) */
+  await page.goBack();
+  await page.waitForFunction(h => location.href !== h, here);
 });
 
 await step('용어 사전과 퀴즈', async () => {
