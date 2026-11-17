@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useWakeLock } from './wakeLock';
 import QRCode from 'qrcode';
-import { DEMO_PACE, holdingCost, holdingValue, LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, MODES, STOCKS } from '../../shared/rules';
+import { DEMO_PACE, holdingCost, holdingValue, LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, MODES, roomLabel, STOCKS } from '../../shared/rules';
 import type { ClientMsg, NewsCard, RoomView, StockCode } from '../../shared/types';
 import { navigate } from './App';
 import { coachStep } from './coach';
@@ -40,7 +40,7 @@ function Lobby({ view, send, error }: { view: RoomView; send: (m: ClientMsg) => 
   return (
     <main className="lobby">
       <div className="lobby-head">
-        <p className="course">{cfg.label} · 대기실</p>
+        <p className="course">{roomLabel(view.mode, view.operated)} · 대기실</p>
         <button className="back-btn" aria-label="방 나가기" title="방 나가기"
           onClick={() => { send({ t: 'leave' }); store.del(`room:${view.code}`); store.del(`favorites:${view.code}`); navigate('/'); }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
@@ -203,7 +203,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
     <div className="game">
       <header className="topbar">
         {/* 화면에는 안 보이지만 읽어 주는 제목. 페이지마다 h1이 하나 있어야 합니다. */}
-        <h1 className="sr-only">{view.mode === 'solo' ? '혼자 연습' : '친구 대전'} {view.round}라운드 · {PHASE_LABEL[view.phase ?? 'news']}</h1>
+        <h1 className="sr-only">{roomLabel(view.mode, view.operated)} {view.round}라운드 · {PHASE_LABEL[view.phase ?? 'news']}</h1>
         <div className="status">
           <b>{PHASE_LABEL[view.phase ?? 'news']}</b>
           <span className="num" aria-label={`${view.round}라운드, 전체 ${view.totalRounds}라운드`}>{view.round}/{view.totalRounds}</span>

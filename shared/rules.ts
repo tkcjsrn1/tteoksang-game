@@ -70,6 +70,10 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
    한 판에는 대표 종목 6개와 방 설정으로 정한 수의 관련 종목이 나옵니다(server/src/plan.ts pickStocks).
    모든 기업은 지어낸 가상 기업입니다. */
 export type StockGroup = 'power' | 'storage' | 'cold' | 'bio' | 'stage' | 'water' | 'space' | 'farm' | 'care' | 'recycle' | 'chips' | 'games';
+/** 화면에 쓰는 방 이름. 학술제 방은 내부적으로 친구 대전이지만 운영자가 진행하므로 따로 부릅니다. */
+export function roomLabel(mode: GameMode, operated?: boolean): string {
+  return operated ? '학술제 대전' : MODES[mode].label;
+}
 /** 보유 종목 한 줄의 평가금액 = 가진 수량 × 지금 가격(원, 정수).
     시작 자금 1,000만 원이라 수량 × 가격은 Number.MAX_SAFE_INTEGER(약 9천조)보다 한참 작아 정수 그대로 안전합니다. */
 export const holdingValue = (h: { qty: number; price: number }) => h.qty * h.price;
