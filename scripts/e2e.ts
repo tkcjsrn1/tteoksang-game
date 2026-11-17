@@ -23,6 +23,17 @@ const port = await hub.listen(0);
 const base = `http://localhost:${port}`;
 const browser = await chromium.launch(process.env.E2E_NO_PROXY ? { args: ['--no-proxy-server'] } : {});
 const ctx = await browser.newContext({ viewport: { width: W, height: 844 }, deviceScaleFactor: 1 });
+/* 화면 꺼짐 방지 요청을 세어 봅니다(헤드리스 브라우저는 실제 잠금을 거절할 수 있어 가짜로 바꿔 끼움) */
+/* 함수 대신 문자열로 넘깁니다(tsx가 함수에 붙이는 __name 도우미가 브라우저에는 없음) */
+await ctx.addInitScript({ content: `
+  window.__wake = { held: 0, asked: 0 };
+  Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => {
+    window.__wake.asked++; window.__wake.held++;
+    const s = { released: false, release: async () => { if (!s.released) { s.released = true; window.__wake.held--; } } };
+    return s;
+  } } });
+` });
+const wake = () => page.evaluate('window.__wake') as Promise<{ held: number; asked: number }>;
 const page = await ctx.newPage();
 let tutorialStock = '';
 let tradedStock = '';
@@ -107,6 +118,7 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
   await page.getByLabel('1라운드, 전체 3라운드').waitFor();
   await page.locator('.sectors').waitFor();
+  ok((await wake()).held === 1, `게임 중 화면 꺼짐 방지가 걸리지 않음 ${JSON.stringify(await wake())}`);
   await page.getByRole('button', { name: '설정' }).click();
   const settings = page.getByRole('dialog', { name: '설정' });
   await settings.waitFor();
@@ -400,6 +412,7 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   await page.getByRole('region', { name: '관심종목' }).getByText(pickedName, { exact: true }).waitFor({ timeout: 10_000 });
   const j = page.locator('.journal');
   await j.waitFor({ timeout: 40_000 });
+  ok((await wake()).held === 0, `최종 결과인데 화면 꺼짐 방지가 풀리지 않음 ${JSON.stringify(await wake())}`);
   ok(await j.locator('.journal-item').count() >= 1, '매매일지에 거래가 없음');
   ok(/종가/.test(await j.locator('.journal-item').first().innerText()), '종가 비교 없음');
   await j.getByRole('button', { name: '+ 메모 남기기' }).first().click();
