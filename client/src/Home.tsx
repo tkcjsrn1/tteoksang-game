@@ -9,6 +9,7 @@ import { parseRecords, RECORDS_KEY } from './recordStore';
 import { Chevron, Disclaimer, Logo } from './ui';
 import { needsOnboarding, Onboarding } from './Onboarding';
 import { SettingsButton } from './Settings';
+import { persistedSettings } from './homeSettings';
 
 /** 날짜마다 바뀌는 오늘의 용어. 같은 날에는 누구에게나 같은 용어가 나옵니다. */
 function todayTerm() {
@@ -25,7 +26,7 @@ export function Home() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /* 게임 설정은 고른 값을 이 기기에 기억합니다. 처음에는 기본값(10종목·5라운드·90초) */
-  const [settings, setSettings] = useState<RoomSettings>(() => cleanSettings(store.get('settings')));
+  const [settings, setSettings] = useState<RoomSettings>(() => persistedSettings(cleanSettings(store.get('settings'))));
   const { open, seen } = useGlossary();
   const games = parseRecords(store.get(RECORDS_KEY)).length;
   const run = async (f: () => Promise<void>) => {
@@ -50,7 +51,7 @@ export function Home() {
   const level = settings.level ?? MODES.solo.level, caps = settings.maxPlayers ?? MODES.friend.maxPlayers;
   const news = demo ? DEMO_PACE.news : MODES.solo.news, recap = demo ? DEMO_PACE.recap : MODES.solo.recap;
   const minutes = Math.max(1, Math.round(rounds * (news + trade + recap) / 60));
-  const pick = (o: RoomSettings) => { const next = { ...settings, ...o }; setSettings(next); store.set('settings', JSON.stringify(next)); };
+  const pick = (o: RoomSettings) => { const next = { ...settings, ...o }; setSettings(next); store.set('settings', JSON.stringify(persistedSettings(next))); };
   const join = () => run(async () => { await roomInfo(code); navigate(`/room/${code}`); });
   /* 튜토리얼: 게임 방법 카드를 처음부터 보여 주고, 혼자 연습 첫 라운드에 단계 안내를 다시 켭니다. */
   const startTutorial = () => { store.del('tutorial'); setTutorial(true); setHowTo(true); };
@@ -98,7 +99,7 @@ export function Home() {
               <input type="checkbox" checked={demo} onChange={e => pick({ pace: e.target.checked ? 'demo' : 'normal' })} />
               발표용 빠른 판 ({DEMO_PACE.rounds}라운드 · 뉴스 {DEMO_PACE.news}초 · 장 {DEMO_PACE.trade}초 · 결과 {DEMO_PACE.recap}초)
             </label>
-            {demo && <p className="hint">발표·시연에서 처음부터 최종 결과까지 한 번에 보여 줄 때 쓰세요. 연습할 때는 끄는 것을 권합니다.</p>}
+            {demo && <p className="hint">발표·시연에서 처음부터 최종 결과까지 한 번에 보여 줄 때 쓰세요. 이 설정은 저장하지 않아서 다음에 홈에 오면 꺼져 있어요.</p>}
             <p className="hint">{LEVEL_LABEL[level]}: {LEVEL_NOTE[level]}. 뉴스·속보·돌발 사건은 두 난이도에서 똑같이 나와요.</p>
             <p className="hint">혼자 연습과 친구 방 모두에 적용돼요. 친구 방은 만든 사람의 설정을 따릅니다. 처음이라면 쉬움·10종목·5라운드를 권합니다.</p>
             <div className="room-extra" role="group" aria-label="친구 방 정원">

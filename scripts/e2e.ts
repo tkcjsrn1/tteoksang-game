@@ -299,6 +299,20 @@ await step('용어 설명 창 열고 닫기', async () => {
   ok(await sheet.getByText('이 게임에서는').count() + await sheet.locator('.term-short').count() > 0, '설명 내용 없음');
   await sheet.getByRole('button', { name: '닫기' }).click();
   await sheet.waitFor({ state: 'detached' });
+  /* 손잡이를 조금 끌면 제자리로, 충분히 끌면 닫힙니다 */
+  const drag = async (dy: number) => {
+    const box = (await sheet.locator('.sheet-grip').boundingBox())!;
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x, y + dy, { steps: 12 }); await page.mouse.up();
+  };
+  await page.locator('button.gl-term').first().click();
+  await sheet.waitFor();
+  await drag(18);   // 튕김 기준(24px)보다 짧게
+  await page.waitForTimeout(400);
+  ok(await sheet.count() === 1, '조금 끌었는데 용어 창이 닫힘');
+  await drag(220);
+  await sheet.waitFor({ state: 'detached' });
 });
 
 await step('용어 사전과 퀴즈', async () => {

@@ -252,7 +252,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 /* 아래에서 올라오는 창 */
 .sheet-wrap { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .4); display: flex; align-items: flex-end; justify-content: center; }
 .sheet { background: var(--panel); width: min(var(--app-width), 100%); max-height: 90vh; overflow-y: auto; border-radius: 24px 24px 0 0; padding-top: 10px; padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); padding-left: var(--gutter-l); padding-right: var(--gutter-r); display: flex; flex-direction: column; gap: 12px; }
-.sheet::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: #D1D6DB; align-self: center; flex: none; }
+/* 손잡이: 보이는 막대는 40×4px이지만 손가락으로 잡기 쉽게 시트 폭 전체·24px 높이를 끌 수 있습니다(위아래 음수 여백으로 간격은 예전과 같음) */
+.sheet-grip { align-self: stretch; flex: none; height: 24px; margin: -10px 0 -10px; display: flex; align-items: center; justify-content: center; touch-action: none; cursor: grab; }
+.sheet-grip::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: #D1D6DB; }
+.sheet-head { touch-action: none; }
 .sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .sheet-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
 .bigpx { font-size: 26px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
