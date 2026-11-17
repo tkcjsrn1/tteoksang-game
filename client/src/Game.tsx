@@ -143,6 +143,12 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
   /* 배경음: 장중에만. 마감 10초 전부터 빨라집니다 */
   useEffect(() => { setMusicScene(view.phase === 'trade', soon); }, [view.phase, soon]);
   useEffect(() => () => setMusicScene(false), []);
+  /* 하단 탭 배지: 내 자산은 걸어 둔 예약 주문 수, 뉴스는 안 본 새 뉴스가 있으면 점 */
+  const pending = view.portfolio?.orders.length ?? 0;
+  const newsCount = view.news.reduce((n, r) => n + r.cards.length, 0);
+  const [newsSeen, setNewsSeen] = useState(newsCount);
+  useEffect(() => { if (tab === 'news') setNewsSeen(newsCount); }, [tab, newsCount]);
+  const newsNew = tab !== 'news' && newsCount > newsSeen;
   /* 장중 속보가 뜨면 알림음 */
   const breakingCount = view.phase === 'trade' ? (view.news[view.news.length - 1]?.cards.filter(c => c.card.breaking).length ?? 0) : 0;
   const prevBreaking = useRef(breakingCount);
@@ -240,7 +246,15 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
         {tab === 'news' && <NewsLog view={view} />}
       </main>
       <nav className="tabs">
-        {(['market', 'assets', 'news'] as Tab[]).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{TAB_ICON[t]}{t === 'market' ? '시장' : t === 'assets' ? '내 자산' : '뉴스'}</button>)}
+        {(['market', 'assets', 'news'] as Tab[]).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>
+          <span className="tab-icon">{TAB_ICON[t]}
+            {t === 'assets' && pending > 0 && <span className="tab-badge num" aria-hidden="true">{pending}</span>}
+            {t === 'news' && newsNew && <span className="tab-dot" aria-hidden="true" />}
+          </span>
+          {t === 'market' ? '시장' : t === 'assets' ? '내 자산' : '뉴스'}
+          {t === 'assets' && pending > 0 && <span className="sr-only">, 예약 주문 {pending}건</span>}
+          {t === 'news' && newsNew && <span className="sr-only">, 새 뉴스 있음</span>}
+        </button>)}
       </nav>
       <footer className="foot"><Disclaimer /></footer>
       {stock && <StockSheet stock={stock} view={view} left={left} coach={coach} onClose={() => setDetail(null)}

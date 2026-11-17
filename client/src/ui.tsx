@@ -5,6 +5,7 @@ import { Rich, TermLink } from './glossary/GlossaryContext';
 import { replayAt, replayPath, replayTicks, useReplay } from './fx';
 import { bucketCandles, probeIndex } from './live';
 import { logoVariant } from './sectors';
+import { GLYPH } from './glyphs';
 import { useTheme } from './theme';
 
 export const won = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}원`;
@@ -46,23 +47,10 @@ export function Chevron() {
 }
 /** 종목 머리글자 동그라미. 같은 업종은 같은 색입니다. */
 const avatarColor = (code: string) => { const s = STOCKS.find(x => x.code === code); return s ? GROUPS[s.group].color : '#8B95A1'; };
-/* 가상 기업 로고: 업종마다 기본 그림(번개·불꽃·눈꽃·잎·음표·물방울)이 있고, 같은 업종 안에서는 테두리 모양으로 구분합니다. */
-const GLYPH: Record<string, string> = {
-  power: 'M13 3L5 13h5l-1 8 8-11h-5z',
-  storage: 'M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z',
-  cold: 'M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5',
-  bio: 'M5 19C5 10 10 5 19 5c0 9-5 14-14 14zM5 19l8-8',
-  stage: 'M9 18V6l10-2v12M9 18a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM19 16a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z',
-  water: 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z',
-  space: 'M12 3a9 9 0 1 1-9 9M12 3v4M12 12l5-5M3 12h4',
-  farm: 'M12 21V9M12 9c0-3 2-5 5-5 0 3-2 5-5 5zM12 13c0-3-2-5-5-5 0 3 2 5 5 5z',
-  care: 'M12 20s-7-4.5-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.5-7 9-7 9z',
-  recycle: 'M7 7l-3 5 3 2M17 7l3 5-3 2M9 19h6M12 4l3 5h-6z'
-};
 export function StockAvatar({ code, name }: { code: string; name: string }) {
   const s = STOCKS.find(x => x.code === code);
   if (!s) return <span className="avatar" style={{ background: avatarColor(code) }} aria-hidden="true">{name[0]}</span>;
-  const v = logoVariant(code), stroke = s.group === 'cold' || s.group === 'bio' || s.group === 'stage';
+  const v = logoVariant(code), stroke = s.group === 'cold' || s.group === 'bio' || s.group === 'stage' || s.group === 'chips' || s.group === 'games';
   return (
     <span className={`avatar logo-${v}`} style={{ background: avatarColor(code) }} aria-hidden="true">
       <svg width="36" height="36" viewBox="0 0 36 36">
