@@ -4,6 +4,7 @@
    - 열어 본 용어는 이 기기에만 기록해 사전 화면에서 진행도로 보여 줍니다. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSheetDrag } from '../sheetDrag';
+import { useSheetDismiss } from '../sheetStack';
 import { categoryLabel, linkTerms, termById, TERMS } from '../../../shared/glossary';
 import { navigate } from '../App';
 import { store } from '../net';
@@ -48,6 +49,7 @@ export function GlossaryProvider({ children }: { children: ReactNode }) {
 function TermSheet({ id, onOpen, onClose }: { id: string; onOpen: (id: string) => void; onClose: () => void }) {
   const t = termById.get(id)!;
   const { sheet, handle } = useSheetDrag(onClose);
+  useSheetDismiss(onClose);
   return (
     <div className="sheet-wrap top" onClick={onClose}>
       <section ref={sheet} className="sheet term-sheet" role="dialog" aria-label={`용어: ${t.term}`} onClick={e => e.stopPropagation()}>

@@ -9,6 +9,7 @@ import type { OrderOutcome } from '../net';
 import type { CoachStep } from '../coach';
 import { intradayBp } from '../live';
 import { useSheetDrag } from '../sheetDrag';
+import { useSheetDismiss } from '../sheetStack';
 export type Tab = 'market' | 'assets' | 'news';
 export interface PlayProps { view: RoomView; offset: number; online: boolean; send: (m: ClientMsg) => void; placeOrder: (c: StockCode, s: Side, q: number, kind?: OrderKind, limit?: number) => Promise<OrderOutcome>; cancelOrder: (c: StockCode) => Promise<OrderOutcome>; setStop: (c: StockCode, stop: number | null, take: number | null) => Promise<OrderOutcome> }
 import { arrow, dir, pctBp, StockAvatar, won } from '../ui';
@@ -77,6 +78,7 @@ export function StockRow({ s, view, onOpen, hint = false }: { s: StockView; view
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { sheet, handle } = useSheetDrag(onClose);
+  useSheetDismiss(onClose);
   return (
     <div className="sheet-wrap" onClick={onClose}>
       <section ref={sheet} className="sheet" role="dialog" aria-label={title} onClick={e => e.stopPropagation()}>
