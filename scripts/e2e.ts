@@ -45,10 +45,17 @@ page.on('console', m => { if (m.type() === 'error' && !ignorable(m.text())) erro
 /* 장중 속보 알림은 떠 있는 동안 화면 위를 가립니다. 단계를 시작하기 전에 치우고,
    무엇이 떴는지는 기록해 두었다가 '장중 속보' 단계에서 확인합니다. */
 let breakingSeen: string | null = null;
+let countdownSeen: boolean | null = null;
 async function closeBreaking() {
   const pop = page.locator('.breaking');
   if (!(await pop.count())) return;
   breakingSeen ??= await pop.innerText().catch(() => null);
+  /* 남은 초가 5 → 4 → … 로 줄어드는지 한 번만 봅니다 */
+  if (countdownSeen === null) {
+    const sec = async () => Number((await pop.locator('button').last().innerText().catch(() => '')).match(/\((\d)초/)?.[1] ?? NaN);
+    const a = await sec(); await page.waitForTimeout(1100); const b = await sec();
+    countdownSeen = Number.isFinite(a) && Number.isFinite(b) ? b < a : null;
+  }
   await pop.getByRole('button', { name: /닫기/ }).click().catch(() => {});
   await pop.waitFor({ state: 'detached', timeout: 3_000 }).catch(() => {});
 }
@@ -223,6 +230,15 @@ await step('시장가 매수: 바로 체결', async () => {
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  /* 시장 탭 '내 보유 종목': 오른쪽 큰 숫자는 1주 가격이 아니라 평가금액(수량 × 지금 가격) */
+  const mine = page.getByRole('region', { name: '내 보유 종목' });
+  if (await mine.count()) {
+    const row = mine.locator('button.row').first();
+    const small = await row.locator('.row-main small').innerText();
+    const qty = Number(small.match(/([\d,]+)주/)![1].replace(/,/g, '')), now = Number(small.match(/지금 ([\d,]+)원/)![1].replace(/,/g, ''));
+    const big = Number((await row.locator('.row-price b').innerText()).replace(/[^\d]/g, ''));
+    ok(Math.abs(big - qty * now) <= qty * 20, `보유 종목 큰 숫자가 평가금액이 아님(${big} vs ${qty}×${now})`);
+  }
   /* 그래프 종류 버튼은 종목 창 위쪽에 있습니다(차트 안이 아님) */
   const chart = page.locator('.live-chart'), kinds = page.getByRole('group', { name: '그래프 종류' });
   await chart.locator('.chart-fill').first().waitFor();
@@ -274,6 +290,7 @@ await step('장중 속보: 알림이 뜨고 닫힌다', async () => {
   ok(breakingSeen, '주문 시간이 끝날 때까지 장중 속보 알림이 뜨지 않음');
   ok(/속보/.test(breakingSeen ?? ''), '속보 표시 없음');
   ok(/%/.test(breakingSeen ?? ''), '속보 대상 종목의 등락이 없음');
+  ok(countdownSeen !== false, '속보 창의 남은 초가 줄어들지 않음');
 });
 
 await step('발표 일정: 다음 라운드 예정 종목만 보인다', async () => {

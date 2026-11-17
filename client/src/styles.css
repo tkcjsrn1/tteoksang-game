@@ -729,3 +729,9 @@ h1.d-phase { margin: 0; font: inherit; }
 .start-sheet .check { margin-top: 0; }
 .start-sheet .room-extra { margin-top: 0; }
 .start-sum { margin: 4px 0 0; font-weight: 700; font-size: 15px; color: var(--fg); }
+
+/* 내 자산 탭 보유 종목: 오른쪽에 평가금액(굵게)과 평가손익(작게) 두 줄 */
+.hold-value { display: grid; text-align: right; flex: none; }
+.hold-value b { font-weight: 700; }
+.hold-value small.up { color: var(--up); }
+.hold-value small.down { color: var(--down); }

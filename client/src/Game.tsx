@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useWakeLock } from './wakeLock';
 import QRCode from 'qrcode';
-import { DEMO_PACE, LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, MODES, roomLabel, STOCKS } from '../../shared/rules';
+import { DEMO_PACE, holdingCost, holdingValue, LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, MODES, roomLabel, STOCKS } from '../../shared/rules';
 import type { ClientMsg, NewsCard, RoomView, StockCode } from '../../shared/types';
 import { navigate } from './App';
 import { coachStep } from './coach';
@@ -161,14 +161,13 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
     }
     prevBreaking.current = breakingCount;
   }, [breakingCount]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* 속보 창은 5초 뒤 저절로 닫힙니다. 주문 시간을 너무 잡아먹지 않게 */
+  /* 속보 창은 5초 뒤 저절로 닫힙니다(남은 초는 창이 직접 셉니다). 주문 시간을 너무 잡아먹지 않게 */
   useEffect(() => {
     if (!breakingPop) return;
-    const t = setTimeout(() => setBreakingPop(null), 5000);
     /* 화면 아무 곳이나 건드리면 바로 닫습니다. 주문하려는데 알림이 가리고 있으면 안 되니까요. */
     const close = () => setBreakingPop(null);
     document.addEventListener('pointerdown', close);
-    return () => { clearTimeout(t); document.removeEventListener('pointerdown', close); };
+    return () => document.removeEventListener('pointerdown', close);
   }, [breakingPop]);
   useEffect(() => { if (view.phase !== 'trade') setBreakingPop(null); }, [view.phase]);
   /* 체결 소리와 진동: 바로 체결, 지정가 체결, 손절·익절 자동 매도 모두 체결 기록이 늘어날 때 울립니다 */
@@ -262,7 +261,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
         onWatch={() => { setWatching(true); setDetail(null); }}
         place={placeOrder} cancel={cancelOrder} setStop={setStop} toast={toast.show} />}
       {help && <HelpSheet phase={view.phase} level={view.level} onClose={() => setHelp(false)} onReplayTutorial={view.mode === 'solo' ? () => { store.del('tutorial'); setTutorialOff(false); setWatching(false); setHelp(false); } : null} />}
-      {breakingPop && <BreakingPopup view={view} card={breakingPop} onClose={() => setBreakingPop(null)}
+      {breakingPop && <BreakingPopup key={breakingPop.stageId + breakingPop.headline} view={view} card={breakingPop} onClose={() => setBreakingPop(null)}
         onOpen={c => { setBreakingPop(null); setTab('market'); setDetail(c); }} />}
       {toast.node}
     </div>
@@ -319,7 +318,7 @@ function MyHoldings({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) =
   const p = view.portfolio;
   if (!p || p.holdings.length === 0) return null;
   const pnl = p.holdings.reduce((a, h) => a + h.pnl, 0);
-  const cost = p.holdings.reduce((a, h) => a + h.qty * h.avgCost, 0);
+  const cost = p.holdings.reduce((a, h) => a + holdingCost(h), 0);
   return (
     <section className="panel flush mine" aria-label="내 보유 종목">
       <div className="list-head">
@@ -334,16 +333,16 @@ function MyHoldings({ view, onOpen }: { view: RoomView; onOpen: (c: StockCode) =
             <StockAvatar code={h.code} name={h.name} />
             <span className="row-main">
               <b>{h.name}</b>
-              <small>{h.qty.toLocaleString('ko-KR')}주 · <TermLink id="avg-cost">평균</TermLink> {won(h.avgCost)}{stops ? ' · 손절·익절 걸림' : ''}{s?.haltLeft ? ` · VI ${s.haltLeft}초` : ''}</small>
+              <small>{h.qty.toLocaleString('ko-KR')}주 · <TermLink id="avg-cost">평균</TermLink> {won(h.avgCost)} · 지금 {won(h.price)}{stops ? ' · 손절·익절 걸림' : ''}{s?.haltLeft ? ` · VI ${s.haltLeft}초` : ''}</small>
             </span>
             <span className="row-price">
-              <b className="num">{won(h.price)}</b>
-              <small className={`num ${dir(h.pnl)}`}>{signedWon(h.pnl)}</small>
+              <b className="num">{won(holdingValue(h))}</b>
+              <small className={`num ${dir(h.pnl)}`}>{signedWon(h.pnl)}{holdingCost(h) ? ` (${pctBp(Math.round(h.pnl * 10000 / holdingCost(h)))})` : ''}</small>
             </span>
           </button>
         );
       })}</div>
-      <p className="hint">종목을 누르면 바로 사고팔 수 있어요.</p>
+      <p className="hint">오른쪽 큰 숫자는 <TermLink id="holding-value">평가금액</TermLink>(가진 수량 × 지금 가격), 아래는 평가손익이에요. 종목을 누르면 바로 사고팔 수 있어요.</p>
     </section>
   );
 }
@@ -360,8 +359,8 @@ function Assets({ view, cancel, toast }: { view: RoomView; cancel: PlayProps['ca
         <dt><TermLink id="deposit-reserved">매수 예약금</TermLink></dt><dd className="num">{won(p.reserved)}</dd>
         <dt>낸 <TermLink id="fee">수수료</TermLink>·<TermLink id="transaction-tax">세금</TermLink></dt><dd className="num">{won(p.fees)}</dd>
       </dl>
-      <h3 className="h small">보유 종목 <small className="hint">· 오른쪽 숫자는 <TermLink id="unrealized-pnl">평가손익</TermLink></small></h3>
-      {p.holdings.length ? <ul className="list">{p.holdings.map(h => <li key={h.code}><span>{h.name}<small>{h.qty.toLocaleString('ko-KR')}주 · 평균 {won(h.avgCost)}</small></span><span className={dir(h.pnl)}>{signedWon(h.pnl)}</span></li>)}</ul> : <p className="hint">아직 보유 종목이 없습니다.</p>}
+      <h3 className="h small">보유 종목 <small className="hint">· 오른쪽은 <TermLink id="holding-value">평가금액</TermLink>과 <TermLink id="unrealized-pnl">평가손익</TermLink></small></h3>
+      {p.holdings.length ? <ul className="list">{p.holdings.map(h => <li key={h.code}><span>{h.name}<small>{h.qty.toLocaleString('ko-KR')}주 · 평균 {won(h.avgCost)} · 지금 {won(h.price)}</small></span><span className="hold-value"><b className="num">{won(holdingValue(h))}</b><small className={`num ${dir(h.pnl)}`}>{signedWon(h.pnl)}</small></span></li>)}</ul> : <p className="hint">아직 보유 종목이 없습니다.</p>}
       {(view.level === 'pro' || p.orders.length > 0) && <h3 className="h small">걸어 둔 <TermLink id="limit-order">지정가</TermLink> 예약</h3>}
       {p.orders.length ? <ul className="list">{p.orders.map(o => <li key={o.code}><span>{view.stocks.find(s => s.code === o.code)!.name}<small>{o.side === 'buy' ? '매수' : '매도'} {o.qty.toLocaleString('ko-KR')}주 · 지정가 {won(o.price)}</small></span><button className="ghost small" disabled={view.phase !== 'trade'} onClick={async () => { const r = await cancel(o.code); toast(r.ok ? '예약을 취소했습니다' : r.reason ?? '취소하지 못했습니다'); }}>취소</button></li>)}</ul> : view.level === 'pro' ? <p className="hint">예약한 주문이 없습니다.</p> : null}
       {!!p.dividendLog?.length && <>

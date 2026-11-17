@@ -74,6 +74,11 @@ export type StockGroup = 'power' | 'storage' | 'cold' | 'bio' | 'stage' | 'water
 export function roomLabel(mode: GameMode, operated?: boolean): string {
   return operated ? '학술제 대전' : MODES[mode].label;
 }
+/** 보유 종목 한 줄의 평가금액 = 가진 수량 × 지금 가격(원, 정수).
+    시작 자금 1,000만 원이라 수량 × 가격은 Number.MAX_SAFE_INTEGER(약 9천조)보다 한참 작아 정수 그대로 안전합니다. */
+export const holdingValue = (h: { qty: number; price: number }) => h.qty * h.price;
+/** 산 원가 = 가진 수량 × 평균 단가(수수료 포함). 평가손익률의 분모입니다. */
+export const holdingCost = (h: { qty: number; avgCost: number }) => h.qty * h.avgCost;
 
 export const GROUPS: Record<StockGroup, { label: string; leader: StockCode; color: string }> = {
   power:   { label: '분산 전력',    leader: 'G01', color: '#E08E0B' },

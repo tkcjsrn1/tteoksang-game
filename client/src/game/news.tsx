@@ -1,6 +1,6 @@
 /* 뉴스·사건 화면: 뉴스 카드, 속보 알림, 돌발 카드와 결과 창, VI·발표 일정·배당 안내, 라운드 결과.
    Game.tsx에서 옮겼습니다(2026-11). 옮기기만 했고 동작은 그대로입니다. */
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { CardView, ClientMsg, NewsCard, NewsResult, RoomView, StockCode, StockView } from '../../../shared/types';
 import { navigate } from '../App';
 import { buzz, play, useCountUp } from '../fx';
@@ -124,8 +124,19 @@ export function CardResult({ card, mine, onClose }: { card: CardView; mine: { ke
 }
 /** 내 평가액 구역. 관전자에게는 상위 순위만 보여 줍니다. */
 
+/** 속보 창이 저절로 닫히기까지의 초 */
+export const BREAKING_SECONDS = 5;
 export function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView; card: NewsCard; onClose: () => void; onOpen: (c: StockCode) => void }) {
   const targets = card.targets.map(c => view.stocks.find(s => s.code === c)).filter((s): s is StockView => !!s);
+  /* 5 → 4 → 3 → 2 → 1로 줄어들다가 0이 되면 닫습니다. 새 속보가 오면 창을 새로 그려(key) 5부터 다시 셉니다. */
+  const [left, setLeft] = useState(BREAKING_SECONDS);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const t = setInterval(() => setLeft(n => n - 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => { if (left <= 0) closeRef.current(); }, [left]);
   return (
     <div className="breaking-wrap" role="status" aria-label="속보">
       <div className="breaking">
@@ -140,7 +151,8 @@ export function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView;
           </button></li>;
         })}</ul>}
         <p className="hint">속보가 뜨는 순간 가격이 먼저 반응했어요. 결과는 장 마감 때 공개됩니다. 아무 곳이나 누르면 닫혀요.</p>
-        <button className="ghost" onClick={onClose}>닫기 (5초 뒤 자동)</button>
+        {/* 남은 초는 화면 읽기 프로그램이 매초 다시 읽지 않게 숨기고, 버튼 이름은 '닫기'로 고정합니다 */}
+        <button className="ghost" onClick={onClose} aria-label="닫기"><span>닫기 <span className="num" aria-hidden="true">({Math.max(left, 1)}초 뒤 자동)</span></span></button>
       </div>
     </div>
   );
