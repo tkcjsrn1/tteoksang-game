@@ -8,6 +8,7 @@ import { groupStocks } from '../sectors';
 import type { OrderOutcome } from '../net';
 import type { CoachStep } from '../coach';
 import { intradayBp } from '../live';
+import { useSheetDrag } from '../sheetDrag';
 export type Tab = 'market' | 'assets' | 'news';
 export interface PlayProps { view: RoomView; offset: number; online: boolean; send: (m: ClientMsg) => void; placeOrder: (c: StockCode, s: Side, q: number, kind?: OrderKind, limit?: number) => Promise<OrderOutcome>; cancelOrder: (c: StockCode) => Promise<OrderOutcome>; setStop: (c: StockCode, stop: number | null, take: number | null) => Promise<OrderOutcome> }
 import { arrow, dir, pctBp, StockAvatar, won } from '../ui';
@@ -75,10 +76,12 @@ export function StockRow({ s, view, onOpen, hint = false }: { s: StockView; view
 }
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const { sheet, handle } = useSheetDrag(onClose);
   return (
     <div className="sheet-wrap" onClick={onClose}>
-      <section className="sheet" role="dialog" aria-label={title} onClick={e => e.stopPropagation()}>
-        <div className="sheet-head"><h2>{title}</h2><button className="help-btn" aria-label="닫기" onClick={onClose}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
+      <section ref={sheet} className="sheet" role="dialog" aria-label={title} onClick={e => e.stopPropagation()}>
+        <div className="sheet-grip" aria-hidden="true" {...handle} />
+        <div className="sheet-head" {...handle}><h2>{title}</h2><button className="help-btn" aria-label="닫기" onClick={onClose}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
         {children}
       </section>
     </div>

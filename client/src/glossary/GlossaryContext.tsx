@@ -3,6 +3,7 @@
    - <Rich text>: 글 속 용어를 자동으로 찾아 링크합니다(shared/glossary.ts의 linkTerms).
    - 열어 본 용어는 이 기기에만 기록해 사전 화면에서 진행도로 보여 줍니다. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSheetDrag } from '../sheetDrag';
 import { categoryLabel, linkTerms, termById, TERMS } from '../../../shared/glossary';
 import { navigate } from '../App';
 import { store } from '../net';
@@ -46,10 +47,12 @@ export function GlossaryProvider({ children }: { children: ReactNode }) {
 
 function TermSheet({ id, onOpen, onClose }: { id: string; onOpen: (id: string) => void; onClose: () => void }) {
   const t = termById.get(id)!;
+  const { sheet, handle } = useSheetDrag(onClose);
   return (
     <div className="sheet-wrap top" onClick={onClose}>
-      <section className="sheet term-sheet" role="dialog" aria-label={`용어: ${t.term}`} onClick={e => e.stopPropagation()}>
-        <div className="sheet-head">
+      <section ref={sheet} className="sheet term-sheet" role="dialog" aria-label={`용어: ${t.term}`} onClick={e => e.stopPropagation()}>
+        <div className="sheet-grip" aria-hidden="true" {...handle} />
+        <div className="sheet-head" {...handle}>
           <h2>{t.term}</h2>
           <button className="ghost small" onClick={onClose}>닫기</button>
         </div>
