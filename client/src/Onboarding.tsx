@@ -77,7 +77,7 @@ function ArtOrder() {
     <div className="art-card">
       <div className="art-seg"><span className="on">매수</span><span>매도</span></div>
       <b className="art-qty">100주</b>
-      <div className="art-kv"><span>총 빠져나갈 돈</span><b>871,740원</b></div>
+      <div className="art-kv"><span>총 빠져나갈 돈</span><b>870,870원</b></div>
       <span className="art-btn">100주 매수</span>
     </div>
   );
