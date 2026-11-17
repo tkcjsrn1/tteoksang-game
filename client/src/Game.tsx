@@ -213,7 +213,7 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
       <main className="game-body">
         {coach && tab === 'market' && news}
         {coach && <Coach step={coach} onSkip={skipTutorial} />}
-        {view.phase === 'recap' && <Recap view={view} onOpen={c => { setDetail(c); setTab('market'); }} />}
+        {view.phase === 'recap' && <Recap view={view} send={send} onOpen={c => { setDetail(c); setTab('market'); }} />}
         {view.phase === 'settling' && <div className="panel"><p className="headline">시장 결과 집계 중</p><p className="hint">체결을 확인하고 있습니다. 잠시만 기다려 주세요.</p></div>}
         {tab === 'market' && view.phase !== 'recap' && <>
           <Standing view={view} />

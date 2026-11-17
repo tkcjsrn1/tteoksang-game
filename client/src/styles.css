@@ -710,3 +710,7 @@ input[type=search] { -webkit-appearance: none; appearance: none; }
 h1.d-phase { margin: 0; font: inherit; }
 .d-trend .trend-bar { height: 16px; }
 .d-skip { font-size: clamp(14px, 1vw, 20px); padding: 8px 16px; }
+
+/* 결과 화면 '다 봤어요': 아래 탭 바로 위에 붙어 있습니다 */
+.recap-done { position: sticky; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); z-index: 4; background: var(--panel); border-radius: 16px; padding: 12px; margin-top: 8px; box-shadow: 0 -4px 16px rgba(0, 0, 0, .08); display: grid; gap: 6px; text-align: center; }
+.recap-done .cta { width: 100%; }
