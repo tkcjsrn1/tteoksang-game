@@ -1,0 +1,41 @@
+# 배포한 서버에 가짜 참가자를 붙여 학술제 한 판을 끝까지 돌려 봅니다. 손으로만 실행합니다.
+# GitHub → Actions → Rehearsal → Run workflow. 80명 3라운드면 무료 서버 월 전송량(5GB) 중 약 100MB를 씁니다.
+# 사람이 플레이 중일 때나 발표 당일에는 돌리지 마세요.
+name: Rehearsal
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 배포 주소
+        default: https://tteoksang-game.onrender.com
+        required: true
+      players:
+        description: 가짜 참가자 수(1~80)
+        default: '80'
+        required: true
+      rounds:
+        description: 라운드 수(3·5·8·10)
+        default: '3'
+        required: true
+
+jobs:
+  rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # 무료 서버가 잠들어 있으면 깨우는 데 1분 가까이 걸립니다
+      # 입력값은 환경 변수로만 넘깁니다(명령에 바로 끼워 넣지 않음)
+      - name: 서버 깨우기와 버전 확인
+        env: { URL: "${{ inputs.url }}" }
+        run: |
+          for i in $(seq 1 12); do curl -sf --max-time 30 "$URL/api/health" && break; sleep 10; done
+          echo
+      - name: 리허설
+        env: { URL: "${{ inputs.url }}", PLAYERS: "${{ inputs.players }}", ROUNDS: "${{ inputs.rounds }}" }
+        run: npm run rehearsal -- "$URL" "$PLAYERS" "$ROUNDS"
