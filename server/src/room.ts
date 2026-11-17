@@ -696,8 +696,13 @@ export class GameRoom {
     return true;
   }
 
-  leaderboard(): LeaderRow[] {
-    const sorted = this.s.players.map(p => ({ p, value: this.value(p) }))
+  /** 장중 시세 메시지에 실을 [참가자 id, 지금 평가액]. 순위는 받는 쪽에서 leaderboard()와 같은 규칙으로 다시 매깁니다 */
+  tickBoard(): [string, number][] { return this.s.players.map(p => [p.id, this.value(p)]); }
+
+  /** 순위표. priceOf를 주면 그 가격으로 평가합니다(정산 중에는 공개 전 가격) */
+  leaderboard(priceOf?: (code: StockCode) => number): LeaderRow[] {
+    const valueOf = (p: Player) => priceOf ? p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * priceOf(st.code), 0) : this.value(p);
+    const sorted = this.s.players.map(p => ({ p, value: valueOf(p) }))
       .sort((a, b) => b.value - a.value || a.p.label.localeCompare(b.p.label));
     let rank = 0;
     return sorted.map(({ p, value }, i) => {
@@ -788,8 +793,9 @@ export class GameRoom {
       phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade, level: cfg.level,
       you: { id: p?.id ?? null, label: p?.label ?? null, role, isHost: !!p && p.id === this.s.hostId },
       humanCount: this.s.status === 'lobby' ? this.online : this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: this.minToStart, startCash: START_CASH, operated: this.operated,
-      /* 정산 중에는 순위도 공개 전 값을 씁니다. */
-      leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
+      /* 정산 중에는 순위도 공개 전 값(장 마감 직전 시세)을 씁니다. 내 평가액과 같은 가격이라 둘이 어긋나지 않습니다.
+         예전에는 직전 라운드 끝 평가액을 써서, 정산 중에 내 평가액(장 마감 직전)과 순위가 서로 다른 시점이었습니다. */
+      leaderboard: inSettling ? this.leaderboard(priceOf) : this.leaderboard(),
       stocks, news: this.newsView(), schedule: this.scheduleView(), breakingAt, card: this.cardView(p), prediction: this.predictionView(p, now), crowd: this.crowdView(),
       predictionTrend: this.s.status === 'finished' ? this.predictionTrend() : undefined, pace: this.s.settings?.pace,
       portfolio: p ? {
@@ -805,11 +811,5 @@ export class GameRoom {
       arcIds: this.s.status === 'finished' ? this.s.plan.arcIds : undefined,
       nextRoomCode: this.s.nextRoomCode
     };
-  }
-  private prevLeaderboard(): LeaderRow[] {
-    return this.s.players.map(p => {
-      const v = p.valueHist[p.valueHist.length - 2] ?? START_CASH;
-      return { playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected, value: v, returnPct: (v / START_CASH - 1) * 100, rank: p.rankHist[p.rankHist.length - 2] ?? 1, prevRank: p.rankHist[p.rankHist.length - 2] ?? 1 };
-    }).sort((a, b) => a.rank - b.rank);
   }
 }

@@ -32,6 +32,10 @@ export const MSG_LIMIT_PER_SEC = 30;       // 연결 하나가 1초에 보낼 �
 export const MAX_ROOMS = 1000;             // 서버 전체 방 수 상한
 export const RECENT_ARCS_MAX = 12;         // 방을 만들 때 "최근에 본 사건"으로 받아 줄 개수
 export const ROOMS_PER_IP_PER_MIN = 20;    // 같은 주소에서 1분에 만들 수 있는 방 수
+/* 장중 시세 메시지에 순위(평가액)를 싣는 주기. 참가자(NPC 포함)가 BOARD_BIG_ROOM명 이하면 매초,
+   그보다 많으면 BOARD_EVERY_BIG초마다(80명 방에서 1초 전송량이 너무 늘지 않게) */
+export const BOARD_BIG_ROOM = 20;
+export const BOARD_EVERY_BIG = 3;
 
 export class Hub {
   rooms = new Map<string, GameRoom>();
@@ -176,7 +180,12 @@ export class Hub {
     if (!l) return;
     const prices: Partial<Record<StockCode, number>> = {};
     room.stocks.forEach(st => { prices[st.code] = room.markPrice(st.code); });
-    const msg = JSON.stringify({ t: 'tick', round: room.s.round, k: l.k, prices } satisfies ServerMsg);
+    /* 순위도 시세와 같은 시점으로 맞춥니다. 예전에는 순위가 장 시작·내 주문 때만 바뀌어서,
+       1초마다 바뀌는 내 평가액과 순위가 서로 다른 시점이었습니다(친구가 더 많아도 내가 위로 보임).
+       사람이 많은 방은 전송량을 줄이려고 BOARD_EVERY_BIG초에 한 번만 싣습니다. */
+    const every = room.s.players.length > BOARD_BIG_ROOM ? BOARD_EVERY_BIG : 1;
+    const board = l.k % every === 0 ? room.tickBoard() : undefined;
+    const msg = JSON.stringify({ t: 'tick', round: room.s.round, k: l.k, prices, ...(board ? { board } : {}) } satisfies ServerMsg);
     for (const c of this.conns) if (c.room === room && c.ws.readyState === WebSocket.OPEN) c.ws.send(msg);
   }
   /** 예약 주문이 체결된 참가자에게만 화면 전체를 다시 보냅니다. */
