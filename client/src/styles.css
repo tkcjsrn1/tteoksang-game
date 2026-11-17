@@ -717,3 +717,11 @@ h1.d-phase { margin: 0; font: inherit; }
 /* 결과 화면 '다 봤어요': 아래 탭 바로 위에 붙어 있습니다 */
 .recap-done { position: sticky; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); z-index: 4; background: var(--panel); border-radius: 16px; padding: 12px; margin-top: 8px; box-shadow: 0 -4px 16px rgba(0, 0, 0, .08); display: grid; gap: 6px; text-align: center; }
 .recap-done .cta { width: 100%; }
+
+/* 시작 전 설정 창: 홈의 시작 버튼을 누르면 열립니다. 휴대폰 폭에서 두 칸씩 놓습니다 */
+.start-sheet { display: grid; gap: 10px; }
+.start-sheet > .hint { margin: 0; }
+.start-sheet .room-settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.start-sheet .check { margin-top: 0; }
+.start-sheet .room-extra { margin-top: 0; }
+.start-sum { margin: 4px 0 0; font-weight: 700; font-size: 15px; color: var(--fg); }
