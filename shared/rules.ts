@@ -70,6 +70,11 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
    한 판에는 대표 종목 6개와 방 설정으로 정한 수의 관련 종목이 나옵니다(server/src/plan.ts pickStocks).
    모든 기업은 지어낸 가상 기업입니다. */
 export type StockGroup = 'power' | 'storage' | 'cold' | 'bio' | 'stage' | 'water' | 'space' | 'farm' | 'care' | 'recycle' | 'chips' | 'games';
+/** 화면에 쓰는 방 이름. 학술제 방은 내부적으로 친구 대전이지만 운영자가 진행하므로 따로 부릅니다. */
+export function roomLabel(mode: GameMode, operated?: boolean): string {
+  return operated ? '학술제 대전' : MODES[mode].label;
+}
+
 export const GROUPS: Record<StockGroup, { label: string; leader: StockCode; color: string }> = {
   power:   { label: '분산 전력',    leader: 'G01', color: '#E08E0B' },
   storage: { label: '열에너지 저장', leader: 'G02', color: '#7B61FF' },

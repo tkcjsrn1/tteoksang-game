@@ -455,6 +455,7 @@ await step('학술제: 운영자 대형 화면(1920px)과 참가자 입장·시�
   const phone = await pctx.newPage();
   await phone.goto(`${base}/#/room/${code}`);
   await phone.getByText('운영자가 대형 화면에서 시작하면').waitFor();
+  ok(await phone.getByText('학술제 대전 · 대기실').count() === 1, '학술제 참가자 대기실이 "학술제 대전"으로 나오지 않음');
   ok(await phone.getByRole('button', { name: '게임 시작' }).count() === 0, '참가자에게 시작 버튼이 보임');
   /* 열쇠 없는 기기에서 연 대형 화면은 읽기 전용 */
   const ro = await pctx.newPage();

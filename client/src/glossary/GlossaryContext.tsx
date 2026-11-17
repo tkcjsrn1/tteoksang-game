@@ -61,7 +61,7 @@ function TermSheet({ id, onOpen, onClose }: { id: string; onOpen: (id: string) =
         <p className="hint">{categoryLabel(t.category)}{t.en ? ` · ${t.en}` : ''}</p>
         <p className="term-short">{t.short}</p>
         <p>{t.body}</p>
-        {t.game && <p className="term-game"><b>이 게임에서는</b> {t.game}</p>}
+        {t.game && <p className="term-game"><b>게임 규칙</b> {t.game}</p>}
         {t.related.length > 0 && <>
           <p className="hint">함께 보면 좋은 용어</p>
           <div className="term-chips">{t.related.map(r => termById.get(r) && <button key={r} className="term-chip" onClick={() => onOpen(r)}>{termById.get(r)!.term}</button>)}</div>
