@@ -717,3 +717,8 @@ h1.d-phase { margin: 0; font: inherit; }
 /* 결과 화면 '다 봤어요': 아래 탭 바로 위에 붙어 있습니다 */
 .recap-done { position: sticky; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); z-index: 4; background: var(--panel); border-radius: 16px; padding: 12px; margin-top: 8px; box-shadow: 0 -4px 16px rgba(0, 0, 0, .08); display: grid; gap: 6px; text-align: center; }
 .recap-done .cta { width: 100%; }
+
+/* 하단 탭 배지: 예약 주문 수(내 자산), 안 본 새 뉴스(뉴스) */
+.tab-icon { position: relative; display: inline-flex; }
+.tab-badge { position: absolute; top: -4px; right: -10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--led-2); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+.tab-dot { position: absolute; top: -1px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--led-2); box-shadow: 0 0 0 2px var(--panel); }
