@@ -36,9 +36,16 @@ jobs:
       # 입력값은 환경 변수로만 넘깁니다(명령에 바로 끼워 넣지 않음)
       - name: 서버 깨우기와 버전 확인
         env: { URL: "${{ inputs.url || 'https://tteoksang-game.onrender.com' }}" }
+        # 방금 main에 머지했다면 Render가 새 버전으로 바뀔 때까지 기다립니다(재시작 중에 돌면 결과가 틀어짐)
         run: |
-          for i in $(seq 1 12); do curl -sf --max-time 30 "$URL/api/health" && break; sleep 10; done
-          echo
+          main=$(git ls-remote "https://github.com/${{ github.repository }}" refs/heads/main | cut -c1-7)
+          echo "기다리는 버전: $main"
+          for i in $(seq 1 60); do
+            h=$(curl -sf --max-time 30 "$URL/api/health" || true)
+            echo "$h" | grep -q "$main" && { echo "$h"; exit 0; }
+            sleep 15
+          done
+          echo "15분 안에 새 버전이 뜨지 않았습니다: $h"; exit 1
       - name: 리허설
         env: { URL: "${{ inputs.url || 'https://tteoksang-game.onrender.com' }}", PLAYERS: "${{ inputs.players || '80' }}", ROUNDS: "${{ inputs.rounds || '3' }}" }
         run: npm run rehearsal -- "$URL" "$PLAYERS" "$ROUNDS"
