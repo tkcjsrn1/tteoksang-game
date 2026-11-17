@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useWakeLock } from './wakeLock';
 import QRCode from 'qrcode';
 import { DEMO_PACE, LABEL_MAX, LEVEL_LABEL, LEVEL_NOTE, MODES, STOCKS } from '../../shared/rules';
 import type { ClientMsg, NewsCard, RoomView, StockCode } from '../../shared/types';
@@ -20,6 +21,8 @@ import { Finished } from './game/final';
 export function Game({ code }: { code: string }) {
   const r = useRoom(code);
   const { view, error, online } = r;
+  /* 대기실·게임 중에는 화면이 꺼지지 않게 합니다. 최종 결과에서는 풀어 줍니다. */
+  useWakeLock(!!view && view.status !== 'finished');
   if (!view) return <main className="center">{error ? <><p className="error">{error}</p><button className="cta" onClick={() => navigate('/')}>처음으로</button></> : <p>방에 들어가는 중입니다</p>}<Disclaimer /></main>;
   if (view.status === 'lobby') return <Lobby view={view} send={r.send} error={error} />;
   if (view.status === 'finished') return <Finished view={view} send={r.send} />;

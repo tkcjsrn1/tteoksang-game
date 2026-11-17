@@ -3,6 +3,7 @@
    움직임이 큰 종목, 상위 5명의 이름과 수익률. 개인 보유·현금·주문은 서버가 보내지도 않습니다(view의 portfolio가 null).
    운영자 열쇠가 이 기기에 있으면 시작·다음 판 버튼이 보이고, 없으면 읽기 전용입니다. */
 import { useEffect, useState } from 'react';
+import { useWakeLock } from './wakeLock';
 import QRCode from 'qrcode';
 import { LEVEL_LABEL, MODES } from '../../shared/rules';
 import type { LeaderRow, RoomView } from '../../shared/types';
@@ -19,6 +20,8 @@ export function Display({ code }: { code: string }) {
   const [opKey] = useState(() => store.get(operatorKey(code)));
   const { view, offset, send, error, role } = useRoom(code, { operatorToken: opKey });
   const left = useSecondsLeft(view?.phaseEndsAt, offset);
+  /* 대형 화면(프로젝터 PC)은 판이 끝난 뒤에도 켜 둡니다 */
+  useWakeLock(!!view);
   if (!view) return (
     <main className="display center">
       {error ? <><p className="error">{error}</p><button className="cta" onClick={() => navigate('/')}>처음으로</button></> : <p>대형 화면을 준비하는 중입니다</p>}
