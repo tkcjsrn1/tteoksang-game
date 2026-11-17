@@ -2,6 +2,7 @@
    - 효과음은 파일 없이 브라우저의 WebAudio로 짧게 합성합니다(저작권·용량 걱정 없음).
    - 브라우저는 사용자가 한 번 누르기 전에는 소리를 막으므로, 첫 클릭 때 오디오를 엽니다.
    - 배경음도 WebAudio로 만듭니다(장중에만, 마감 10초 전부터 빨라짐). 진동은 지원하는 휴대폰에서만 울립니다.
+   - 화면이 꺼지거나 앱이 뒤로 가면 오디오를 재워서 효과음·배경음 모두 나지 않게 합니다.
    - 소리·배경음·진동 켜고 끄기는 이 기기에만 저장합니다. 움직임 줄이기 설정이면 숫자 애니메이션을 건너뜁니다.
    계산 함수(countValue, revealTone, fillTone, musicStep, musicBpm)는 React와 브라우저 없이 tests/fx.test.ts에서 검사합니다. */
 import { useEffect, useRef, useState } from 'react';
@@ -57,6 +58,12 @@ export function setMasterVolume(value: number) {
   saveAudioSetting(VOLUME_KEY, String(value));
   if (master && ctx) master.gain.setTargetAtTime(value / 100, ctx.currentTime, 0.02);
 }
+/** 화면이 지금 안 보이는지(화면 꺼짐, 홈 화면, 다른 탭) */
+const pageHidden = () => typeof document !== 'undefined' && document.hidden;
+/** 효과음을 낼지. 소리를 껐거나, 음량이 0이거나, 화면이 안 보이면 내지 않습니다 */
+export function soundAllowed(on: boolean, vol: number, hidden: boolean): boolean {
+  return on && vol > 0 && !hidden;
+}
 function audio(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -70,13 +77,25 @@ function audio(): AudioContext | null {
       ctx = next;
     } catch { return null; }
   }
-  if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+  if (ctx.state === 'suspended' && !pageHidden()) void ctx.resume().catch(() => {});
   return ctx;
+}
+/* 화면이 숨겨지면 오디오 자체를 재웁니다. 이미 예약된 음(배경음 꼬리 등)도 함께 멈춥니다.
+   예전에는 배경음만 멈춰서, 서버가 계속 진행하는 동안 종·속보·결과 효과음이 화면 밖에서 울렸습니다. */
+function onVisibility() {
+  if (pageHidden()) { if (ctx && ctx.state === 'running') void ctx.suspend().catch(() => {}); }
+  else if (ctx && ctx.state === 'suspended') void ctx.resume().catch(() => {});
+  syncMusic();
 }
 /* 첫 터치·클릭 때 오디오를 열어 둡니다(브라우저 자동 재생 정책). */
 if (typeof window !== 'undefined') {
   window.addEventListener('click', () => { audio(); syncMusic(); }, { once: true });
-  document.addEventListener('visibilitychange', syncMusic);
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('pagehide', onVisibility);
+  window.addEventListener('pageshow', onVisibility);
+  /* 안드로이드 앱(Capacitor)이 뒤로 갈 때 보내는 pause·resume 이벤트도 같이 받습니다 */
+  document.addEventListener('pause', onVisibility);
+  document.addEventListener('resume', onVisibility);
 }
 function note(ac: AudioContext, freq: number, start: number, dur: number, type: OscillatorType, gain: number, output: AudioNode) {
   if (dur <= 0 || gain <= 0) return;
@@ -90,7 +109,7 @@ function note(ac: AudioContext, freq: number, start: number, dur: number, type: 
 }
 /** 짧은 효과음을 냅니다. 소리를 껐거나 오디오를 못 쓰는 환경이면 아무것도 하지 않습니다. */
 export function play(tone: Tone) {
-  if (!enabled || volume === 0) return;
+  if (!soundAllowed(enabled, volume, pageHidden())) return;
   const ac = audio();
   if (!ac || !master || ac.state !== 'running') return;
   const t = ac.currentTime;
@@ -123,7 +142,8 @@ export type Buzz = 'fill' | 'trigger' | 'news' | 'bell';
 /** 진동 길이(ms). 배열이면 진동·쉼·진동 순서입니다 */
 export const BUZZ: Record<Buzz, number | number[]> = { fill: 25, trigger: [70, 50, 70], news: [30, 40, 30], bell: 40 };
 export function buzz(kind: Buzz) {
-  if (!hapticOn || typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+  /* 화면이 안 보일 때는 진동도 하지 않습니다(효과음과 같은 이유) */
+  if (!hapticOn || pageHidden() || typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
   try { navigator.vibrate(BUZZ[kind]); } catch { /* 막혀 있으면 넘어갑니다 */ }
 }
 export function setHaptic(on: boolean) {

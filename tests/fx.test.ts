@@ -1,7 +1,7 @@
 /* 연출 계산: 카운트업 숫자와 결과 효과음 고르기 */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BUZZ, countValue, fillTone, musicBpm, musicStep, MUSIC_STEPS, revealTone } from '../client/src/fx';
+import { BUZZ, countValue, fillTone, soundAllowed, musicBpm, musicStep, MUSIC_STEPS, revealTone } from '../client/src/fx';
 import { probeIndex } from '../client/src/live';
 import { logoVariant, LOGO_VARIANTS } from '../client/src/sectors';
 import { STOCKS } from '../shared/rules';
@@ -53,4 +53,11 @@ test('기업 로고: 같은 업종 기업끼리 테두리 모양이 모두 다�
     assert.deepEqual(members.map(s => logoVariant(s.code)), members.map((_, i) => i), g);
     assert.ok(members.length <= LOGO_VARIANTS, `${g}: 로고 모양(${LOGO_VARIANTS}가지)보다 기업이 많음`);
   }
+});
+
+test('화면이 안 보이면(화면 꺼짐·홈 화면) 효과음을 내지 않는다', () => {
+  assert.equal(soundAllowed(true, 100, false), true);
+  assert.equal(soundAllowed(true, 100, true), false);
+  assert.equal(soundAllowed(false, 100, false), false);
+  assert.equal(soundAllowed(true, 0, false), false);
 });

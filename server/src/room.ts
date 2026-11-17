@@ -60,6 +60,8 @@ const ANIMALS = ['사슴', '수달', '고래', '너구리', '판다', '여우', 
 const token = () => randomBytes(18).toString('base64url');
 const npcId = (t: NpcType) => `npc-${t}`;
 /** 이번 판에 나오는 종목. 예전에 저장된 방(stockCodes 없음)은 처음 6종목으로 봅니다. */
+/** 방에 기억해 두는 관전자 열쇠 수 상한 */
+const MAX_SPECTATOR_TOKENS = 500;
 export const gameCodes = (plan: GamePlan): StockCode[] => plan.stockCodes ?? LEGACY_CODES;
 const initialPrices = (codes: StockCode[]) => Object.fromEntries(codes.map(c => [c, stockOf(c).start])) as Record<StockCode, number>;
 
@@ -133,6 +135,8 @@ export class GameRoom {
     }
     if (this.s.status !== 'lobby' || this.humans.length >= this.config.maxPlayers) {
       const t = token(); this.s.spectators.push(t);
+      /* 관전자 열쇠는 다시 들어올 때 알아보는 용도라, 너무 많아지면 오래된 것부터 버립니다(방 상태가 끝없이 커지지 않게) */
+      if (this.s.spectators.length > MAX_SPECTATOR_TOKENS) this.s.spectators.splice(0, this.s.spectators.length - MAX_SPECTATOR_TOKENS);
       return { token: t, role: 'spectator', label: null };
     }
     const p = newPlayer('human', this.uniqueLabel(), now);
@@ -161,6 +165,11 @@ export class GameRoom {
     }
   }
   /** 대기실에서 방장이 나가면 가장 먼저 들어온 접속 중 참가자에게 넘깁니다. 시작한 판은 방장과 상관없이 진행합니다. */
+  /** 서버를 다시 켜서 불러온 방: 아직 아무도 연결되어 있지 않으므로 모두 끊김으로 두고 방장을 다시 정합니다. */
+  resetConnections() {
+    this.s.players.forEach(p => { if (p.kind === 'human') p.connected = false; });
+    this.fixHost();
+  }
   private fixHost() {
     /* 운영자 방에는 참가자 방장이 없습니다. 시작·재대전은 운영자만 합니다. */
     if (this.operated) { this.s.hostId = null; return; }
@@ -252,7 +261,17 @@ export class GameRoom {
         p.cash += amount;
         (p.dividends ??= []).push({ round: r, code: it.code, qty, dps: it.dps, amount });
       }
-      this.s.prices[it.code] = exDividendPrice(this.s.prices[it.code], it.dps);
+      const before = this.s.prices[it.code];
+      this.s.prices[it.code] = exDividendPrice(before, it.dps);
+      /* 걸어 둔 손절가·익절가도 같은 만큼 낮춥니다. 그대로 두면 배당락만으로 장 시작과 함께 손절이 걸립니다. */
+      const drop = before - this.s.prices[it.code];
+      for (const p of this.s.players) {
+        const st = p.stops?.[it.code];
+        if (!st) continue;
+        const shift = (v: number | null) => v === null || v - drop < TICK_WON ? null : v - drop;
+        st.stop = shift(st.stop); st.take = shift(st.take);
+        if (st.stop === null && st.take === null) delete p.stops![it.code];
+      }
     }
   }
   private dividendView(): DividendView | null {
@@ -611,9 +630,10 @@ export class GameRoom {
       const pr = p.predictions?.[round];
       if (pr && firstStage && pr.stageId === firstStage.stageId) pr.correct = (pr.choice === 'up') === firstBeat;
     });
-    const humanBuyers = this.s.players.length > 1;
+    /* 군집 행동은 사람끼리만 셉니다. 혼자 연습의 NPC를 따라 산 것은 군집 행동이 아닙니다. */
+    const humanBuyers = this.humans.length > 1;
     const buyers: Partial<Record<StockCode, number>> = {};
-    roundFills.forEach(fs => new Set(fs.filter(f => f.side === 'buy').map(f => f.code)).forEach(c => { buyers[c] = (buyers[c] ?? 0) + 1; }));
+    this.humans.forEach(h => new Set((roundFills.get(h.id) ?? []).filter(f => f.side === 'buy').map(f => f.code)).forEach(c => { buyers[c] = (buyers[c] ?? 0) + 1; }));
 
     /* 1. 행동 관찰(과신·처분 효과 지표 재료) */
     this.s.players.forEach(p => {
@@ -700,8 +720,13 @@ export class GameRoom {
     return true;
   }
 
-  leaderboard(): LeaderRow[] {
-    const sorted = this.s.players.map(p => ({ p, value: this.value(p) }))
+  /** 장중 시세 메시지에 실을 [참가자 id, 지금 평가액]. 순위는 받는 쪽에서 leaderboard()와 같은 규칙으로 다시 매깁니다 */
+  tickBoard(): [string, number][] { return this.s.players.map(p => [p.id, this.value(p)]); }
+
+  /** 순위표. priceOf를 주면 그 가격으로 평가합니다(정산 중에는 공개 전 가격) */
+  leaderboard(priceOf?: (code: StockCode) => number): LeaderRow[] {
+    const valueOf = (p: Player) => priceOf ? p.cash + this.stocks.reduce((a, st) => a + (p.holdings[st.code]?.qty ?? 0) * priceOf(st.code), 0) : this.value(p);
+    const sorted = this.s.players.map(p => ({ p, value: valueOf(p) }))
       .sort((a, b) => b.value - a.value || a.p.label.localeCompare(b.p.label));
     let rank = 0;
     return sorted.map(({ p, value }, i) => {
@@ -792,8 +817,9 @@ export class GameRoom {
       phaseEndsAt: this.s.phaseEndsAt, phaseSeconds: this.s.phaseSeconds, serverNow: now, tradeSeconds: cfg.trade, level: cfg.level,
       you: { id: p?.id ?? null, label: p?.label ?? null, role, isHost: !!p && p.id === this.s.hostId },
       humanCount: this.s.status === 'lobby' ? this.online : this.humans.length, maxPlayers: cfg.maxPlayers, minToStart: this.minToStart, startCash: START_CASH, operated: this.operated,
-      /* 정산 중에는 순위도 공개 전 값을 씁니다. */
-      leaderboard: inSettling ? this.prevLeaderboard() : this.leaderboard(),
+      /* 정산 중에는 순위도 공개 전 값(장 마감 직전 시세)을 씁니다. 내 평가액과 같은 가격이라 둘이 어긋나지 않습니다.
+         예전에는 직전 라운드 끝 평가액을 써서, 정산 중에 내 평가액(장 마감 직전)과 순위가 서로 다른 시점이었습니다. */
+      leaderboard: inSettling ? this.leaderboard(priceOf) : this.leaderboard(),
       stocks, news: this.newsView(), schedule: this.scheduleView(), breakingAt, card: this.cardView(p), prediction: this.predictionView(p, now), crowd: this.crowdView(),
       predictionTrend: this.s.status === 'finished' ? this.predictionTrend() : undefined, pace: this.s.settings?.pace,
       recapDone: this.recapDoneView(p),
@@ -810,11 +836,5 @@ export class GameRoom {
       arcIds: this.s.status === 'finished' ? this.s.plan.arcIds : undefined,
       nextRoomCode: this.s.nextRoomCode
     };
-  }
-  private prevLeaderboard(): LeaderRow[] {
-    return this.s.players.map(p => {
-      const v = p.valueHist[p.valueHist.length - 2] ?? START_CASH;
-      return { playerId: p.id, label: p.label, kind: p.kind, npcType: p.npcType ? NPC_RULES[p.npcType].label : null, npcRule: p.npcType ? NPC_RULES[p.npcType].rule : null, connected: p.connected, value: v, returnPct: (v / START_CASH - 1) * 100, rank: p.rankHist[p.rankHist.length - 2] ?? 1, prevRank: p.rankHist[p.rankHist.length - 2] ?? 1 };
-    }).sort((a, b) => a.rank - b.rank);
   }
 }

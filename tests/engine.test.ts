@@ -283,3 +283,8 @@ test('분산형 NPC는 업종이 많은 판에서도 첫 라운드에 현금보�
   assert.ok(spend <= cash * 0.9, `첫 라운드 매수 ${spend}원이 현금의 90%를 넘음`);
   assert.ok(orders.every(o => o.qty > 0));
 });
+
+test('결과 시간은 기대 vs 실제와 배운 점을 읽을 수 있게 30초 이상', () => {
+  /* 20초일 때 결과 화면을 다 읽기 전에 다음 라운드로 넘어간다는 피드백이 있었습니다 */
+  for (const mode of ['solo', 'friend'] as const) assert.ok(MODES[mode].recap >= 30, `${mode} 결과 ${MODES[mode].recap}초`);
+});

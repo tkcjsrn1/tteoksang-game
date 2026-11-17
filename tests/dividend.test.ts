@@ -55,3 +55,23 @@ test('기준일까지 가진 사람만 배당을 받고, 입금과 배당락이 
   (again as unknown as { payDividends(r: number): void }).payDividends(rd + 1);
   assert.equal(again.player(a)!.cash, pa.cash);
 });
+
+test('배당락으로 시가가 내려가도 걸어 둔 손절가에 바로 걸리지 않게 손절가·익절가도 같은 만큼 낮춘다', () => {
+  const room = GameRoom.create({ code: '525252', mode: 'friend', now: T0, seed: 3, settings: { level: 'pro' } });
+  const a = room.join(null, T0).token; room.join(null, T0 + 1);
+  room.start(T0);
+  const rd = dividendRound(MODES.friend.rounds);
+  const div = room.s.plan.stockCodes!.find(c => fundOf(c).dps > 0)!;
+  while (room.s.round < rd || room.s.phase !== 'trade') next(room);
+  assert.equal(room.placeOrder(a, 'a1', div, 'buy', 100, room.s.live!.startedAt).ok, true);
+  next(room);                                   // 기준일 장 마감·결과
+  const close = room.s.prices[div];
+  /* 종가 바로 아래에 손절가, 위에 익절가를 겁니다 */
+  assert.equal(room.setStop(a, 's1', div, close - 10, close + 500, room.s.phaseEndsAt! - 1).ok, true);
+  next(room);                                   // 다음 라운드 뉴스: 입금 + 배당락
+  const drop = close - room.s.prices[div];
+  assert.ok(drop > 0, '배당락으로 시가가 내려가야 합니다');
+  assert.deepEqual([room.player(a)!.stops![div]!.stop, room.player(a)!.stops![div]!.take], [close - 10 - drop, close + 500 - drop]);
+  next(room);                                   // 장 시작: 밤사이 손절 확인
+  assert.equal(room.player(a)!.holdings[div]?.qty, 100, '배당락만으로 손절되면 안 됩니다');
+});

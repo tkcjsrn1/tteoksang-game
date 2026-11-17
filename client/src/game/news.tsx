@@ -240,7 +240,7 @@ function RecapDone({ view, send }: { view: RoomView; send: (m: ClientMsg) => voi
   );
 }
 /** 순위 변화. 사람이 많은 방에서는 상위 5명과 나만 먼저 보여 주고 나머지는 펼쳐 봅니다.
-    결과 시간이 20초라 '기대 vs 실제' 설명이 긴 순위표에 밀리지 않게 설명 뒤에 둡니다. */
+    결과 시간이 30초라 '기대 vs 실제' 설명이 긴 순위표에 밀리지 않게 설명 뒤에 둡니다. */
 const RANK_TOP = 5;
 function RankMoves({ view }: { view: RoomView }) {
   const all = view.leaderboard;

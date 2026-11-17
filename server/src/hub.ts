@@ -16,6 +16,8 @@ export interface HubOptions { store?: Store; staticDir?: string; port?: number; 
   /** 리버스 프록시 뒤에서 X-Forwarded-For의 첫 주소를 접속 주소로 씁니다. 프록시가 없을 때 켜면 주소를 속일 수 있습니다. */
   trustProxy?: boolean }
 
+/** 클라이언트가 붙이는 요청 ID: crypto.randomUUID()(36자) 등. 64자까지 받습니다. */
+const validRequestId = (v: unknown): v is string => typeof v === 'string' && v.length >= 1 && v.length <= 64;
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 /* 링크 미리보기(og:image·og:url)는 전체 주소여야 합니다. 배포할 때 PUBLIC_URL에 https://내주소 를 넣으면
    index.html의 %PUBLIC_URL%을 그 값으로 바꿔서 내보냅니다. 비워 두면 /og.png 같은 상대 주소가 됩니다. */
@@ -30,6 +32,10 @@ export const MSG_LIMIT_PER_SEC = 30;       // 연결 하나가 1초에 보낼 �
 export const MAX_ROOMS = 1000;             // 서버 전체 방 수 상한
 export const RECENT_ARCS_MAX = 12;         // 방을 만들 때 "최근에 본 사건"으로 받아 줄 개수
 export const ROOMS_PER_IP_PER_MIN = 20;    // 같은 주소에서 1분에 만들 수 있는 방 수
+/* 장중 시세 메시지에 순위(평가액)를 싣는 주기. 참가자(NPC 포함)가 BOARD_BIG_ROOM명 이하면 매초,
+   그보다 많으면 BOARD_EVERY_BIG초마다(80명 방에서 1초 전송량이 너무 늘지 않게) */
+export const BOARD_BIG_ROOM = 20;
+export const BOARD_EVERY_BIG = 3;
 
 export class Hub {
   rooms = new Map<string, GameRoom>();
@@ -57,7 +63,11 @@ export class Hub {
   async listen(port = this.opts.port ?? 8787): Promise<number> {
     await this.store.init();
     /* 없어진 모드(예전 학술제 방)로 저장된 방은 건너뜁니다. */
-    for (const s of await this.store.loadActive(this.now() - ROOM_KEEP_MS)) if (MODES[s.mode]) this.rooms.set(s.code, new GameRoom(s));
+    for (const s of await this.store.loadActive(this.now() - ROOM_KEEP_MS)) if (MODES[s.mode]) {
+      const room = new GameRoom(s);
+      room.resetConnections();
+      this.rooms.set(s.code, room);
+    }
     void this.sweep();
     await new Promise<void>(r => this.server.listen(port, r));
     this.timer = setInterval(() => this.loop(), 100);
@@ -170,7 +180,12 @@ export class Hub {
     if (!l) return;
     const prices: Partial<Record<StockCode, number>> = {};
     room.stocks.forEach(st => { prices[st.code] = room.markPrice(st.code); });
-    const msg = JSON.stringify({ t: 'tick', round: room.s.round, k: l.k, prices } satisfies ServerMsg);
+    /* 순위도 시세와 같은 시점으로 맞춥니다. 예전에는 순위가 장 시작·내 주문 때만 바뀌어서,
+       1초마다 바뀌는 내 평가액과 순위가 서로 다른 시점이었습니다(친구가 더 많아도 내가 위로 보임).
+       사람이 많은 방은 전송량을 줄이려고 BOARD_EVERY_BIG초에 한 번만 싣습니다. */
+    const every = room.s.players.length > BOARD_BIG_ROOM ? BOARD_EVERY_BIG : 1;
+    const board = l.k % every === 0 ? room.tickBoard() : undefined;
+    const msg = JSON.stringify({ t: 'tick', round: room.s.round, k: l.k, prices, ...(board ? { board } : {}) } satisfies ServerMsg);
     for (const c of this.conns) if (c.room === room && c.ws.readyState === WebSocket.OPEN) c.ws.send(msg);
   }
   /** 예약 주문이 체결된 참가자에게만 화면 전체를 다시 보냅니다. */
@@ -217,16 +232,23 @@ export class Hub {
     if (m.t === 'hello') {
       const room = this.rooms.get(String(m.code));
       if (!room) return this.send(c, { t: 'error', reason: '방을 찾을 수 없습니다. 코드를 확인해 주세요' });
+      /* 이 연결이 이미 어느 방의 참가자·관전자라면: 같은 방이면 새 자리를 만들지 않고 같은 자리로 다시 붙이고,
+         다른 방(또는 대형 화면)으로 옮기면 이전 자리는 끊김으로 둡니다. 한 연결로 hello를 반복해 유령 참가자로 정원을 채우지 못하게 합니다. */
+      const prevRoom = c.room, prevToken = c.role === 'player' || c.role === 'spectator' ? c.token : null;
+      const staff: Role | null = room.isOperator(m.operatorToken) ? 'operator' : m.display === true ? 'display' : null;
+      const reuse = !staff && prevRoom === room && prevToken ? prevToken : null;
+      if (prevRoom && prevToken && c.role === 'player' && !reuse && ![...this.conns].some(o => o !== c && o.room === prevRoom && o.token === prevToken)) {
+        prevRoom.disconnect(prevToken, now); this.later.add(prevRoom);
+      }
       c.room = room;
       /* 운영자와 대형 화면은 참가자 자리를 차지하지 않고 관전자 목록에도 남지 않습니다. */
-      const staff: Role | null = room.isOperator(m.operatorToken) ? 'operator' : m.display === true ? 'display' : null;
       if (staff) {
         c.token = null; c.role = staff;
         this.send(c, { t: 'welcome', token: null, role: staff, label: null, code: room.s.code });
         this.sendView(c, now);
         return;
       }
-      const j = room.join(m.token, now);
+      const j = room.join(reuse ?? m.token, now);
       c.token = j.token; c.role = j.role;
       this.send(c, { t: 'welcome', token: j.token, role: j.role, label: j.label, code: room.s.code });
       /* 혼자 연습은 입장 즉시 시작합니다. */
@@ -240,6 +262,9 @@ export class Hub {
     }
     const room = c.room;
     if (!room) return this.send(c, { t: 'error', reason: '먼저 방에 들어와 주세요' });
+    /* 주문·취소·손절 요청은 요청 ID(1~64자 문자열)가 있어야 합니다. 없으면 "undefined"라는 ID로 저장돼 중복 확인이 망가지고,
+       너무 길면 요청 기록(방 상태)이 커집니다. */
+    if ((m.t === 'order' || m.t === 'cancel' || m.t === 'stop') && !validRequestId(m.requestId)) return this.send(c, { t: 'error', reason: '잘못된 요청입니다' });
     switch (m.t) {
       case 'start':
         if (!room.canStart(c.token, c.role === 'operator' ? room.s.operatorToken : null)) return this.send(c, { t: 'error', reason: '지금은 시작할 수 없습니다' });
@@ -298,7 +323,9 @@ export class Hub {
         const res = room.rename(c.token ?? '', String(m.label ?? ''), now);
         if (!res.ok) { this.send(c, { t: 'error', reason: res.reason ?? '이름을 바꾸지 못했습니다' }); return; }
         this.dirty.add(room.s.code);
-        this.broadcast(room);
+        /* 입장과 같이: 바꾼 사람에게는 바로, 나머지에게는 타이머(0.1초)에서 한 번에 모아 보냅니다 */
+        this.sendView(c, now);
+        this.later.add(room);
         return;
       }
       case 'leave':

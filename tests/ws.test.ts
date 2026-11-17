@@ -14,12 +14,13 @@ after(async () => { await hub.close(); });
 class Client {
   ws!: WebSocket; view: RoomView | null = null; token: string | null = null; role: string | null = null; acks = new Map<string, { ok: boolean; reason?: string; fill?: unknown }>(); ackCount = 0; errors: string[] = [];
   ticks: Extract<ServerMsg, { t: 'tick' }>[] = [];
+  views = 0;
   async connect() {
     this.ws = new WebSocket(`ws://localhost:${port}/ws`);
     await new Promise((r, j) => { this.ws.once('open', r); this.ws.once('error', j); });
     this.ws.on('message', d => {
       const m = JSON.parse(d.toString()) as ServerMsg;
-      if (m.t === 'view') this.view = m.view;
+      if (m.t === 'view') { this.view = m.view; this.views++; }
       if (m.t === 'welcome') { this.token = m.token; this.role = m.role; }
       if (m.t === 'ack') { this.acks.set(m.requestId, { ok: m.ok, reason: m.reason, fill: m.fill }); this.ackCount++; }
       if (m.t === 'tick') this.ticks.push(m);
@@ -383,8 +384,10 @@ test('주문 시간에는 1초마다 시세가 오고, 지정가 예약은 시�
   assert.equal(f.price, limit);
   assert.equal(f.kind, 'limit');
   assert.equal(a.view!.portfolio!.orders.length, 0);
-  /* 시세 메시지에는 다른 사람 주문·결말이 없습니다 */
-  assert.deepEqual(Object.keys(t).sort(), ['k', 'prices', 'round', 't']);
+  /* 시세 메시지에는 다른 사람 주문·결말이 없습니다. 순위용 평가액(board)만 함께 옵니다 */
+  assert.deepEqual(Object.keys(t).sort(), ['board', 'k', 'prices', 'round', 't']);
+  assert.deepEqual(t.board!.map(([id]) => id).sort(), room.s.players.map(p => p.id).sort());
+  assert.ok(t.board!.every(([, v]) => Number.isInteger(v)));
   [a, b].forEach(c => c.close());
 });
 
@@ -407,6 +410,78 @@ test('오래 손대지 않은 방은 다시 켤 때 불러오지 않고 지운�
     await until(() => !store.rooms.has('666666'), 2000);
     assert.ok(store.rooms.has('555555'), '최근 방 기록을 지우면 안 됩니다');
   } finally { await hub.close(); }
+});
+
+test('대기실에서 여러 명이 한꺼번에 이름을 바꾸면 방 전체 화면은 모아서 보낸다', async () => {
+  /* 학술제처럼 사람이 많을 때 이름 바꾸기 한 번마다 방 전체에 보내면 n×n번이 됩니다(입장과 같은 문제) */
+  const { code } = await create({ mode: 'friend', settings: { maxPlayers: 20 } });
+  const n = 12;
+  const cs = await Promise.all(Array.from({ length: n }, () => new Client().connect()));
+  for (const c of cs) await c.hello(code);
+  await until(() => cs.every(c => c.view?.humanCount === n));
+  await new Promise(r => setTimeout(r, 250));
+  for (const c of cs) c.views = 0;
+  cs.forEach((c, i) => c.send({ t: 'rename', label: `참가자${i + 1}` }));
+  /* 모두가 모든 사람의 새 이름을 보게 됩니다 */
+  await until(() => cs.every(c => cs.every((_, i) => c.view!.leaderboard.some(l => l.label === `참가자${i + 1}`))));
+  const total = cs.reduce((a, c) => a + c.views, 0);
+  assert.ok(total < (n * n) / 2, `이름 바꾸기 ${n}번에 화면 ${total}번 전송(즉시 보내면 ${n * n}번)`);
+  for (const c of cs) c.close();
+});
+
+test('한 연결이 입장 요청을 반복해도 참가자는 한 명이다(유령 참가자로 정원 채우기 방지)', async () => {
+  const { code } = await create({ mode: 'friend', settings: { maxPlayers: 8 } });
+  const c = await new Client().connect();
+  await c.hello(code);
+  const first = c.token;
+  for (let i = 0; i < 5; i++) c.send({ t: 'hello', code, token: null });
+  await new Promise(r => setTimeout(r, 300));
+  const room = hub.rooms.get(code)!;
+  assert.equal(room.humans.length, 1, `참가자 ${room.humans.length}명`);
+  assert.equal(c.token, first, '같은 자리로 다시 붙어야 합니다');
+  c.close();
+  await until(() => room.humans.every(p => !p.connected));
+});
+
+test('요청 ID가 없거나 너무 길면 주문을 받지 않는다', async () => {
+  const { code } = await create({ mode: 'friend' });
+  const a = await (await new Client().connect()).hello(code);
+  const b = await (await new Client().connect()).hello(code);
+  a.send({ t: 'start' });
+  const room = hub.rooms.get(code)!;
+  await until(() => room.s.status === 'playing');
+  await advance(room, [a, b]);
+  const stock = a.view!.stocks[0].code;
+  const errs = a.errors.length;
+  a.send({ t: 'order', code: stock, side: 'buy', qty: 1 } as unknown as ClientMsg);
+  a.send({ t: 'order', requestId: 'x'.repeat(65), code: stock, side: 'buy', qty: 1 });
+  await until(() => a.errors.length >= errs + 2);
+  const p = room.player(a.token)!;
+  assert.equal(Object.keys(p.requests).length, 0, `저장된 요청: ${Object.keys(p.requests).map(k => k.slice(0, 10))}`);
+  /* 정상 주문은 그대로 됩니다 */
+  assert.equal((await a.order('ok-1', stock, 'buy', 1)).ok, true);
+  a.close(); b.close();
+});
+
+test('서버를 다시 켜면 불러온 방의 참가자는 모두 끊긴 상태로 시작하고, 새로 들어온 사람이 방장이 된다', async () => {
+  const store = new MemoryStore();
+  const t0 = Date.now();
+  const r = GameRoom.create({ code: '777777', mode: 'friend', now: t0, seed: 5 });
+  r.join(null, t0);                     // 방장(접속 중으로 저장됨)
+  await store.saveRoom(r.s);
+  const h2 = new Hub({ store });
+  const p2 = await h2.listen(0);
+  try {
+    const room = h2.rooms.get('777777')!;
+    assert.ok(room.humans.every(p => !p.connected), '재시작 직후에는 아무도 연결되어 있지 않습니다');
+    const ws = new WebSocket(`ws://localhost:${p2}/ws`);
+    await new Promise((res, rej) => { ws.once('open', res); ws.once('error', rej); });
+    ws.send(JSON.stringify({ t: 'hello', code: '777777', token: null }));
+    await until(() => room.humans.length === 2);
+    const joined = room.humans.find(p => p.connected)!;
+    assert.equal(room.s.hostId, joined.id, '원래 방장이 안 돌아오면 접속한 사람이 방장');
+    ws.terminate();
+  } finally { await h2.close(); }
 });
 
 test('다음 단계(skip)는 운영자만 보낼 수 있고, 보내면 다음 단계로 넘어간다', async () => {

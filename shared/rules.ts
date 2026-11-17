@@ -12,8 +12,8 @@ export const TAX_BP = 20;
 
 /* 라운드 시간(초). 한 라운드 = 뉴스 + 주문 + 결과. 처음 하는 사람도 뉴스를 읽고 판단할 수 있게 한 라운드를 2분 넘게 둡니다(2026-11 결정). */
 export const MODES: Record<GameMode, { rounds: number; news: number; trade: number; recap: number; maxPlayers: number; minToStart: number; arcs: number; cards: number; level: Level; label: string }> = {
-  friend:   { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 3, level: 'easy', label: '친구 대전' },
-  solo:     { rounds: 5,  news: 20, trade: 90, recap: 20, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 3, level: 'easy', label: '혼자 연습' }
+  friend:   { rounds: 5,  news: 20, trade: 90, recap: 30, maxPlayers: 8,  minToStart: 2, arcs: 2, cards: 3, level: 'easy', label: '친구 대전' },
+  solo:     { rounds: 5,  news: 20, trade: 90, recap: 30, maxPlayers: 1,  minToStart: 1, arcs: 2, cards: 3, level: 'easy', label: '혼자 연습' }
 };
 
 /** 발표·시연용 빠른 판. 한 판 약 3분이라 발표 시간 안에 처음부터 최종 결과까지 보여 줄 수 있습니다 */
