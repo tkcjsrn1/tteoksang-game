@@ -722,3 +722,10 @@ h1.d-phase { margin: 0; font: inherit; }
 .tab-icon { position: relative; display: inline-flex; }
 .tab-badge { position: absolute; top: -4px; right: -10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--led-2); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
 .tab-dot { position: absolute; top: -1px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--led-2); box-shadow: 0 0 0 2px var(--panel); }
+/* 시작 전 설정 창: 홈의 시작 버튼을 누르면 열립니다. 휴대폰 폭에서 두 칸씩 놓습니다 */
+.start-sheet { display: grid; gap: 10px; }
+.start-sheet > .hint { margin: 0; }
+.start-sheet .room-settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.start-sheet .check { margin-top: 0; }
+.start-sheet .room-extra { margin-top: 0; }
+.start-sum { margin: 4px 0 0; font-weight: 700; font-size: 15px; color: var(--fg); }
