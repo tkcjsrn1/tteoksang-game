@@ -13,7 +13,7 @@ import { defaultOpenGroups } from './sectors';
 import { walletChange } from './live';
 import { dir, Disclaimer, formatCountdown, pct, pctBp, signedWon, StockAvatar, useToast, won } from './ui';
 import { Coach, SectorBoard, StockRow, Sheet, TAB_ICON, type PlayProps, type Tab } from './game/parts';
-import { BreakingPopup, Card, CurrentNews, DividendNotice, NewsLog, Recap, SchedulePanel, ViNotice } from './game/news';
+import { BreakingPopup, Card, CurrentNews, DividendNotice, NewsLog, Recap, ViNotice } from './game/news';
 import { StockSheet } from './game/order';
 import { Finished } from './game/final';
 
@@ -228,7 +228,6 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
           <MyHoldings view={view} onOpen={setDetail} />
           <ViNotice view={view} />
           <DividendNotice view={view} />
-          <SchedulePanel view={view} />
           {!coach && news}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send} />}
           {favoriteStocks.length > 0 && <section className="panel flush" aria-label="관심종목">

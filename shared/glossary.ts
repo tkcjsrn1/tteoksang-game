@@ -93,7 +93,7 @@ export const TERMS: Term[] = [
   { id: 'earnings-calendar', term: '발표 일정', en: 'Earnings calendar', category: 'news',
     short: '어느 회사가 언제 실적이나 소식을 발표하는지 적어 둔 일정표',
     body: '실제 시장에서는 실적 발표일이 미리 공지됩니다. 발표 전에는 기대가 가격에 먼저 반영되고, 발표 뒤에는 기대와 결과의 차이만큼 움직입니다. 일정을 알면 언제 변동이 커질지 가늠할 수 있습니다.',
-    game: '다음 라운드에 소식이 나올 회사만 미리 알려 줍니다. 내용과 결과는 그 라운드에 공개됩니다.',
+    game: '현재 라운드의 결과가 공개된 뒤 다음 라운드에 소식이 나올 회사를 알려 줍니다. 다음 뉴스의 내용과 결과는 그 라운드에 공개됩니다.',
     match: ['발표 일정', '실적 발표 일정'], related: ['expectation', 'guidance'] },
   { id: 'transaction-tax', term: '증권거래세', en: 'Securities transaction tax', category: 'order',
     short: '주식을 팔 때 판 금액에 붙는 세금',
