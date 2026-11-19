@@ -226,15 +226,15 @@ function Playing({ view, offset, online, send, placeOrder, cancelOrder, setStop 
         {tab === 'market' && view.phase !== 'recap' && <>
           <Standing view={view} />
           <MyHoldings view={view} onOpen={setDetail} />
+          {favoriteStocks.length > 0 && <section className="panel flush" aria-label="관심종목">
+            <div className="list-head"><span>★ 관심종목</span></div>
+            <div className="board">{favoriteStocks.map(s => <StockRow key={s.code} s={s} view={view} onOpen={() => setDetail(s.code)} />)}</div>
+          </section>}
           <ViNotice view={view} />
           <DividendNotice view={view} />
           <SchedulePanel view={view} />
           {!coach && news}
           {isPlayer && view.card && view.phase === 'trade' && <Card view={view} send={send} />}
-          {favoriteStocks.length > 0 && <section className="panel flush" aria-label="관심종목">
-            <div className="list-head"><span>★ 관심종목</span></div>
-            <div className="board">{favoriteStocks.map(s => <StockRow key={s.code} s={s} view={view} onOpen={() => setDetail(s.code)} />)}</div>
-          </section>}
           <div className="panel flush">
             <div className="list-head"><span><TermLink id="sector">업종</TermLink>별 종목 {view.stocks.length}개</span>{view.phase === 'trade' ? <span className="live-dot">실시간 시세 · 오늘 등락</span> : <span><TermLink id="reference-price">기준가</TermLink> · 직전 등락</span>}</div>
             <SectorBoard stocks={view.stocks} live={view.phase === 'trade'} defaultOpen={defaultOpenGroups(view)} pinned={coach?.no === 2 && coach.target ? [coach.target] : []}
