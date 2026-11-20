@@ -63,7 +63,7 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
   const pace = (raw as Record<string, unknown>).pace;
   if (isPace(pace)) out.pace = pace;
   const big = (raw as Record<string, unknown>).bigBreaking;
-  if (big === 'off' || big === 'always') out.bigBreaking = big;
+  if (big === 'off') out.bigBreaking = big;
   return out;
 }
 

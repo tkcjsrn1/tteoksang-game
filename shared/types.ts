@@ -6,8 +6,8 @@ export type GameMode = 'friend' | 'solo';
 export type Level = 'easy' | 'pro';
 /** 진행 빠르기. demo = 발표·시연용 빠른 판(3라운드, 뉴스 15초·장 30초·결과 15초). 라운드 수·장 시간 설정보다 우선합니다 */
 export type Pace = 'normal' | 'demo';
-/** 대형 속보: 'off'는 끄기(튜토리얼 판), 'always'는 판마다 반드시 한 번(학술제 발표용). 없으면 후보 뉴스가 속보로 나올 때만 */
-export type BigBreaking = 'off' | 'always';
+/** 대형 속보: 'off'는 끄기(튜토리얼 판). 없으면 후보 뉴스가 속보로 나올 때만(학술제 방도 같음) */
+export type BigBreaking = 'off';
 export interface RoomSettings { stocks?: number; rounds?: number; trade?: number; maxPlayers?: number; level?: Level; pace?: Pace; bigBreaking?: BigBreaking }
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';

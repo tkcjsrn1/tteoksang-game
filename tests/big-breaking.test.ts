@@ -44,10 +44,11 @@ test("대형 속보: 'off'면 생기지 않고, 그 밖의 시나리오(뉴스·
   }
 });
 
-test("대형 속보: 'always'(학술제 발표용)면 시드를 바꿔서라도 반드시 한 번 생긴다", () => {
+test('대형 속보: 학술제(운영자) 방도 시드를 바꾸지 않고 다른 방과 같은 시나리오를 쓴다', () => {
   for (let seed = 1; seed <= 60; seed++) {
-    const room = GameRoom.create({ code: '424242', mode: 'friend', now: T0, seed, settings: { bigBreaking: 'always' }, operated: true });
-    assert.equal(hasShock(room.s.plan), true, `시드 ${seed}`);
+    const fest = GameRoom.create({ code: '424242', mode: 'friend', now: T0, seed, operated: true });
+    assert.equal(fest.s.seed, seed);
+    assert.equal(hasShock(fest.s.plan), hasShock(buildPlan(seed, 'friend')), `시드 ${seed}`);
   }
 });
 
@@ -80,9 +81,9 @@ test('대형 속보: VI가 실제로 걸리고, 속보가 공개되기 전에는
   assert.ok(room.haltLeft(target) > 0, '대상 종목에 VI가 걸리지 않음');
 });
 
-test('대형 속보 설정: 서버 규칙은 off·always만 받고, 홈 화면 기기 저장에는 남기지 않는다', () => {
-  assert.equal(cleanSettings(JSON.stringify({ bigBreaking: 'always' })).bigBreaking, 'always');
+test('대형 속보 설정: 서버 규칙은 off만 받고, 홈 화면 기기 저장에는 남기지 않는다', () => {
+  assert.equal(cleanSettings(JSON.stringify({ bigBreaking: 'always' })).bigBreaking, undefined);
   assert.equal(cleanSettings(JSON.stringify({ bigBreaking: 'off' })).bigBreaking, 'off');
   assert.equal(cleanSettings(JSON.stringify({ bigBreaking: 'yes' })).bigBreaking, undefined);
-  assert.equal(persistedSettings({ bigBreaking: 'always', rounds: 5 }).bigBreaking, undefined);
+  assert.equal(persistedSettings({ bigBreaking: 'off', rounds: 5 }).bigBreaking, undefined);
 });

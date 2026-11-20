@@ -5,9 +5,7 @@ import { cleanLabel, CONFIDENCES, gameConfig, LABEL_MAX, checkOrder, computeClos
 import type { CardView, Contribution, CrowdView, PredictionTrendRow, PredictionView, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
-import { buildPlan, hasShock, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
-/** '대형 속보 반드시 한 번'에서 시드를 몇 번까지 바꿔 볼지. 한 시드에 30~50%라 64번이면 사실상 항상 나옵니다 */
-const SHOCK_SEED_TRIES = 64;
+import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
 import { buildReport } from './report';
 
 /** refPrice: 체결 순간의 장중 시세. kind: 시장가(바로 체결)·지정가(예약). k: 주문 시간 시작부터 지난 초 */
@@ -78,14 +76,9 @@ export class GameRoom {
   constructor(state: RoomState) { this.s = state; }
 
   static create(opts: { code: string; mode: GameMode; now: number; seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; settings?: RoomSettings; operated?: boolean }): GameRoom {
-    let seed = opts.seed ?? randomInt(2 ** 31);
+    const seed = opts.seed ?? randomInt(2 ** 31);
     const excluded = opts.excludedArcs ?? [];
-    let plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, opts.settings);
-    /* 학술제 발표용 '대형 속보 반드시 한 번': 대형 속보가 생기는 시나리오가 나올 때까지 다음 시드를 봅니다(한 시드에 30~50%라 몇 번이면 나옴) */
-    for (let i = 1; opts.settings?.bigBreaking === 'always' && !opts.forcedArcs && !hasShock(plan) && i <= SHOCK_SEED_TRIES; i++) {
-      seed = (seed + 1) % 2 ** 31;
-      plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, opts.settings);
-    }
+    const plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, opts.settings);
     const npcs = NPC_TYPES.map(t => newPlayer('npc', `NPC ${NPC_RULES[t].label}`, opts.now, t, npcId(t)));
     return new GameRoom({
       code: opts.code, mode: opts.mode, seed, status: 'lobby', hostId: null,
