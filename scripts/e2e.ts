@@ -234,6 +234,13 @@ await step('시장가 매수: 바로 체결', async () => {
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  /* 장중 주문 창: 매수 버튼이 스크롤 없이 첫 화면 안에 있어야 합니다(장이 30~90초라서) */
+  {
+    const go = page.locator('.sheet button.go');
+    const top = await page.locator('.sheet').evaluate(el => { el.scrollTop = 0; return true; });
+    const box = await go.boundingBox();
+    ok(top && !!box && box.y + box.height <= page.viewportSize()!.height, `장중 주문 버튼이 첫 화면 밖에 있음(y=${box?.y})`);
+  }
   /* 시장 탭 '내 보유 종목': 오른쪽 큰 숫자는 1주 가격이 아니라 평가금액(수량 × 지금 가격) */
   const mine = page.getByRole('region', { name: '내 보유 종목' });
   await mine.waitFor({ state: 'attached' });
