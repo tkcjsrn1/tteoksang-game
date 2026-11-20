@@ -255,7 +255,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 /* 손잡이: 보이는 막대는 40×4px이지만 손가락으로 잡기 쉽게 시트 폭 전체·24px 높이를 끌 수 있습니다(위아래 음수 여백으로 간격은 예전과 같음) */
 .sheet-grip { align-self: stretch; flex: none; height: 24px; margin: -10px 0 -10px; display: flex; align-items: center; justify-content: center; touch-action: none; cursor: grab; }
 .sheet-grip::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: #D1D6DB; }
-.sheet-head { touch-action: none; }
+/* 손잡이·제목 줄을 마우스로 끌 때 글자가 파랗게 선택되지 않게 */
+.sheet-head { touch-action: none; user-select: none; -webkit-user-select: none; }
+.sheet-grip { user-select: none; -webkit-user-select: none; }
 .sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .sheet-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
 .bigpx { font-size: 26px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }

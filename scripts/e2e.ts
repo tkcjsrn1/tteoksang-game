@@ -371,6 +371,7 @@ await step('용어 설명 창 열고 닫기', async () => {
   ok(await sheet.count() === 1, '조금 끌었는데 용어 창이 닫힘');
   await drag(220);
   await sheet.waitFor({ state: 'detached' });
+  ok(await page.evaluate(() => (window.getSelection()?.toString() ?? '').trim() === ''), '창을 끌었더니 글자가 선택됨');
   /* 휴대폰 뒤로가기와 PC Esc는 창만 닫고 화면은 그대로 둡니다 */
   const here = page.url();
   await page.locator('button.gl-term').first().click();
