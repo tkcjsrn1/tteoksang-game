@@ -6,7 +6,7 @@ import { GameRoom } from '../server/src/room';
 
 const T0 = 1_000_000;
 function trading() {
-  const room = GameRoom.create({ code: '313131', mode: 'solo', now: T0, seed: 9 });
+  const room = GameRoom.create({ code: '313131', mode: 'solo', now: T0, seed: 9, forcedArcs: ['nuvakan', 'semorium'] });
   const tok = room.join(null, T0).token;
   room.start(T0);
   room.tick(room.s.phaseEndsAt!);
