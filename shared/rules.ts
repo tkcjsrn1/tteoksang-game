@@ -337,6 +337,17 @@ export function marketFill(book: QuoteBook, side: Side, qty: number): { price: n
   const price = side === 'buy' ? Math.ceil(total / qty) : Math.floor(total / qty);
   return { price, slipBp: Math.round(Math.abs(price - best) * 10000 / best), best, levels: used };
 }
+/** 지정가로 지금 바로 체결될 수 있는 수량과 평균가. 매수는 지정가 이하 매도 호가만, 매도는 지정가 이상 매수 호가만 씁니다.
+    호가에 쌓인 수량을 넘는 몫은 체결하지 않고 돌려줍니다(남은 수량은 예약으로 남깁니다). 닿는 호가가 없으면 null. */
+export function limitFill(book: QuoteBook, side: Side, qty: number, limit: number): { qty: number; price: number } | null {
+  const lv = side === 'buy' ? book.asks.filter(l => l.price <= limit) : book.bids.filter(l => l.price >= limit);
+  let left = Math.max(0, Math.floor(qty)), total = 0;
+  const want = left;
+  for (const l of lv) { if (left <= 0) break; const q = Math.min(left, l.qty); total += q * l.price; left -= q; }
+  const filled = want - left;
+  if (filled < 1) return null;
+  return { qty: filled, price: side === 'buy' ? Math.ceil(total / filled) : Math.floor(total / filled) };
+}
 const reservedExcept = (ctx: OrderContext, code: StockCode | null) => Object.values(ctx.orders).reduce((a, o) => a + (o && o.code !== code ? o.reserve : 0), 0);
 
 /** 주문 검증. ref는 지금 가격(장중 시세)입니다.

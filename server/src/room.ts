@@ -1,11 +1,11 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { cleanLabel, CONFIDENCES, gameConfig, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, quoteBook, REACT_BP, SHOCK_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import { cleanLabel, CONFIDENCES, gameConfig, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, limitFill, marketFill, quoteBook, REACT_BP, SHOCK_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, CrowdView, PredictionTrendRow, PredictionView, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
-import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
+import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan, type PlannedStage } from './plan';
 import { buildReport } from './report';
 
 /** refPrice: 체결 순간의 장중 시세. kind: 시장가(바로 체결)·지정가(예약). k: 주문 시간 시작부터 지난 초 */
@@ -333,18 +333,24 @@ export class GameRoom {
     const r = this.currentRound, steps = Math.max(1, Math.round(this.config.trade));
     const breaking = r.stages.find(st => st.breaking);
     const breakAt = breaking ? Math.max(1, Math.floor(steps / 2)) : null;
-    const signal = breaking ? stageById.get(breaking.stageId)!.signal : {};
     const paths = {} as Record<StockCode, number[]>;
     this.stocks.forEach(st => {
-      const lead = GROUPS[st.group].leader;
-      const dir = signal[st.code] ?? 0, leadDir = st.code !== lead ? signal[lead] ?? 0 : 0;
-      const reactBp = breaking?.shock ? SHOCK_BP : REACT_BP;
-      const react = dir ? dir * reactBp : leadDir ? Math.round(leadDir * reactBp * st.linkBeta) : 0;
+      const react = this.breakingReact(st, breaking);
       const rnd = mulberry(this.s.seed ^ Math.imul(this.s.round, 0x9E3779B1) ^ Math.imul(Number(st.code.slice(1)), 0x85EBCA6B));
       paths[st.code] = intradayPath(rnd, this.s.prices[st.code], r.marketBp + (r.stockBp[st.code] ?? 0) + react, steps, st.maxMoveBp * WIGGLE_X,
         breakAt !== null && react ? { at: breakAt, bp: react } : undefined);
     });
     this.s.live = { round: this.s.round, startedAt: now, steps, k: 0, breakAt, paths, done: false, halts: {} };
+  }
+  /** 속보 순간 이 종목이 한 번에 움직이는 폭(bp). 대상 종목은 기사 분위기 방향으로 REACT_BP(대형 속보는 SHOCK_BP),
+      같은 업종 종목은 대장주 방향 × linkBeta. 속보가 없거나 관계없는 종목은 0 */
+  private breakingReact(st: StockDef, breaking: PlannedStage | undefined): number {
+    if (!breaking) return 0;
+    const signal = stageById.get(breaking.stageId)!.signal;
+    const lead = GROUPS[st.group].leader;
+    const dir = signal[st.code] ?? 0, leadDir = st.code !== lead ? signal[lead] ?? 0 : 0;
+    const reactBp = breaking.shock ? SHOCK_BP : REACT_BP;
+    return dir ? dir * reactBp : leadDir ? Math.round(leadDir * reactBp * st.linkBeta) : 0;
   }
   /* ---------- 변동성 완화장치(VI) ---------- */
   /** 이 종목이 지금 VI로 멈춰 있는지. 멈춰 있으면 풀릴 때까지 남은 초, 아니면 0 */
@@ -454,12 +460,13 @@ export class GameRoom {
       const chk = checkOrder(p, code, side, qty, ref, { limit });
       if (!chk.ok) return { ok: false, reason: chk.reason };
       delete p.orders[code];
-      /* 지금 호가가 이미 지정가보다 유리하면 바로 체결합니다(지정가보다 불리하게는 체결하지 않음). */
-      const bid = this.bestBid(code);
-      if (side === 'buy' ? ref <= limit! : bid !== null && bid >= limit!) {
-        const mk = marketFill(this.book(code), side, qty)?.price ?? limit!;
-        const price = side === 'buy' ? Math.min(mk, limit!) : Math.max(mk, limit!);
-        return { ok: true, fill: this.executeFill(p, code, side, qty, price, ref, requestId, 'limit', now) };
+      /* 지금 호가가 이미 지정가에 닿으면 지정가보다 불리하지 않은 호가에 쌓인 수량만 바로 체결하고, 남은 수량은 예약으로 둡니다.
+         예전에는 호가 수량과 상관없이 전부를 지정가에 체결해서, 현재가 지정가로 큰 수량을 슬리피지 없이 살 수 있었습니다. */
+      const part = limitFill(this.book(code), side, qty, limit!);
+      if (part) {
+        const fill = this.executeFill(p, code, side, part.qty, part.price, ref, requestId, 'limit', now);
+        if (part.qty < qty) this.restLimit(p, code, side, qty - part.qty, limit!, ref, requestId, now);
+        return { ok: true, fill };
       }
       p.orders[code] = { code, side, qty, kind: 'limit', price: limit!, refPrice: ref, slipBp: 0, gross: chk.gross, fee: chk.fee, reserve: chk.reserve, requestId, placedAt: now };
       this.touch(now);
@@ -470,6 +477,13 @@ export class GameRoom {
     return { ok: true, fill: this.executeFill(p, code, side, qty, chk.price, ref, requestId, 'market', now) };
   }
   /** 체결: 현금·보유 수량을 바로 바꾸고 체결 기록을 남깁니다. */
+  /** 지정가 주문 중 아직 체결되지 않은 수량을 예약으로 남깁니다. 예약금이 모자라면 남기지 않습니다. */
+  private restLimit(p: Player, code: StockCode, side: Side, qty: number, limit: number, ref: number, requestId: string, now: number) {
+    const chk = checkOrder(p, code, side, qty, ref, { limit });
+    if (!chk.ok) { delete p.orders[code]; return; }
+    p.orders[code] = { code, side, qty, kind: 'limit', price: limit, refPrice: ref, slipBp: 0, gross: chk.gross, fee: chk.fee, reserve: chk.reserve, requestId, placedAt: p.orders[code]?.placedAt ?? now };
+    this.touch(now);
+  }
   private executeFill(p: Player, code: StockCode, side: Side, qty: number, price: number, ref: number, requestId: string, kind: OrderKind, now: number, trigger?: 'stop' | 'take'): FillInfo {
     const gross = price * qty, fee = chargeOf(side, gross), tax = side === 'sell' ? taxOf(gross) : 0;
     let realized: Fill['realized'] = null;
@@ -547,7 +561,11 @@ export class GameRoom {
       delete p.orders[o.code];
       if (o.side === 'sell' && (p.holdings[o.code]?.qty ?? 0) < o.qty) continue;   // 그사이 팔아 버린 수량은 체결하지 않음
       if (o.side === 'buy' && p.cash < o.reserve) continue;
-      this.executeFill(p, o.code, o.side, o.qty, o.price, price, o.requestId, 'limit', now);
+      /* 예약은 지정가에 체결하되, 이번 초 호가창에서 지정가에 닿은 호가 수량만큼만. 남은 수량은 다음 초에 다시 봅니다 */
+      const qty = Math.min(o.qty, limitFill(this.book(o.code), o.side, o.qty, o.price)?.qty ?? 0);
+      if (qty < 1) { p.orders[o.code] = o; continue; }
+      this.executeFill(p, o.code, o.side, qty, o.price, price, o.requestId, 'limit', now);
+      if (qty < o.qty) this.restLimit(p, o.code, o.side, o.qty - qty, o.price, price, o.requestId, now);
     }
   }
   cancelOrder(tokenValue: string, requestId: string, code: StockCode, now: number): OrderResult {
@@ -672,6 +690,12 @@ export class GameRoom {
           if (bp) events.push({ stageId: ps.stageId, label: `업종 동반 · ${out.label}`, bp, reason: `같은 업종(${GROUPS[st.group].label}) ${stockOf(leader).name} 소식에 함께 움직였습니다` });
         });
       });
+      /* 대형 속보로 한 번에 움직인 몫(±12.5%)은 종가에도 남깁니다. 그 위에 사건 결과가 더해집니다.
+         남기지 않으면 결과가 속보와 같은 방향이어도(악재 속보 −12.5% 뒤 실제 −6%) 종가가 속보 직후보다 높아져서,
+         대형 속보 반대로 사면 항상 이기는 판이 됐습니다(후보 19개 결과가 모두 ±12.5% 안). 보통 속보(3.5%)는 그대로 되돌림 */
+      const shockStage = plan.stages.find(ps => ps.breaking && ps.shock);
+      const shockBp = shockStage ? this.breakingReact(st, shockStage) : 0;
+      if (shockBp) events.push({ stageId: shockStage!.stageId, label: '대형 속보 반응', bp: shockBp, reason: '속보 순간 한 번에 움직인 몫이 종가에도 남았습니다' });
       const c = computeClose(round, bases[st.code], events, plan.marketBp, plan.stockBp[st.code] ?? 0);
       const path = live?.paths[st.code] ?? [bases[st.code]];
       let buyQty = 0, sellQty = 0;
