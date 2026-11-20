@@ -35,6 +35,8 @@ export function Home() {
   const [busy, setBusy] = useState(false);
   /* 시작 버튼을 누르면 바로 시작하지 않고, 설정을 한 번 보여 주는 창을 엽니다 */
   const [starting, setStarting] = useState<StartKind | null>(null);
+  /* 학술제 발표용: 대형 속보(VI)를 판마다 반드시 한 번. 이 판에만 쓰고 저장하지 않습니다 */
+  const [sureShock, setSureShock] = useState(true);
   /* 게임 설정은 고른 값을 이 기기에 기억합니다. 처음에는 기본값(10종목·5라운드·90초) */
   const [settings, setSettings] = useState<RoomSettings>(() => persistedSettings(cleanSettings(store.get('settings'))));
   const { open, seen } = useGlossary();
@@ -46,11 +48,12 @@ export function Home() {
   /* 정원은 친구 대전에만 있는 설정이라 혼자 연습에는 빼고 보냅니다(서버도 거절합니다) */
   const forMode = (mode: 'friend' | 'solo'): RoomSettings => mode === 'friend' ? settings
     : Object.fromEntries(Object.entries(settings).filter(([k]) => k !== 'maxPlayers')) as RoomSettings;
-  const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, forMode(mode)); navigate(`/room/${r.code}`); });
+  /* extra: 이 판에만 쓰는 설정(튜토리얼 판의 대형 속보 끄기 등). 기기에는 저장하지 않습니다 */
+  const make = (mode: 'friend' | 'solo', extra: RoomSettings = {}) => run(async () => { const r = await createRoom(mode, { ...forMode(mode), ...extra }); navigate(`/room/${r.code}`); });
   /* 학술제 운영자: 친구 대전 설정 그대로, 정원은 서버가 버티는 상한인 80명으로 고정합니다.
      운영자 열쇠는 이 기기에만 저장하고 대형 화면으로 갑니다. */
   const festival = () => run(async () => {
-    const r = await createRoom('friend', { ...settings, maxPlayers: FESTIVAL_MAX_PLAYERS }, true);
+    const r = await createRoom('friend', { ...settings, maxPlayers: FESTIVAL_MAX_PLAYERS, ...(sureShock ? { bigBreaking: 'always' as const } : {}) }, true);
     if (!r.operatorToken) throw new Error('운영자 방을 만들지 못했습니다');
     store.set(operatorKey(r.code), r.operatorToken);
     navigate(`/display/${r.code}`);
@@ -160,12 +163,16 @@ export function Home() {
             </label>
             <p className="hint">{CAPACITY_NOTE}</p>
           </div>}
+          {starting === 'festival' && <label className="check">
+            <input type="checkbox" checked={sureShock} onChange={e => setSureShock(e.target.checked)} />
+            <span>대형 속보 반드시 한 번 (발표용 · 뉴스로 VI가 걸리는 장면)</span>
+          </label>}
           <p className="start-sum">{demo ? '발표용 빠른 판 · ' : ''}{LEVEL_LABEL[level]} · {stocks}종목 · {rounds}라운드 · 장 {trade}초 · 한 판 약 {minutes}분</p>
           {error && <p className="error" role="alert">{error}</p>}
           <button className="cta" disabled={busy} onClick={() => { if (starting === 'festival') festival(); else make(starting); }}>{START[starting].go}</button>
         </div>
       </Sheet>}
-      {howTo && <Onboarding onDone={() => { setHowTo(false); if (tutorial) { setTutorial(false); make('solo'); } }} />}
+      {howTo && <Onboarding onDone={() => { setHowTo(false); if (tutorial) { setTutorial(false); make('solo', { bigBreaking: 'off' }); } }} />}
     </main>
   );
 }

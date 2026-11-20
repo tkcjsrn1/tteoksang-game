@@ -1,13 +1,13 @@
 /* 시드로 게임 전체 시나리오를 미리 확정합니다. 같은 시드와 설정이면 같은 결말과 변동이 나옵니다. */
 import { gameConfig, GROUPS, MARKET_MAX_BP, stockOf, STOCKS, STOCKS_PER_GAME } from '../../shared/rules';
 import type { GameMode, RoomSettings, StockCode } from '../../shared/types';
-import { ARCS, CARDS, type Arc, type Outcome, type Stage } from './content';
+import { ARCS, CARDS, SHOCK_STAGES, type Arc, type Outcome, type Stage } from './content';
 
 export function mulberry(seed: number) {
   let a = seed | 0;
   return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
-export interface PlannedStage { stageId: string; outcomeId: string; breaking: boolean }
+export interface PlannedStage { stageId: string; outcomeId: string; breaking: boolean; /** 대형 속보(판마다 최대 1개) */ shock?: boolean }
 export interface RoundPlan { round: number; stages: PlannedStage[]; marketBp: number; stockBp: Record<StockCode, number>; cardId: string | null }
 export interface GamePlan { arcIds: string[]; rounds: RoundPlan[]; /** 이번 판에 나오는 종목. 예전 저장 데이터에는 없습니다 */ stockCodes?: StockCode[] }
 /* 한 판에 나오는 종목 수 기본값은 shared/rules.ts STOCKS_PER_GAME */
@@ -91,5 +91,13 @@ export function buildPlan(seed: number, mode: GameMode, excludedArcs: string[] =
     const ci = cardRounds.indexOf(r);
     rounds.push({ round: r, stages, marketBp, stockBp, cardId: ci >= 0 ? cards[ci % cards.length].id : null });
   }
+  markShock(rounds, settings);
   return { arcIds: chosen.map(a => a.id), rounds, stockCodes };
 }
+/** 속보 자리에 온 첫 대형 속보 후보 하나를 대형 속보로 표시합니다. 'off'면 표시하지 않습니다. */
+export function markShock(rounds: RoundPlan[], settings?: RoomSettings) {
+  if (settings?.bigBreaking === 'off') return;
+  const st = rounds.flatMap(r => r.stages).find(x => x.breaking && SHOCK_STAGES.has(x.stageId));
+  if (st) st.shock = true;
+}
+export const hasShock = (plan: GamePlan) => plan.rounds.some(r => r.stages.some(s => s.shock));

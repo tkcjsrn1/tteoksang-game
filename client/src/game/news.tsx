@@ -13,7 +13,7 @@ import { lessonLink, Sheet } from './parts';
 export function NewsBody({ card, result, compact = false, action }: { card: NewsCard; result: NewsResult | null; compact?: boolean; action?: React.ReactNode }) {
   if (compact) return (
     <article className="news">
-      <p className="news-meta">{card.breaking ? <span className="chip alert">속보</span> : <span className="chip">이번 뉴스</span>}<span className="chip soft">{card.arcTitle}</span></p>
+      <p className="news-meta">{card.breaking ? <span className="chip alert">{breakingTag(card)}</span> : <span className="chip">이번 뉴스</span>}<span className="chip soft">{card.arcTitle}</span></p>
       <h2 className="headline"><Rich text={card.headline} /></h2>
       <dl className="facts">
         <dt><TermLink id="expectation">시장 기대</TermLink></dt><dd className="expect"><Rich text={card.expectation} /></dd>
@@ -27,7 +27,7 @@ export function NewsBody({ card, result, compact = false, action }: { card: News
   );
   return (
     <article className="news">
-      <p className="news-meta">{card.breaking && <span className="chip alert">속보</span>}<span className="chip soft">{card.arcTitle}</span></p>
+      <p className="news-meta">{card.breaking && <span className="chip alert">{breakingTag(card)}</span>}<span className="chip soft">{card.arcTitle}</span></p>
       <h2 className="headline"><Rich text={card.headline} /></h2>
       <dl className="facts">
         <dt>확인된 사실</dt><dd><Rich text={card.facts} /></dd>
@@ -124,6 +124,8 @@ export function CardResult({ card, mine, onClose }: { card: CardView; mine: { ke
 }
 /** 내 평가액 구역. 관전자에게는 상위 순위만 보여 줍니다. */
 
+/** 속보 꼬리표: 대형 속보는 번개 표시와 함께 따로 부릅니다 */
+export const breakingTag = (card: NewsCard) => card.shock ? '⚡ 대형 속보' : '속보';
 /** 속보 창이 저절로 닫히기까지의 초 */
 export const BREAKING_SECONDS = 5;
 export function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView; card: NewsCard; onClose: () => void; onOpen: (c: StockCode) => void }) {
@@ -138,9 +140,9 @@ export function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView;
   }, []);
   useEffect(() => { if (left <= 0) closeRef.current(); }, [left]);
   return (
-    <div className="breaking-wrap" role="status" aria-label="속보">
-      <div className="breaking">
-        <p className="news-meta"><span className="chip alert">속보</span><span className="chip soft">{card.arcTitle}</span></p>
+    <div className="breaking-wrap" role="status" aria-label={breakingTag(card).replace('⚡ ', '')}>
+      <div className={`breaking${card.shock ? ' shock' : ''}`}>
+        <p className="news-meta"><span className="chip alert">{breakingTag(card)}</span><span className="chip soft">{card.arcTitle}</span></p>
         <p className="headline"><Rich text={card.headline} /></p>
         <dl className="facts"><dt>시장 기대</dt><dd><Rich text={card.expectation} /></dd><dt>단서</dt><dd><Rich text={card.clue} /></dd></dl>
         {targets.length > 0 && <ul className="list breaking-stocks">{targets.map(s => {
@@ -150,7 +152,9 @@ export function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView;
             <b className={dir(bp)}>{arrow(bp)} {pctBp(bp)}</b>
           </button></li>;
         })}</ul>}
-        <p className="hint">속보가 뜨는 순간 가격이 먼저 반응했어요. 결과는 장 마감 때 공개됩니다. 아무 곳이나 누르면 닫혀요.</p>
+        <p className="hint">{card.shock
+          ? <>큰 소식이라 가격이 한 번에 크게 움직였어요. 시가 대비 ±10%를 넘으면 <TermLink id="vi">VI</TermLink>로 그 종목만 15초 동안 거래가 멈춰요. 결과는 장 마감 때 공개되니, 따라 사기 전에 시장 기대와 단서를 다시 보세요.</>
+          : '속보가 뜨는 순간 가격이 먼저 반응했어요. 결과는 장 마감 때 공개됩니다.'} 아무 곳이나 누르면 닫혀요.</p>
         {/* 남은 초는 화면 읽기 프로그램이 매초 다시 읽지 않게 숨기고, 버튼 이름은 '닫기'로 고정합니다 */}
         <button className="ghost" onClick={onClose} aria-label="닫기"><span>닫기 <span className="num" aria-hidden="true">({Math.max(left, 1)}초 뒤 자동)</span></span></button>
       </div>
@@ -217,7 +221,8 @@ export function Recap({ view, onOpen, send }: { view: RoomView; onOpen: (c: Stoc
     </div>}
     {fire && <Confetti key={view.round} />}
     <PredictResult view={view} />
-    {now?.cards.map(c => c.result && <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={view.stocks.find(s => s.code === c.card.targets[0])!} />)}
+    {now?.cards.map(c => { if (!c.result) return null; const st = view.stocks.find(s => s.code === c.card.targets[0])!;
+      return <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={st} shock={shockInfo(view, c.card, st)} />; })}
     {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
     {view.leaderboard.length > 1 && <RankMoves view={view} />}
     <div className="panel flush">
@@ -275,8 +280,18 @@ function RankMoves({ view }: { view: RoomView }) {
     </div>
   );
 }
+/** 대형 속보 복기: 속보 직후 가격 → 종가, 내가 속보 뒤에 산 값 → 종가. 장중 1초 시세(ticks)와 내 체결 기록만으로 계산합니다 */
+export interface ShockInfo { before: number; after: number; close: number; myQty: number; myAvg: number | null }
+export function shockInfo(view: RoomView, card: NewsCard, stock: StockView): ShockInfo | null {
+  const at = view.breakingAt, t = stock.ticks, b = stock.history[stock.history.length - 1];
+  if (!card.shock || at === undefined || !t || at < 1 || at >= t.length || !b || b.round !== view.round) return null;
+  const fills = (view.portfolio?.fillLog ?? []).filter(f => f.round === view.round && f.code === stock.code && f.side === 'buy' && (f.tick ?? -1) >= at);
+  const myQty = fills.reduce((a, f) => a + f.qty, 0), cost = fills.reduce((a, f) => a + f.qty * f.price, 0);
+  return { before: t[at - 1], after: t[at], close: b.closePrice, myQty, myAvg: myQty ? Math.round(cost / myQty) : null };
+}
+const bpOf = (from: number, to: number) => from > 0 ? Math.round((to - from) * 10000 / from) : 0;
 /** 사건 하나의 결과: 기대와 실제를 나란히, 주인공 종목의 등락을 막대로 나눠 보여 줍니다. */
-export function RecapNews({ card, result, stock }: { card: NewsCard; result: NewsResult; stock: StockView }) {
+export function RecapNews({ card, result, stock, shock }: { card: NewsCard; result: NewsResult; stock: StockView; shock?: ShockInfo | null }) {
   const b = stock.history[stock.history.length - 1];
   const mainBp = result.impacts.find(i => i.code === stock.code)?.bp ?? 0;
   const parts = b ? [
@@ -304,6 +319,12 @@ export function RecapNews({ card, result, stock }: { card: NewsCard; result: New
         })}
       </div>}
       {b && <CandleReplay b={b} name={stock.name} ticks={stock.ticks} />}
+      {shock && <p className="shock-line">
+        <b>⚡ 대형 속보 복기</b> 속보 직후 {won(shock.after)} → 종가 {won(shock.close)} <b className={dir(bpOf(shock.after, shock.close))}>{pctBp(bpOf(shock.after, shock.close))}</b>
+        {shock.myAvg !== null
+          ? <> · 내가 속보 뒤 산 {shock.myQty.toLocaleString('ko-KR')}주(평균 {won(shock.myAvg)})는 종가 기준 <b className={dir(bpOf(shock.myAvg, shock.close))}>{pctBp(bpOf(shock.myAvg, shock.close))}</b></>
+          : ' · 속보 뒤에 따라 사지 않았어요'}
+      </p>}
       <p className="lesson-box"><b>배운 점</b> <Rich text={result.concept} /></p>
       <details className="more"><summary>기업별 영향 자세히</summary>
         <ul className="impact">{result.impacts.map((i, k) => <li key={k}><span className={dir(i.bp)}>{i.code} {arrow(i.bp)} {pctBp(i.bp)}</span> <Rich text={i.reason} /></li>)}</ul>

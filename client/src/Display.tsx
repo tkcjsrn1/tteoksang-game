@@ -46,11 +46,14 @@ export function Display({ code }: { code: string }) {
       </header>
       {view.status === 'finished'
         ? <DisplayFinal view={view} isOp={isOp} rematch={() => send({ t: 'rematch' })} />
-        : <div className="d-grid">
+        : <>
+          <DisplayVi view={view} />
+          <div className="d-grid">
             <DisplayNews view={view} />
             <DisplayStocks view={view} />
             <DisplayRank rows={view.leaderboard} />
-          </div>}
+          </div>
+        </>}
       {error && <p className="error" role="alert">{error}</p>}
       <Disclaimer />
     </main>
@@ -94,6 +97,13 @@ function DisplayLobby({ view, isOp, start, error }: { view: RoomView; isOp: bool
   );
 }
 
+/** 장중 VI 띠: 거래가 멈춘 종목과 남은 초. 대형 속보 때 강당 전체가 같은 순간을 보게 합니다 */
+function DisplayVi({ view }: { view: RoomView }) {
+  const halted = view.phase === 'trade' ? view.stocks.filter(s => (s.haltLeft ?? 0) > 0) : [];
+  if (!halted.length) return null;
+  return <p className="d-vi" role="status">⚡ VI 발동 · {halted.map(s => `${s.name} ${s.haltLeft}초`).join(' · ')} 거래 정지</p>;
+}
+
 /** 지금 라운드 뉴스. 결과 시간에는 실제 결과와 기대 대비 차이를 크게 보여 줍니다 */
 function DisplayNews({ view }: { view: RoomView }) {
   const now = view.news[view.news.length - 1];
@@ -101,8 +111,8 @@ function DisplayNews({ view }: { view: RoomView }) {
   return (
     <section className="d-news" aria-label="이번 라운드 뉴스">
       {now.cards.map(({ card, result }) => (
-        <article key={card.stageId} className={card.breaking ? 'breaking' : ''}>
-          <p className="d-tag">{card.breaking ? '속보' : '이번 뉴스'} · {card.arcTitle}</p>
+        <article key={card.stageId} className={card.breaking ? `breaking${card.shock ? ' shock' : ''}` : ''}>
+          <p className="d-tag">{card.breaking ? (card.shock ? '⚡ 대형 속보' : '속보') : '이번 뉴스'} · {card.arcTitle}</p>
           <h2>{card.headline}</h2>
           {result
             ? <dl><dt>시장 기대</dt><dd>{card.expectation}</dd><dt>실제 결과</dt><dd className="d-actual">{result.actual} <small>· {result.gap}</small></dd></dl>

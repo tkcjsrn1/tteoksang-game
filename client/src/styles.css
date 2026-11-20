@@ -735,3 +735,12 @@ h1.d-phase { margin: 0; font: inherit; }
 .hold-value b { font-weight: 700; }
 .hold-value small.up { color: var(--up); }
 .hold-value small.down { color: var(--down); }
+
+/* 대형 속보: 속보 창 테두리를 두껍게, 대형 화면에는 VI 띠 */
+.breaking.shock { border-width: 3px; animation: breaking-in .3s cubic-bezier(.2, .9, .3, 1), shock-pulse 1s ease-in-out 2; }
+@keyframes shock-pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--up) 35%, transparent), 0 10px 28px rgba(0, 0, 0, .28); } }
+@media (prefers-reduced-motion: reduce) { .breaking.shock { animation: none; } }
+.d-news article.breaking.shock .d-tag { color: var(--up); font-weight: 800; }
+.d-vi { margin: 0; padding: clamp(10px, 1vw, 18px) clamp(16px, 1.6vw, 32px); border-radius: 16px; background: var(--up); color: #fff; font-size: clamp(18px, 1.6vw, 34px); font-weight: 800; }
+.shock-line { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); font-size: 14px; line-height: 1.5; }
+.shock-line > b:first-child { display: block; margin-bottom: 2px; }

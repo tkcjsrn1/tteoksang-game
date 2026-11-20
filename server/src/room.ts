@@ -1,11 +1,13 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { cleanLabel, CONFIDENCES, gameConfig, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import { cleanLabel, CONFIDENCES, gameConfig, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, quoteBook, REACT_BP, SHOCK_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, CrowdView, PredictionTrendRow, PredictionView, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
-import { buildPlan, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
+import { buildPlan, hasShock, mulberry, type ForcedOutcomes, type GamePlan } from './plan';
+/** '대형 속보 반드시 한 번'에서 시드를 몇 번까지 바꿔 볼지. 한 시드에 30~50%라 64번이면 사실상 항상 나옵니다 */
+const SHOCK_SEED_TRIES = 64;
 import { buildReport } from './report';
 
 /** refPrice: 체결 순간의 장중 시세. kind: 시장가(바로 체결)·지정가(예약). k: 주문 시간 시작부터 지난 초 */
@@ -76,9 +78,14 @@ export class GameRoom {
   constructor(state: RoomState) { this.s = state; }
 
   static create(opts: { code: string; mode: GameMode; now: number; seed?: number; excludedArcs?: string[]; forced?: ForcedOutcomes; forcedArcs?: string[]; settings?: RoomSettings; operated?: boolean }): GameRoom {
-    const seed = opts.seed ?? randomInt(2 ** 31);
+    let seed = opts.seed ?? randomInt(2 ** 31);
     const excluded = opts.excludedArcs ?? [];
-    const plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, opts.settings);
+    let plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, opts.settings);
+    /* 학술제 발표용 '대형 속보 반드시 한 번': 대형 속보가 생기는 시나리오가 나올 때까지 다음 시드를 봅니다(한 시드에 30~50%라 몇 번이면 나옴) */
+    for (let i = 1; opts.settings?.bigBreaking === 'always' && !opts.forcedArcs && !hasShock(plan) && i <= SHOCK_SEED_TRIES; i++) {
+      seed = (seed + 1) % 2 ** 31;
+      plan = buildPlan(seed, opts.mode, excluded, opts.forced, opts.forcedArcs, opts.settings);
+    }
     const npcs = NPC_TYPES.map(t => newPlayer('npc', `NPC ${NPC_RULES[t].label}`, opts.now, t, npcId(t)));
     return new GameRoom({
       code: opts.code, mode: opts.mode, seed, status: 'lobby', hostId: null,
@@ -338,7 +345,8 @@ export class GameRoom {
     this.stocks.forEach(st => {
       const lead = GROUPS[st.group].leader;
       const dir = signal[st.code] ?? 0, leadDir = st.code !== lead ? signal[lead] ?? 0 : 0;
-      const react = dir ? dir * REACT_BP : leadDir ? Math.round(leadDir * REACT_BP * st.linkBeta) : 0;
+      const reactBp = breaking?.shock ? SHOCK_BP : REACT_BP;
+      const react = dir ? dir * reactBp : leadDir ? Math.round(leadDir * reactBp * st.linkBeta) : 0;
       const rnd = mulberry(this.s.seed ^ Math.imul(this.s.round, 0x9E3779B1) ^ Math.imul(Number(st.code.slice(1)), 0x85EBCA6B));
       paths[st.code] = intradayPath(rnd, this.s.prices[st.code], r.marketBp + (r.stockBp[st.code] ?? 0) + react, steps, st.maxMoveBp * WIGGLE_X,
         breakAt !== null && react ? { at: breakAt, bp: react } : undefined);
@@ -766,7 +774,7 @@ export class GameRoom {
       const stages = r === this.s.round ? this.visibleStages() : plan.stages;
       out.push({ round: r, cards: stages.map(ps => {
         const stage = stageById.get(ps.stageId)!;
-        const card: NewsCard = { stageId: stage.id, arcTitle: arcOfStage.get(stage.id)!.title, headline: stage.headline, facts: stage.facts, expectation: stage.expectation, remaining: stage.remaining, clue: stage.clue, targets: stage.targets, breaking: ps.breaking };
+        const card: NewsCard = { stageId: stage.id, arcTitle: arcOfStage.get(stage.id)!.title, headline: stage.headline, facts: stage.facts, expectation: stage.expectation, remaining: stage.remaining, clue: stage.clue, targets: stage.targets, breaking: ps.breaking, ...(ps.shock ? { shock: true } : {}) };
         let result: NewsResult | null = null;
         if (open && (r < this.s.round || this.s.phase === 'recap' || this.s.status === 'finished')) {
           const o = stage.outcomes.find(x => x.id === ps.outcomeId)!;

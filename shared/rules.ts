@@ -62,6 +62,8 @@ export function cleanSettings(saved: string | null | undefined): RoomSettings {
   if (isLevel(level)) out.level = level;
   const pace = (raw as Record<string, unknown>).pace;
   if (isPace(pace)) out.pace = pace;
+  const big = (raw as Record<string, unknown>).bigBreaking;
+  if (big === 'off' || big === 'always') out.bigBreaking = big;
   return out;
 }
 
@@ -383,6 +385,8 @@ export function maxBuyQty(ctx: OrderContext, code: StockCode, ref: number, opts:
 /** 장중 속보가 뜰 때 헤드라인 방향으로 먼저 튀는 폭(대표 종목 기준, bp = 3.5%). 같은 업종 종목은 linkBeta배.
     종목 하루 변동폭(maxMoveBp 50~150bp)보다 크게 잡아야 속보가 떴다는 걸 화면에서 알아볼 수 있습니다. */
 export const REACT_BP = 350;
+/** 대형 속보의 반응 폭(bp). VI 기준(±10%)을 넘도록 12.5%. 같은 업종은 linkBeta만큼 따라갑니다(4~8%, VI 아래) */
+export const SHOCK_BP = 1250;
 /** 장중 흔들림 크기: 종목 변동폭(maxMoveBp)의 이 배수가 한 라운드 표준편차 */
 export const WIGGLE_X = 1.2;
 /** 0~1 균등 난수 함수 */
