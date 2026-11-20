@@ -3,9 +3,6 @@
 # 사람이 플레이 중일 때나 발표 당일에는 돌리지 마세요.
 name: Rehearsal
 on:
-  # 이 브랜치에 푸시하면 기본값(80명·3라운드)으로 한 번 돕니다. main에 머지하기 전 시험용
-  push:
-    branches: [chore/rehearsal-workflow]
   workflow_dispatch:
     inputs:
       url:
