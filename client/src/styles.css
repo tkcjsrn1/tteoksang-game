@@ -737,3 +737,8 @@ h1.d-phase { margin: 0; font: inherit; }
 .hold-value b { font-weight: 700; }
 .hold-value small.up { color: var(--up); }
 .hold-value small.down { color: var(--down); }
+
+/* 장중 주문 창: 버튼 바로 위에 낼 돈(받을 돈)을 크게 한 줄로. 자세한 비용은 버튼 아래 */
+.order-total { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 0; font-size: 15px; }
+.order-total b { font-size: 18px; font-weight: 800; }
+.sheet-sub { margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line); }

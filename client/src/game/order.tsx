@@ -29,13 +29,17 @@ export function StockSheet({ stock, view, left, coach, onClose, onWatch, favorit
   const pointData = stock.history.find(h => h.round === point);
   const intro = coach?.target === stock.code && (view.phase === 'news' || view.phase === 'trade');
   const order = view.you.role === 'player' && <OrderPanel stock={stock} view={view} left={left} place={place} cancel={cancel} toast={toast} intro={intro} />;
+  /* 장중에는 주문이 먼저: 가격 → 주문(매수·매도 버튼까지) → 차트·기업 정보 순서로 둡니다.
+     장이 30~90초라 차트와 설명 아래까지 스크롤하느라 시간을 쓰지 않게 하려는 것입니다. 장 밖에서는 정보가 먼저입니다. */
+  const tradeFirst = !!order && view.phase === 'trade' && left > 0;
+  const priceLine = view.phase === 'trade' && stock.ticks
+    ? <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 <small className={dir(intradayBp(stock))}>{arrow(intradayBp(stock))} {pctBp(intradayBp(stock))} <span className="hint">오늘</span></small></p>
+    : <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 {stock.lastChangeBp !== null && <small className={dir(stock.lastChangeBp)}>{arrow(stock.lastChangeBp)} {pctBp(stock.lastChangeBp)}</small>}</p>;
   const details = <>
       <p className="hint"><Rich text={`${GROUPS[stockOf(stock.code).group].label} 업종 · ${stock.sector}${stockOf(stock.code).linkBeta === 1 ? ' · 대장주' : ''}`} /></p>
       <p className="hint">{stock.desc}</p>
       <CompanyInfo stock={stock} />
-      {view.phase === 'trade' && stock.ticks
-        ? <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 <small className={dir(intradayBp(stock))}>{arrow(intradayBp(stock))} {pctBp(intradayBp(stock))} <span className="hint">오늘</span></small></p>
-        : <p className="bigpx num">{stock.price.toLocaleString('ko-KR')}원 {stock.lastChangeBp !== null && <small className={dir(stock.lastChangeBp)}>{arrow(stock.lastChangeBp)} {pctBp(stock.lastChangeBp)}</small>}</p>}
+      {!tradeFirst && priceLine}
       <div className="seg mini" role="group" aria-label="그래프 종류">
         <button aria-pressed={chart === 'line'} disabled={!hasTicks} onClick={() => pickChart('line')}>1초</button>
         <button aria-pressed={chart === 'candle'} disabled={!hasTicks} onClick={() => pickChart('candle')}>10초봉</button>
@@ -61,6 +65,11 @@ export function StockSheet({ stock, view, left, coach, onClose, onWatch, favorit
       {intro ? <>
         {order}
         <details className="more"><summary>차트·기업 정보</summary>{details}</details>
+      </> : tradeFirst ? <>
+        {priceLine}
+        {order}
+        <h3 className="h small sheet-sub">차트·기업 정보</h3>
+        {details}
       </> : <>{details}{order}</>}
     </Sheet>
   );
@@ -117,6 +126,36 @@ export function OrderPanel({ stock, view, left, place, cancel, toast, intro }: {
   };
   if (!open && view.phase !== 'news') return <p className="hint strong">이번 라운드 장 마감</p>;
   const sideLabel = side === 'buy' ? '매수' : '매도';
+  /* 장중에는 주문 버튼을 위로 올리고 호가창·비용 자세히는 버튼 아래에 둡니다 */
+  const upFront = open && !intro;
+  const totalLabel = side === 'buy' ? (isLimit ? '묶어 둘 돈(예약금)' : '빠져나갈 돈') : '받을 돈';
+  const totalWon = side === 'buy' ? gross + fee : Math.max(0, gross - fee);
+  const costList = (
+    <dl className="kv">
+      <dt>지금 시세</dt><dd>{won(stock.price)}</dd>
+      {!isLimit && !easy && <><dt>{side === 'buy' ? '최우선 매도 호가' : '최우선 매수 호가'}</dt><dd>{mf ? won(mf.best) : '없음'}</dd></>}
+      {isLimit
+        ? <><dt>지정가</dt><dd>{limitOk ? won(lim) : '—'}</dd></>
+        : <><dt>예상 체결가</dt><dd>{won(fp.price)}</dd>
+          {!easy && <><dt><TermLink id="slippage">슬리피지</TermLink>{fp.slipBp ? ` ${fp.slipBp}bp` : ''}</dt><dd>{slipWon ? `${side === 'buy' ? '+' : '−'}${won(slipWon)}` : '없음'}</dd></>}</>}
+      <dt>주문 금액</dt><dd>{won(gross)}</dd>
+      <dt><TermLink id="fee">수수료</TermLink> 0.10%</dt><dd>{won(commission)}</dd>
+      {side === 'sell' && <><dt><TermLink id="transaction-tax">증권거래세</TermLink> 0.20%</dt><dd>{won(tax)}</dd></>}
+      <dt className="total">{totalLabel}</dt><dd className="total">{won(totalWon)}</dd>
+    </dl>
+  );
+  const overMax = n > max && <p className="error">가능한 수량을 넘었어요</p>;
+  const howItFills = (
+    <p className="hint">{easy
+      ? (side === 'buy' ? '지금 시세로 바로 체결돼요. 한 번에 많이 사면 체결가가 조금 올라갈 수 있어요.' : '지금 시세로 바로 팔려요. 파는 값은 시세보다 한 칸(10원) 낮은 값부터 시작해요.')
+      : isLimit
+        ? (marketable ? '지금 시세가 지정가보다 유리해서 바로 체결돼요.' : '시세가 지정가에 닿으면 그 가격에 체결돼요. 장 마감까지 안 닿으면 자동 취소돼요.' + (existing ? ' 이 종목의 기존 예약은 새 예약으로 바뀌어요.' : ''))
+        : side === 'buy' ? '가장 싼 매도 호가부터 차례로 사요. 수량이 많으면 더 비싼 호가까지 사게 돼요(슬리피지).' : `가장 비싼 매수 호가부터 차례로 팔아요. 시세보다 한 칸(10원) 낮은 값부터 시작해요(스프레드).`}</p>
+  );
+  const noQuote = !isLimit && !mf && <p className="error">{side === 'sell' ? '사려는 주문이 없어 지금은 시장가로 팔 수 없어요(하한가).' : '팔려는 주문이 없어 지금은 시장가로 살 수 없어요.'}</p>;
+  const submitButton = (
+    <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max || (isLimit && !limitOk) || (!isLimit && !mf)} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 장 시작` : busy ? '요청 중' : `${isLimit && limitOk ? `${won(lim)}에 ` : ''}${n > 0 ? `${n.toLocaleString('ko-KR')}주 ` : ''}${sideLabel}${isLimit && !marketable ? ' 예약' : ''}`}</button>
+  );
   const bookPanel = !easy && view.phase === 'trade' && <OrderBook book={book} price={stock.price} open={stock.openPrice} onPick={pickLevel} />;
   const kindPanel = !easy && <div className="seg kind" role="group" aria-label="주문 방식">
     <button aria-pressed={kind === 'market'} onClick={() => chooseKind('market')}>시장가 · 바로 체결</button>
@@ -128,7 +167,7 @@ export function OrderPanel({ stock, view, left, place, cancel, toast, intro }: {
         <p><b>{existing.side === 'buy' ? '매수' : '매도'} {existing.qty.toLocaleString('ko-KR')}주 · 지정가 {won(existing.price)}</b> 예약 중 · 시세가 닿으면 체결, 안 닿으면 마감 때 자동 취소</p>
         <button className="ghost small" disabled={!open || busy} onClick={doCancel}>예약 취소</button>
       </div>}
-      {!intro && bookPanel}
+      {!intro && !upFront && bookPanel}
       <div className="seg side"><button data-s="buy" aria-pressed={side === 'buy'} onClick={() => { setSide('buy'); setQty(''); }}>매수</button><button data-s="sell" aria-pressed={side === 'sell'} onClick={() => { setSide('sell'); setQty(''); }}>매도</button></div>
       {easy ? null : intro ? <details className="more"><summary>주문 방식·호가창</summary>{kindPanel}{bookPanel}</details> : kindPanel}
       {isLimit && <>
@@ -147,26 +186,20 @@ export function OrderPanel({ stock, view, left, place, cancel, toast, intro }: {
         <button aria-label="1주 더하기" onClick={() => setQty(String(n + 1))}>+</button>
       </div>
       <div className="pcts">{([[0.1, '10%'], [0.25, '25%'], [0.5, '50%'], [1, '최대']] as const).map(([r, label]) => <button key={label} onClick={() => setQty(String(Math.floor(max * r)))}>{label}</button>)}</div>
-      <dl className="kv">
-        <dt>지금 시세</dt><dd>{won(stock.price)}</dd>
-        {!isLimit && !easy && <><dt>{side === 'buy' ? '최우선 매도 호가' : '최우선 매수 호가'}</dt><dd>{mf ? won(mf.best) : '없음'}</dd></>}
-        {isLimit
-          ? <><dt>지정가</dt><dd>{limitOk ? won(lim) : '—'}</dd></>
-          : <><dt>예상 체결가</dt><dd>{won(fp.price)}</dd>
-            {!easy && <><dt><TermLink id="slippage">슬리피지</TermLink>{fp.slipBp ? ` ${fp.slipBp}bp` : ''}</dt><dd>{slipWon ? `${side === 'buy' ? '+' : '−'}${won(slipWon)}` : '없음'}</dd></>}</>}
-        <dt>주문 금액</dt><dd>{won(gross)}</dd>
-        <dt><TermLink id="fee">수수료</TermLink> 0.10%</dt><dd>{won(commission)}</dd>
-        {side === 'sell' && <><dt><TermLink id="transaction-tax">증권거래세</TermLink> 0.20%</dt><dd>{won(tax)}</dd></>}
-        <dt className="total">{side === 'buy' ? (isLimit ? '묶어 둘 돈(예약금)' : '빠져나갈 돈') : '받을 돈'}</dt><dd className="total">{won(side === 'buy' ? gross + fee : Math.max(0, gross - fee))}</dd>
-      </dl>
-      {n > max && <p className="error">가능한 수량을 넘었어요</p>}
-      <p className="hint">{easy
-        ? (side === 'buy' ? '지금 시세로 바로 체결돼요. 한 번에 많이 사면 체결가가 조금 올라갈 수 있어요.' : '지금 시세로 바로 팔려요. 파는 값은 시세보다 한 칸(10원) 낮은 값부터 시작해요.')
-        : isLimit
-          ? (marketable ? '지금 시세가 지정가보다 유리해서 바로 체결돼요.' : '시세가 지정가에 닿으면 그 가격에 체결돼요. 장 마감까지 안 닿으면 자동 취소돼요.' + (existing ? ' 이 종목의 기존 예약은 새 예약으로 바뀌어요.' : ''))
-          : side === 'buy' ? '가장 싼 매도 호가부터 차례로 사요. 수량이 많으면 더 비싼 호가까지 사게 돼요(슬리피지).' : `가장 비싼 매수 호가부터 차례로 팔아요. 시세보다 한 칸(10원) 낮은 값부터 시작해요(스프레드).`}</p>
-      {!isLimit && !mf && <p className="error">{side === 'sell' ? '사려는 주문이 없어 지금은 시장가로 팔 수 없어요(하한가).' : '팔려는 주문이 없어 지금은 시장가로 살 수 없어요.'}</p>}
-      <button className={`go ${side}`} disabled={!open || busy || n < 1 || n > max || (isLimit && !limitOk) || (!isLimit && !mf)} onClick={submit}>{view.phase === 'news' ? `${Math.ceil(left)}초 후 장 시작` : busy ? '요청 중' : `${isLimit && limitOk ? `${won(lim)}에 ` : ''}${n > 0 ? `${n.toLocaleString('ko-KR')}주 ` : ''}${sideLabel}${isLimit && !marketable ? ' 예약' : ''}`}</button>
+      {upFront ? <>
+        <p className="order-total"><span>{totalLabel}</span><b className="num">{won(totalWon)}</b></p>
+        {overMax}{noQuote}
+        {submitButton}
+        {costList}
+        {howItFills}
+        {bookPanel}
+      </> : <>
+        {costList}
+        {overMax}
+        {howItFills}
+        {noQuote}
+        {submitButton}
+      </>}
     </div>
   );
 }
