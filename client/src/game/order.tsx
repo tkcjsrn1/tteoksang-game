@@ -2,7 +2,7 @@
    Game.tsx에서 옮겼습니다(2026-11). 옮기기만 했고 동작은 그대로입니다. */
 import { useMemo, useState } from 'react';
 import type { Order, OrderKind, RoomView, Side, StockCode, StockView } from '../../../shared/types';
-import { BOOK_SHOW, GROUPS, dividendYieldBp, feeOf, formatEok, fundOf, lowerLimit, marketCapWon, marketFill, maxBuyQty, perOf, quoteBook, stockOf, taxOf, upperLimit, type QuoteBook } from '../../../shared/rules';
+import { BOOK_SHOW, GROUPS, dividendYieldBp, feeOf, formatEok, fundOf, limitFill, lowerLimit, marketCapWon, marketFill, maxBuyQty, perOf, quoteBook, stockOf, taxOf, upperLimit, type QuoteBook } from '../../../shared/rules';
 import { play } from '../fx';
 import { Rich, TermLink } from '../glossary/GlossaryContext';
 import type { CoachStep } from '../coach';
@@ -105,6 +105,8 @@ export function OrderPanel({ stock, view, left, place, cancel, toast, intro }: {
   const slipWon = isLimit ? 0 : Math.abs(fp.price - fp.best) * n;
   const bestBid = book.bids[0]?.price ?? null;
   const marketable = isLimit && limitOk && (side === 'buy' ? stock.price <= lim : bestBid !== null && bestBid >= lim);
+  /* 지정가로 지금 바로 체결될 수량. 지정가에 닿은 호가 수량까지만 체결되고 남은 수량은 예약으로 남습니다(서버와 같은 limitFill) */
+  const nowQty = marketable && n >= 1 ? limitFill(book, side, n, lim)?.qty ?? 0 : 0;
   const pickLevel = (price: number) => { setKind('limit'); setLimitText(String(price)); };
   const chooseKind = (k: OrderKind) => { setKind(k); if (k === 'limit' && !limitText) setLimitText(String(stock.price)); };
   const nudge = (d: number) => setLimitText(String(Math.min(hi, Math.max(lo, (limitOk ? lim : stock.price) + d))));
@@ -115,7 +117,7 @@ export function OrderPanel({ stock, view, left, place, cancel, toast, intro }: {
     if (!res.ok) { toast(res.reason ?? '주문하지 못했습니다'); return; }
     if (!res.fill) play('book');
     setQty('');
-    if (res.fill) toast(`체결 · ${res.fill.side === 'buy' ? '매수' : '매도'} ${res.fill.qty.toLocaleString('ko-KR')}주 × ${won(res.fill.price)}`);
+    if (res.fill) toast(`${res.fill.qty < n ? '일부 체결' : '체결'} · ${res.fill.side === 'buy' ? '매수' : '매도'} ${res.fill.qty.toLocaleString('ko-KR')}주 × ${won(res.fill.price)}${res.fill.qty < n ? ` · 남은 ${(n - res.fill.qty).toLocaleString('ko-KR')}주는 예약` : ''}`);
     else toast('지정가 예약 완료 · 시세가 닿으면 체결돼요');
   };
   const doCancel = async () => {
@@ -149,7 +151,7 @@ export function OrderPanel({ stock, view, left, place, cancel, toast, intro }: {
     <p className="hint">{easy
       ? (side === 'buy' ? '지금 시세로 바로 체결돼요. 한 번에 많이 사면 체결가가 조금 올라갈 수 있어요.' : '지금 시세로 바로 팔려요. 파는 값은 시세보다 한 칸(10원) 낮은 값부터 시작해요.')
       : isLimit
-        ? (marketable ? '지금 시세가 지정가보다 유리해서 바로 체결돼요.' : '시세가 지정가에 닿으면 그 가격에 체결돼요. 장 마감까지 안 닿으면 자동 취소돼요.' + (existing ? ' 이 종목의 기존 예약은 새 예약으로 바뀌어요.' : ''))
+        ? (marketable ? (nowQty < n ? `지금 호가에 닿은 ${nowQty.toLocaleString('ko-KR')}주는 바로 체결되고, 남은 ${(n - nowQty).toLocaleString('ko-KR')}주는 예약으로 남아요.` : '지금 시세가 지정가보다 유리해서 바로 체결돼요.') : '시세가 지정가에 닿으면 그 가격에 체결돼요. 장 마감까지 안 닿으면 자동 취소돼요.' + (existing ? ' 이 종목의 기존 예약은 새 예약으로 바뀌어요.' : ''))
         : side === 'buy' ? '가장 싼 매도 호가부터 차례로 사요. 수량이 많으면 더 비싼 호가까지 사게 돼요(슬리피지).' : `가장 비싼 매수 호가부터 차례로 팔아요. 시세보다 한 칸(10원) 낮은 값부터 시작해요(스프레드).`}</p>
   );
   const noQuote = !isLimit && !mf && <p className="error">{side === 'sell' ? '사려는 주문이 없어 지금은 시장가로 팔 수 없어요(하한가).' : '팔려는 주문이 없어 지금은 시장가로 살 수 없어요.'}</p>;
