@@ -668,3 +668,11 @@ export const CARDS: ChoiceCard[] = [
 export const stageById = new Map(ARCS.flatMap(a => a.stages.map(s => [s.id, s] as const)));
 export const arcOfStage = new Map(ARCS.flatMap(a => a.stages.map(s => [s.id, a] as const)));
 export const cardById = new Map(CARDS.map(c => [c.id, c] as const));
+
+/** 대형 속보 후보: 장중 속보로 나오면 대상 종목이 한 번에 ±12.5% 움직여 VI가 걸리는 뉴스.
+    갑작스러운 계약·인수설·경영권 분쟁·테마·사고·소송·계약 재검토처럼 실제로도 하루에 크게 움직일 만한 것만 골랐습니다.
+    결말과는 관계없이 기사 분위기(signal) 방향으로 움직이고, 장 마감 가격은 지금처럼 결말로 정해집니다. */
+export const SHOCK_STAGES: ReadonlySet<string> = new Set([
+  'co-1', 'rumor-1', 'rumor-2b', 'px-1', 'th-1', 'game-1', 'chip-3',   // 급등 쪽
+  're-2', 'ca-2', 'pat-1', 'rc-3', 'sp-2', 'game-2', 'raw-1', 'cr-1'   // 급락 쪽
+]);

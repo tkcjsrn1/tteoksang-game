@@ -1,7 +1,7 @@
 /* 방 하나의 게임 상태 기계. 네트워크와 DB를 모르는 순수 로직이라 시계를 주입해 테스트합니다.
    RoomState는 평범한 JSON이라 그대로 DB에 저장하고 복구할 수 있습니다. */
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { cleanLabel, CONFIDENCES, gameConfig, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, quoteBook, REACT_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
+import { cleanLabel, CONFIDENCES, gameConfig, LABEL_MAX, checkOrder, computeClose, viDirection, VI_SECONDS, dividendRound, exDividendPrice, chargeOf, taxOf, fundOf, GROUPS, intradayPath, LEGACY_CODES, lowerLimit, marketFill, quoteBook, REACT_BP, SHOCK_BP, START_CASH, stockOf, TICK_WON, upperLimit, WIGGLE_X, type QuoteBook, type StockDef } from '../../shared/rules';
 import type { CardView, Contribution, CrowdView, PredictionTrendRow, PredictionView, DividendPaid, DividendView, EventImpact, FillInfo, StopOrder, GameMode, Holding, LeaderRow, NewsCard, NewsResult, NpcType, Order, OrderKind, PriceBreakdown, Role, RoomSettings, ScheduleItem, RoomStatus, RoomView, RoundNews, RoundResult, Side, StockCode, StockView, Phase } from '../../shared/types';
 import { arcOfStage, cardById, stageById } from './content';
 import { NPC_RULES, NPC_TYPES } from './npc';
@@ -338,7 +338,8 @@ export class GameRoom {
     this.stocks.forEach(st => {
       const lead = GROUPS[st.group].leader;
       const dir = signal[st.code] ?? 0, leadDir = st.code !== lead ? signal[lead] ?? 0 : 0;
-      const react = dir ? dir * REACT_BP : leadDir ? Math.round(leadDir * REACT_BP * st.linkBeta) : 0;
+      const reactBp = breaking?.shock ? SHOCK_BP : REACT_BP;
+      const react = dir ? dir * reactBp : leadDir ? Math.round(leadDir * reactBp * st.linkBeta) : 0;
       const rnd = mulberry(this.s.seed ^ Math.imul(this.s.round, 0x9E3779B1) ^ Math.imul(Number(st.code.slice(1)), 0x85EBCA6B));
       paths[st.code] = intradayPath(rnd, this.s.prices[st.code], r.marketBp + (r.stockBp[st.code] ?? 0) + react, steps, st.maxMoveBp * WIGGLE_X,
         breakAt !== null && react ? { at: breakAt, bp: react } : undefined);
@@ -766,7 +767,7 @@ export class GameRoom {
       const stages = r === this.s.round ? this.visibleStages() : plan.stages;
       out.push({ round: r, cards: stages.map(ps => {
         const stage = stageById.get(ps.stageId)!;
-        const card: NewsCard = { stageId: stage.id, arcTitle: arcOfStage.get(stage.id)!.title, headline: stage.headline, facts: stage.facts, expectation: stage.expectation, remaining: stage.remaining, clue: stage.clue, targets: stage.targets, breaking: ps.breaking };
+        const card: NewsCard = { stageId: stage.id, arcTitle: arcOfStage.get(stage.id)!.title, headline: stage.headline, facts: stage.facts, expectation: stage.expectation, remaining: stage.remaining, clue: stage.clue, targets: stage.targets, breaking: ps.breaking, ...(ps.shock ? { shock: true } : {}) };
         let result: NewsResult | null = null;
         if (open && (r < this.s.round || this.s.phase === 'recap' || this.s.status === 'finished')) {
           const o = stage.outcomes.find(x => x.id === ps.outcomeId)!;

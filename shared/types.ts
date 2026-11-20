@@ -6,7 +6,9 @@ export type GameMode = 'friend' | 'solo';
 export type Level = 'easy' | 'pro';
 /** 진행 빠르기. demo = 발표·시연용 빠른 판(3라운드, 뉴스 15초·장 30초·결과 15초). 라운드 수·장 시간 설정보다 우선합니다 */
 export type Pace = 'normal' | 'demo';
-export interface RoomSettings { stocks?: number; rounds?: number; trade?: number; maxPlayers?: number; level?: Level; pace?: Pace }
+/** 대형 속보: 'off'는 끄기(튜토리얼 판). 없으면 후보 뉴스가 속보로 나올 때만(학술제 방도 같음) */
+export type BigBreaking = 'off';
+export interface RoomSettings { stocks?: number; rounds?: number; trade?: number; maxPlayers?: number; level?: Level; pace?: Pace; bigBreaking?: BigBreaking }
 export type Phase = 'news' | 'trade' | 'settling' | 'recap';
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 export type Side = 'buy' | 'sell';
@@ -66,6 +68,8 @@ export interface Holding { qty: number; avgCost: number; sinceRound: number }
 export interface NewsCard {
   stageId: string; arcTitle: string; headline: string; facts: string; expectation: string;
   remaining: string; clue: string; targets: StockCode[]; breaking: boolean;
+  /** 대형 속보: 대상 종목이 한 번에 크게 움직여 VI가 걸릴 수 있는 속보. 속보가 공개될 때 함께 보입니다 */
+  shock?: boolean;
 }
 export interface NewsResult {
   actual: string; gap: string; label: string; concept: string;

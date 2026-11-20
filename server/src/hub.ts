@@ -363,6 +363,9 @@ export class Hub {
               ? isLevel(value)
               : key === 'pace'
                 ? isPace(value)
+              /* 대형 속보: 끄기('off', 튜토리얼 판)만 받습니다 */
+              : key === 'bigBreaking'
+                ? value === 'off'
               /* 정원은 친구 대전에만 있습니다. 혼자 연습에 보내면 거절합니다(화면에서도 감춤) */
               : key === 'maxPlayers' && mode !== 'friend'
                 ? false

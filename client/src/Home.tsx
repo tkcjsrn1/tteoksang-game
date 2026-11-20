@@ -46,7 +46,8 @@ export function Home() {
   /* 정원은 친구 대전에만 있는 설정이라 혼자 연습에는 빼고 보냅니다(서버도 거절합니다) */
   const forMode = (mode: 'friend' | 'solo'): RoomSettings => mode === 'friend' ? settings
     : Object.fromEntries(Object.entries(settings).filter(([k]) => k !== 'maxPlayers')) as RoomSettings;
-  const make = (mode: 'friend' | 'solo') => run(async () => { const r = await createRoom(mode, forMode(mode)); navigate(`/room/${r.code}`); });
+  /* extra: 이 판에만 쓰는 설정(튜토리얼 판의 대형 속보 끄기 등). 기기에는 저장하지 않습니다 */
+  const make = (mode: 'friend' | 'solo', extra: RoomSettings = {}) => run(async () => { const r = await createRoom(mode, { ...forMode(mode), ...extra }); navigate(`/room/${r.code}`); });
   /* 학술제 운영자: 친구 대전 설정 그대로, 정원은 서버가 버티는 상한인 80명으로 고정합니다.
      운영자 열쇠는 이 기기에만 저장하고 대형 화면으로 갑니다. */
   const festival = () => run(async () => {
@@ -165,7 +166,7 @@ export function Home() {
           <button className="cta" disabled={busy} onClick={() => { if (starting === 'festival') festival(); else make(starting); }}>{START[starting].go}</button>
         </div>
       </Sheet>}
-      {howTo && <Onboarding onDone={() => { setHowTo(false); if (tutorial) { setTutorial(false); make('solo'); } }} />}
+      {howTo && <Onboarding onDone={() => { setHowTo(false); if (tutorial) { setTutorial(false); make('solo', { bigBreaking: 'off' }); } }} />}
     </main>
   );
 }

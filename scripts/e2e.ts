@@ -482,6 +482,7 @@ await step('학술제: 운영자 대형 화면(1920px)과 참가자 입장·시�
   await page.goto(base + '/');
   await page.getByRole('button', { name: /학술제 운영자/ }).click();
   await page.getByRole('dialog', { name: '학술제 방 설정' }).getByText(/정원은 80명/).waitFor();
+  ok(await page.getByText(/대형 속보 반드시 한 번/).count() === 0, '학술제 방에 없앤 대형 속보 반드시 한 번 옵션이 남아 있음');
   await page.getByRole('button', { name: '대형 화면 열기' }).click();
   await page.waitForURL(/#\/display\/\d{6}/);
   const code = page.url().match(/display\/(\d{6})/)![1];
