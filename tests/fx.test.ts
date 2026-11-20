@@ -1,7 +1,7 @@
 /* 연출 계산: 카운트업 숫자와 결과 효과음 고르기 */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BUZZ, countValue, fillTone, soundAllowed, musicBpm, musicStep, MUSIC_STEPS, revealTone } from '../client/src/fx';
+import { BUZZ, countValue, fillTone, soundAllowed, musicBpm, musicStep, MUSIC_STEPS, revealTone, userActivated } from '../client/src/fx';
 import { probeIndex } from '../client/src/live';
 import { logoVariant, LOGO_VARIANTS } from '../client/src/sectors';
 import { STOCKS } from '../shared/rules';
@@ -60,4 +60,11 @@ test('화면이 안 보이면(화면 꺼짐·홈 화면) 효과음을 내지 않
   assert.equal(soundAllowed(true, 100, true), false);
   assert.equal(soundAllowed(false, 100, false), false);
   assert.equal(soundAllowed(true, 0, false), false);
+});
+
+test('진동: 사용자가 한 번도 누르지 않았으면 건너뛰고, 확인할 수 없는 브라우저는 그대로 진동', () => {
+  assert.equal(userActivated({ userActivation: { hasBeenActive: false } }), false);
+  assert.equal(userActivated({ userActivation: { hasBeenActive: true } }), true);
+  assert.equal(userActivated({}), true);
+  assert.equal(userActivated(undefined), true);
 });

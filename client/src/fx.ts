@@ -141,9 +141,15 @@ const hapticListeners = new Set<(on: boolean) => void>();
 export type Buzz = 'fill' | 'trigger' | 'news' | 'bell';
 /** 진동 길이(ms). 배열이면 진동·쉼·진동 순서입니다 */
 export const BUZZ: Record<Buzz, number | number[]> = { fill: 25, trigger: [70, 50, 70], news: [30, 40, 30], bell: 40 };
+/** 이 페이지에서 사용자가 한 번이라도 누르거나 입력했는지. 확인할 수 없는 브라우저는 눌렀다고 봅니다 */
+export function userActivated(nav: { userActivation?: { hasBeenActive: boolean } } | undefined = typeof navigator === 'undefined' ? undefined : navigator as never): boolean {
+  return nav?.userActivation ? nav.userActivation.hasBeenActive : true;
+}
 export function buzz(kind: Buzz) {
   /* 화면이 안 보일 때는 진동도 하지 않습니다(효과음과 같은 이유) */
   if (!hapticOn || pageHidden() || typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+  /* 사용자가 화면을 한 번도 누르지 않았으면 브라우저가 진동을 막고 콘솔에 오류를 남깁니다. 미리 건너뜁니다 */
+  if (!userActivated()) return;
   try { navigator.vibrate(BUZZ[kind]); } catch { /* 막혀 있으면 넘어갑니다 */ }
 }
 export function setHaptic(on: boolean) {
@@ -224,6 +230,8 @@ export function useCountUp(target: number, ms = 800, from = 0): number {
   const prev = useRef(reduced() ? target : from);
   useEffect(() => {
     if (reduced()) { setShown(target); prev.current = target; return; }
+    /* 화면이 안 보이면 requestAnimationFrame이 멈춰 숫자가 출발값(0원 등)에 머뭅니다. 바로 최종 값을 보여 줍니다 */
+    if (pageHidden()) { setShown(target); prev.current = target; return; }
     const start = performance.now(), a = prev.current;
     let raf = 0;
     const step = (now: number) => {
