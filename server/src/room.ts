@@ -740,11 +740,11 @@ export class GameRoom {
     });
   }
 
-  /** 다음 라운드에 발표가 예정된 종목. 실제 시장의 실적 발표 일정표에 해당합니다.
-      어떤 회사 소식이 나올지만 알려 주고, 헤드라인과 결과는 담지 않습니다. */
+  /** 결과 공개 뒤 다음 라운드의 발표 회사를 안내합니다.
+      다음 회사가 현재 결말에 따라 달라질 수 있으므로 정산이 끝나기 전에는 숨깁니다. */
   private scheduleView(): ScheduleItem[] {
     const next = this.s.plan.rounds[this.s.round];      // 다음 라운드(0-base)
-    if (this.s.status !== 'playing' || !next) return [];
+    if (this.s.status !== 'playing' || this.s.phase !== 'recap' || !next) return [];
     /* 이미 공개된 사건의 제목만 보여 줍니다. 처음 나오는 사건은 제목이 곧 내용이라 숨깁니다. */
     const shown = new Set<string>();
     for (let r = 1; r <= this.s.round; r++)

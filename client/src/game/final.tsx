@@ -2,7 +2,7 @@
    Game.tsx에서 옮겼습니다(2026-11). 옮기기만 했고 동작은 그대로입니다. */
 import { useEffect, useMemo, useState } from 'react';
 import type { ClientMsg, PredictionTrendRow, RoomView, Side, StockCode } from '../../../shared/types';
-import { MODES, stockOf } from '../../../shared/rules';
+import { roomLabel, stockOf } from '../../../shared/rules';
 import { navigate } from '../App';
 import { play, revealTone, useCountUp } from '../fx';
 import { buildJournal, journalKey, parseNotes } from '../journal';
@@ -83,7 +83,7 @@ export function Finished({ view, send }: { view: RoomView; send: (m: ClientMsg) 
   return (
     <main className="final">
       <section className="sec final-head">
-        <p className="course">{MODES[view.mode].label} · {view.totalRounds}라운드 끝</p>
+        <p className="course">{roomLabel(view.mode, view.operated)} · {view.totalRounds}라운드 끝</p>
         {rep?.rank === 1 && <Confetti />}
         {rep ? <>
           <div className={`trophy${rep.rank === 1 ? ' shine' : ''}`} aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={rep.rank === 1 ? 'var(--gold)' : 'var(--faint)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg></div>

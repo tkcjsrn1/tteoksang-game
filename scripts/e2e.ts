@@ -45,10 +45,17 @@ page.on('console', m => { if (m.type() === 'error' && !ignorable(m.text())) erro
 /* 장중 속보 알림은 떠 있는 동안 화면 위를 가립니다. 단계를 시작하기 전에 치우고,
    무엇이 떴는지는 기록해 두었다가 '장중 속보' 단계에서 확인합니다. */
 let breakingSeen: string | null = null;
+let countdownSeen: boolean | null = null;
 async function closeBreaking() {
   const pop = page.locator('.breaking');
   if (!(await pop.count())) return;
   breakingSeen ??= await pop.innerText().catch(() => null);
+  /* 남은 초가 5 → 4 → … 로 줄어드는지 한 번만 봅니다 */
+  if (countdownSeen === null) {
+    const sec = async () => Number((await pop.locator('button').last().innerText().catch(() => '')).match(/\((\d)초/)?.[1] ?? NaN);
+    const a = await sec(); await page.waitForTimeout(1100); const b = await sec();
+    countdownSeen = Number.isFinite(a) && Number.isFinite(b) ? b < a : null;
+  }
   await pop.getByRole('button', { name: /닫기/ }).click().catch(() => {});
   await pop.waitFor({ state: 'detached', timeout: 3_000 }).catch(() => {});
 }
@@ -107,17 +114,29 @@ await step('홈과 첫 방문 안내', async () => {
   await volume.fill('100');
   await theme.uncheck();
   await settings.getByRole('button', { name: '닫기' }).click();
+  /* 친구 방 만들기도 설정 창이 먼저 나오고, 정원은 친구 방에만 있습니다. Esc로 닫으면 방은 안 생깁니다 */
+  await page.getByRole('button', { name: '친구 방 만들기' }).click();
+  const friend = page.getByRole('dialog', { name: '친구 방 설정' });
+  await friend.locator('.room-extra select').waitFor();
+  ok(await friend.getByRole('button', { name: '이 설정으로 방 만들기' }).count() === 1, '친구 방 만들기 버튼 없음');
+  await page.keyboard.press('Escape');
+  await friend.waitFor({ state: 'detached' });
+  ok(!page.url().includes('/room/'), '설정 창을 닫았는데 방이 만들어짐');
 });
 
 await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async () => {
-  await page.getByText(/^게임 설정 ·/).click();
+  /* 시작 버튼을 누르면 설정 창이 먼저 나옵니다 */
+  await page.getByRole('button', { name: '혼자 연습 시작' }).click();
+  await page.getByRole('dialog', { name: '혼자 연습 설정' }).waitFor();
   /* 호가창·지정가·손절은 실전 난이도에서만 나옵니다 */
   await page.getByLabel('난이도').selectOption('pro');
   await page.getByLabel('종목 수').selectOption('30');
   await page.getByLabel('라운드 수').selectOption('3');
-  await page.getByRole('button', { name: '혼자 연습 시작' }).click();
+  ok(await page.getByLabel('정원').count() === 0, '혼자 연습 설정에 정원이 보임');
+  await page.getByRole('button', { name: '이 설정으로 시작' }).click();
   await page.getByLabel('1라운드, 전체 3라운드').waitFor();
   await page.locator('.sectors').waitFor();
+  ok(await page.getByRole('region', { name: '관심종목' }).count() === 0, '관심종목이 없는데 빈 구역이 보임');
   ok((await wake()).held === 1, `게임 중 화면 꺼짐 방지가 걸리지 않음 ${JSON.stringify(await wake())}`);
   await page.getByRole('button', { name: '설정' }).click();
   const settings = page.getByRole('dialog', { name: '설정' });
@@ -143,7 +162,9 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
   await page.goBack();
   await order.waitFor({ state: 'detached' });
   ok(page.url() === gameUrl && await page.getByLabel(/라운드, 전체 3라운드/).count() === 1, '종목 창 뒤로가기로 게임에서 나감');
-  await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
+  const favorites = page.getByRole('region', { name: '관심종목' });
+  await favorites.getByText(tutorialStock, { exact: true }).waitFor();
+  ok(await favorites.evaluate(el => el.previousElementSibling?.classList.contains('standing')), '보유 종목이 없을 때 관심종목이 내 평가액 바로 아래에 없음');
   /* 결과 예측: 뉴스 시간에 고르고, 고르면 확신도가 나옵니다 */
   const predict = page.getByRole('group', { name: '결과 예측' });
   await predict.getByRole('button', { name: '기대보다 좋다' }).click();
@@ -156,6 +177,7 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
 
 await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
+  ok(await page.locator('.schedule').count() === 0, '결과 공개 전에 다음 발표 일정이 보임');
   const firstRow = page.locator('.sectors button.row').filter({ hasNotText: tutorialStock || /$^/ }).first();
   const t0 = await page.locator('.list-head .live-dot').count();
   ok(t0 === 1, '실시간 시세 표시 없음');
@@ -212,6 +234,17 @@ await step('시장가 매수: 바로 체결', async () => {
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  /* 시장 탭 '내 보유 종목': 오른쪽 큰 숫자는 1주 가격이 아니라 평가금액(수량 × 지금 가격) */
+  const mine = page.getByRole('region', { name: '내 보유 종목' });
+  await mine.waitFor({ state: 'attached' });
+  ok(await page.getByRole('region', { name: '관심종목' }).evaluate(el => el.previousElementSibling?.getAttribute('aria-label') === '내 보유 종목'), '관심종목이 내 보유 종목 바로 아래에 없음');
+  if (await mine.count()) {
+    const row = mine.locator('button.row').first();
+    const small = await row.locator('.row-main small').innerText();
+    const qty = Number(small.match(/([\d,]+)주/)![1].replace(/,/g, '')), now = Number(small.match(/지금 ([\d,]+)원/)![1].replace(/,/g, ''));
+    const big = Number((await row.locator('.row-price b').innerText()).replace(/[^\d]/g, ''));
+    ok(Math.abs(big - qty * now) <= qty * 20, `보유 종목 큰 숫자가 평가금액이 아님(${big} vs ${qty}×${now})`);
+  }
   /* 그래프 종류 버튼은 종목 창 위쪽에 있습니다(차트 안이 아님) */
   const chart = page.locator('.live-chart'), kinds = page.getByRole('group', { name: '그래프 종류' });
   await chart.locator('.chart-fill').first().waitFor();
@@ -263,11 +296,13 @@ await step('장중 속보: 알림이 뜨고 닫힌다', async () => {
   ok(breakingSeen, '주문 시간이 끝날 때까지 장중 속보 알림이 뜨지 않음');
   ok(/속보/.test(breakingSeen ?? ''), '속보 표시 없음');
   ok(/%/.test(breakingSeen ?? ''), '속보 대상 종목의 등락이 없음');
+  ok(countdownSeen !== false, '속보 창의 남은 초가 줄어들지 않음');
 });
 
-await step('발표 일정: 다음 라운드 예정 종목만 보인다', async () => {
+await step('발표 일정: 결과 공개 뒤 다음 라운드 예정 종목만 보인다', async () => {
   const box = page.locator('.schedule');
-  await box.waitFor();
+  await box.waitFor({ timeout: 40_000 });
+  ok(await page.locator('.topbar b').innerText() === '라운드 결과', '결과 화면 밖에서 일정이 보임');
   ok(/2라운드 예정/.test(await box.innerText()), '다음 라운드 안내가 없음');
   ok(await box.locator('.list li').count() >= 1, '예정 종목이 없음');
 });
@@ -386,9 +421,9 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
   /* 2라운드짜리 짧은 판을 새로 시작합니다(이후에 만드는 방부터 적용) */
   Object.assign(MODES.solo, { rounds: 2, news: 1, trade: 6, recap: 2 });
   await page.goto(base + '/');
-  await page.getByText(/^게임 설정 ·/).click();
-  await page.getByLabel('난이도').selectOption('easy');
   await page.getByRole('button', { name: '혼자 연습 시작' }).click();
+  await page.getByLabel('난이도').selectOption('easy');
+  await page.getByRole('button', { name: '이 설정으로 시작' }).click();
   await page.locator('.sectors').waitFor();
   const off = page.getByRole('button', { name: '안내 끄기' });
   if (await off.count()) await off.click();
@@ -428,6 +463,8 @@ await step('매매일지: 판이 끝나면 내 체결과 메모', async () => {
 await step('학술제: 운영자 대형 화면(1920px)과 참가자 입장·시작', async () => {
   await page.goto(base + '/');
   await page.getByRole('button', { name: /학술제 운영자/ }).click();
+  await page.getByRole('dialog', { name: '학술제 방 설정' }).getByText(/정원은 80명/).waitFor();
+  await page.getByRole('button', { name: '대형 화면 열기' }).click();
   await page.waitForURL(/#\/display\/\d{6}/);
   const code = page.url().match(/display\/(\d{6})/)![1];
   /* 대형 화면은 운영자 기기(같은 저장소)에서 1920px로 엽니다 */
@@ -442,6 +479,7 @@ await step('학술제: 운영자 대형 화면(1920px)과 참가자 입장·시�
   const phone = await pctx.newPage();
   await phone.goto(`${base}/#/room/${code}`);
   await phone.getByText('운영자가 대형 화면에서 시작하면').waitFor();
+  ok(await phone.getByText('학술제 대전 · 대기실').count() === 1, '학술제 참가자 대기실이 "학술제 대전"으로 나오지 않음');
   ok(await phone.getByRole('button', { name: '게임 시작' }).count() === 0, '참가자에게 시작 버튼이 보임');
   /* 열쇠 없는 기기에서 연 대형 화면은 읽기 전용 */
   const ro = await pctx.newPage();

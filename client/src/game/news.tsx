@@ -1,6 +1,6 @@
 /* 뉴스·사건 화면: 뉴스 카드, 속보 알림, 돌발 카드와 결과 창, VI·발표 일정·배당 안내, 라운드 결과.
    Game.tsx에서 옮겼습니다(2026-11). 옮기기만 했고 동작은 그대로입니다. */
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { CardView, ClientMsg, NewsCard, NewsResult, RoomView, StockCode, StockView } from '../../../shared/types';
 import { navigate } from '../App';
 import { buzz, play, useCountUp } from '../fx';
@@ -124,8 +124,19 @@ export function CardResult({ card, mine, onClose }: { card: CardView; mine: { ke
 }
 /** 내 평가액 구역. 관전자에게는 상위 순위만 보여 줍니다. */
 
+/** 속보 창이 저절로 닫히기까지의 초 */
+export const BREAKING_SECONDS = 5;
 export function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView; card: NewsCard; onClose: () => void; onOpen: (c: StockCode) => void }) {
   const targets = card.targets.map(c => view.stocks.find(s => s.code === c)).filter((s): s is StockView => !!s);
+  /* 5 → 4 → 3 → 2 → 1로 줄어들다가 0이 되면 닫습니다. 새 속보가 오면 창을 새로 그려(key) 5부터 다시 셉니다. */
+  const [left, setLeft] = useState(BREAKING_SECONDS);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const t = setInterval(() => setLeft(n => n - 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => { if (left <= 0) closeRef.current(); }, [left]);
   return (
     <div className="breaking-wrap" role="status" aria-label="속보">
       <div className="breaking">
@@ -140,7 +151,8 @@ export function BreakingPopup({ view, card, onClose, onOpen }: { view: RoomView;
           </button></li>;
         })}</ul>}
         <p className="hint">속보가 뜨는 순간 가격이 먼저 반응했어요. 결과는 장 마감 때 공개됩니다. 아무 곳이나 누르면 닫혀요.</p>
-        <button className="ghost" onClick={onClose}>닫기 (5초 뒤 자동)</button>
+        {/* 남은 초는 화면 읽기 프로그램이 매초 다시 읽지 않게 숨기고, 버튼 이름은 '닫기'로 고정합니다 */}
+        <button className="ghost" onClick={onClose} aria-label="닫기"><span>닫기 <span className="num" aria-hidden="true">({Math.max(left, 1)}초 뒤 자동)</span></span></button>
       </div>
     </div>
   );
@@ -157,14 +169,14 @@ export function ViNotice({ view }: { view: RoomView }) {
     </section>
   );
 }
-/** 다음 라운드 발표 예정(실제 시장의 실적 발표 일정표에 해당) */
+/** 결과 공개 뒤 다음 라운드 발표 예정 */
 export function SchedulePanel({ view }: { view: RoomView }) {
-  if (view.schedule.length === 0 || (view.phase !== 'trade' && view.phase !== 'recap')) return null;
+  if (view.schedule.length === 0 || view.phase !== 'recap') return null;
   return (
     <section className="panel schedule" aria-label="다음 라운드 발표 예정">
       <div className="list-head"><span><TermLink id="earnings-calendar">발표 일정</TermLink> · {view.schedule[0].round}라운드 예정</span></div>
       <ul className="list">{view.schedule.map(x => <li key={x.code}><span>{x.name}<small>{x.arcTitle || '처음 나오는 소식'}</small></span></li>)}</ul>
-      <p className="hint">어떤 회사 소식이 나올지만 미리 알려 드려요. 내용과 결과는 그때 공개됩니다.</p>
+      <p className="hint">다음 라운드에 소식이 나올 회사를 알려 드려요. 내용과 결과는 그 라운드에 공개됩니다.</p>
     </section>
   );
 }
@@ -216,6 +228,7 @@ export function Recap({ view, onOpen, send }: { view: RoomView; onOpen: (c: Stoc
         <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.lastChangeBp ?? 0)}>{s.lastChangeBp === null ? '—' : `${arrow(s.lastChangeBp)} ${pctBp(s.lastChangeBp)}`}</small></span>
       </button>)}</div>
     </div>
+    <SchedulePanel view={view} />
     <div className="panel"><button className="ghost" onClick={() => navigate(lessonLink(view))}>이 변동을 읽는 법 (차트 연습실)</button></div>
     {send && <RecapDone view={view} send={send} />}
   </>);
