@@ -356,6 +356,7 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
       assert.equal(v.crowd ?? null, null, `${label}: 예측 집계가 공개 전에 나감`);
       assert.equal(v.predictionTrend, undefined, `${label}: 라운드별 정답 수는 판이 끝난 뒤에만`);
       assert.equal(v.recapDone ?? null, null, `${label}: '다 봤어요' 집계는 결과 화면에서만`);
+      assert.deepEqual(v.schedule, [], `${label}: 다음 발표 회사는 결과 공개 뒤에만`);
     }
   };
   check('뉴스', revealed); noVerdict('뉴스');
@@ -372,6 +373,37 @@ test('공개 전 정보는 어떤 역할의 화면에도 나가지 않는다', (
   rec.news[0].cards.forEach(c => revealed.add(c.result!.actual));
   check('결과', revealed);
 });
+
+test('발표 일정의 결과별 종목 분기는 결과 공개 뒤에만 모든 역할에 보인다', () => {
+  const cases = [
+    { outcome: 'hike8', company: 'G03' },
+    { outcome: 'hike3', company: 'G01' }
+  ].map(c => {
+    const game = setup({ forcedArcs: ['heatwave'], forced: { 'heat-2': c.outcome }, settings: { rounds: 3 } });
+    game.room.start(T0);
+    while (game.room.s.round < 2) next(game.room);
+    assert.equal(game.room.currentRound.stages[0].stageId, 'heat-2');
+    return { ...game, company: c.company };
+  });
+  for (const phase of ['news', 'trade', 'settling'] as const) {
+    for (const { room, a } of cases) {
+      assert.equal(room.s.phase, phase);
+      for (const role of ['player', 'spectator', 'operator', 'display'] as const) {
+        assert.deepEqual(room.view(a, role, T0).schedule, [], `${phase} ${role}: 일정으로 결말이 새면 안 됨`);
+      }
+      if (phase !== 'settling') room.tick(room.s.phaseEndsAt!);
+    }
+  }
+  for (const { room, a, company } of cases) {
+    room.beginRecap(T0);
+    for (const role of ['player', 'spectator', 'operator', 'display'] as const) {
+      const schedule = room.view(a, role, T0).schedule;
+      assert.deepEqual(schedule.map(x => x.code), [company], `${role}: 공개 뒤에는 실제 다음 회사를 안내`);
+      assert.equal(schedule[0].round, 3);
+    }
+  }
+});
+
 test('상대 주문과 개인 리포트는 비공개다', () => {
   const { room, a, b } = setup();
   const end = toTrade(room);

@@ -156,7 +156,7 @@ export interface RoomView {
   news: RoundNews[];
   /** 이번 라운드에 공개된 속보가 나온 시점. 개장부터 지난 초 */
   breakingAt?: number;
-  /** 다음 라운드 발표 예정(일정 예고). 마지막 라운드에는 빈 배열 */
+  /** 결과 공개 뒤 다음 라운드 발표 예정. 결과 시간 외와 마지막 라운드에는 빈 배열 */
   schedule: ScheduleItem[];
   card: CardView | null;
   /** 결과 예측. 참가자에게만, 판이 진행 중일 때만 */

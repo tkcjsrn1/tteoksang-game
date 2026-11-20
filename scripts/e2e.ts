@@ -174,6 +174,7 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
 
 await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
+  ok(await page.locator('.schedule').count() === 0, '결과 공개 전에 다음 발표 일정이 보임');
   const firstRow = page.locator('.sectors button.row').filter({ hasNotText: tutorialStock || /$^/ }).first();
   const t0 = await page.locator('.list-head .live-dot').count();
   ok(t0 === 1, '실시간 시세 표시 없음');
@@ -293,9 +294,10 @@ await step('장중 속보: 알림이 뜨고 닫힌다', async () => {
   ok(countdownSeen !== false, '속보 창의 남은 초가 줄어들지 않음');
 });
 
-await step('발표 일정: 다음 라운드 예정 종목만 보인다', async () => {
+await step('발표 일정: 결과 공개 뒤 다음 라운드 예정 종목만 보인다', async () => {
   const box = page.locator('.schedule');
-  await box.waitFor();
+  await box.waitFor({ timeout: 40_000 });
+  ok(await page.locator('.topbar b').innerText() === '라운드 결과', '결과 화면 밖에서 일정이 보임');
   ok(/2라운드 예정/.test(await box.innerText()), '다음 라운드 안내가 없음');
   ok(await box.locator('.list li').count() >= 1, '예정 종목이 없음');
 });
