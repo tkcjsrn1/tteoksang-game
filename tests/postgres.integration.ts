@@ -24,7 +24,7 @@ after(async () => { if (embedded) { await embedded.stop(); rmSync(dir, { recursi
 test('방 상태 저장·복구, 정산과 주문 기록의 중복 방지', async () => {
   const store = new PostgresStore(url);
   await store.init();
-  const room = GameRoom.create({ code: '777777', mode: 'friend', now: 1000, seed: 5 });
+  const room = GameRoom.create({ code: '777777', mode: 'friend', now: 1000, seed: 5, forcedArcs: ['nuvakan', 'semorium'] });
   const a = room.join(null, 1000).token; room.join(null, 1001);
   room.start(1002);
   room.tick(room.s.phaseEndsAt!);
