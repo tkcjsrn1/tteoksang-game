@@ -136,6 +136,7 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
   await page.getByRole('button', { name: '이 설정으로 시작' }).click();
   await page.getByLabel('1라운드, 전체 3라운드').waitFor();
   await page.locator('.sectors').waitFor();
+  ok(await page.getByRole('region', { name: '관심종목' }).count() === 0, '관심종목이 없는데 빈 구역이 보임');
   ok((await wake()).held === 1, `게임 중 화면 꺼짐 방지가 걸리지 않음 ${JSON.stringify(await wake())}`);
   await page.getByRole('button', { name: '설정' }).click();
   const settings = page.getByRole('dialog', { name: '설정' });
@@ -161,7 +162,9 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
   await page.goBack();
   await order.waitFor({ state: 'detached' });
   ok(page.url() === gameUrl && await page.getByLabel(/라운드, 전체 3라운드/).count() === 1, '종목 창 뒤로가기로 게임에서 나감');
-  await page.getByRole('region', { name: '관심종목' }).getByText(tutorialStock, { exact: true }).waitFor();
+  const favorites = page.getByRole('region', { name: '관심종목' });
+  await favorites.getByText(tutorialStock, { exact: true }).waitFor();
+  ok(await favorites.evaluate(el => el.previousElementSibling?.classList.contains('standing')), '보유 종목이 없을 때 관심종목이 내 평가액 바로 아래에 없음');
   /* 결과 예측: 뉴스 시간에 고르고, 고르면 확신도가 나옵니다 */
   const predict = page.getByRole('group', { name: '결과 예측' });
   await predict.getByRole('button', { name: '기대보다 좋다' }).click();
@@ -174,6 +177,7 @@ await step('혼자 연습: 실전 난이도·3라운드·종목 30개', async ()
 
 await step('장중 시세: 가격이 1초마다 바뀐다', async () => {
   await page.locator('.list-head .live-dot').waitFor({ timeout: 15_000 });
+  ok(await page.locator('.schedule').count() === 0, '결과 공개 전에 다음 발표 일정이 보임');
   const firstRow = page.locator('.sectors button.row').filter({ hasNotText: tutorialStock || /$^/ }).first();
   const t0 = await page.locator('.list-head .live-dot').count();
   ok(t0 === 1, '실시간 시세 표시 없음');
@@ -232,6 +236,8 @@ await step('시장가 매수: 바로 체결', async () => {
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
   /* 시장 탭 '내 보유 종목': 오른쪽 큰 숫자는 1주 가격이 아니라 평가금액(수량 × 지금 가격) */
   const mine = page.getByRole('region', { name: '내 보유 종목' });
+  await mine.waitFor({ state: 'attached' });
+  ok(await page.getByRole('region', { name: '관심종목' }).evaluate(el => el.previousElementSibling?.getAttribute('aria-label') === '내 보유 종목'), '관심종목이 내 보유 종목 바로 아래에 없음');
   if (await mine.count()) {
     const row = mine.locator('button.row').first();
     const small = await row.locator('.row-main small').innerText();
@@ -293,9 +299,10 @@ await step('장중 속보: 알림이 뜨고 닫힌다', async () => {
   ok(countdownSeen !== false, '속보 창의 남은 초가 줄어들지 않음');
 });
 
-await step('발표 일정: 다음 라운드 예정 종목만 보인다', async () => {
+await step('발표 일정: 결과 공개 뒤 다음 라운드 예정 종목만 보인다', async () => {
   const box = page.locator('.schedule');
-  await box.waitFor();
+  await box.waitFor({ timeout: 40_000 });
+  ok(await page.locator('.topbar b').innerText() === '라운드 결과', '결과 화면 밖에서 일정이 보임');
   ok(/2라운드 예정/.test(await box.innerText()), '다음 라운드 안내가 없음');
   ok(await box.locator('.list li').count() >= 1, '예정 종목이 없음');
 });

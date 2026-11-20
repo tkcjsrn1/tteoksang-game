@@ -78,9 +78,12 @@ test('VI는 한 라운드에 종목마다 한 번만 걸린다', () => {
   assert.deepEqual(room.s.live!.halts![C], first, '두 번째는 걸리지 않음');
 });
 
-test('발표 일정: 다음 라운드 종목만 알려 주고 헤드라인·결과는 담지 않는다', () => {
+test('발표 일정: 결과 공개 뒤 다음 라운드 종목만 알려 주고 헤드라인·결과는 담지 않는다', () => {
   const { room, a } = trading(3);
-  const v = room.view(a, 'player', T0);
+  const end = room.s.phaseEndsAt!;
+  assert.equal(room.tick(end), 'settled');
+  room.beginRecap(end);
+  const v = room.view(a, 'player', end);
   const next = room.s.plan.rounds[1];
   assert.equal(v.schedule.length > 0, true);
   assert.ok(v.schedule.every(x => x.round === 2), '다음 라운드만');

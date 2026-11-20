@@ -169,14 +169,14 @@ export function ViNotice({ view }: { view: RoomView }) {
     </section>
   );
 }
-/** 다음 라운드 발표 예정(실제 시장의 실적 발표 일정표에 해당) */
+/** 결과 공개 뒤 다음 라운드 발표 예정 */
 export function SchedulePanel({ view }: { view: RoomView }) {
-  if (view.schedule.length === 0 || (view.phase !== 'trade' && view.phase !== 'recap')) return null;
+  if (view.schedule.length === 0 || view.phase !== 'recap') return null;
   return (
     <section className="panel schedule" aria-label="다음 라운드 발표 예정">
       <div className="list-head"><span><TermLink id="earnings-calendar">발표 일정</TermLink> · {view.schedule[0].round}라운드 예정</span></div>
       <ul className="list">{view.schedule.map(x => <li key={x.code}><span>{x.name}<small>{x.arcTitle || '처음 나오는 소식'}</small></span></li>)}</ul>
-      <p className="hint">어떤 회사 소식이 나올지만 미리 알려 드려요. 내용과 결과는 그때 공개됩니다.</p>
+      <p className="hint">다음 라운드에 소식이 나올 회사를 알려 드려요. 내용과 결과는 그 라운드에 공개됩니다.</p>
     </section>
   );
 }
@@ -228,6 +228,7 @@ export function Recap({ view, onOpen, send }: { view: RoomView; onOpen: (c: Stoc
         <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.lastChangeBp ?? 0)}>{s.lastChangeBp === null ? '—' : `${arrow(s.lastChangeBp)} ${pctBp(s.lastChangeBp)}`}</small></span>
       </button>)}</div>
     </div>
+    <SchedulePanel view={view} />
     <div className="panel"><button className="ghost" onClick={() => navigate(lessonLink(view))}>이 변동을 읽는 법 (차트 연습실)</button></div>
     {send && <RecapDone view={view} send={send} />}
   </>);
