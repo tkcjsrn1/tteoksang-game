@@ -19,7 +19,7 @@ test('10초봉: 앞 봉의 종가가 다음 봉의 시가, 고가·저가는 구
 
 test('매매일지: 내 체결마다 라운드 뉴스와 그 라운드 종가 비교가 붙는다', () => {
   const T0 = 2_000_000;
-  const room = GameRoom.create({ code: '424242', mode: 'solo', now: T0, seed: 4 });
+  const room = GameRoom.create({ code: '424242', mode: 'solo', now: T0, seed: 4, forcedArcs: ['nuvakan', 'semorium'] });
   const tok = room.join(null, T0).token;
   room.start(T0);
   while (room.s.phase !== 'trade') room.tick(room.s.phaseEndsAt!);

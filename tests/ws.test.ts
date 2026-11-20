@@ -105,7 +105,7 @@ test('친구 대전은 정원을 올려서 만들 수 있다', async () => {
 
 test('정산 중인 방은 서버 시작 후 결과를 공개하고 다음 라운드로 진행한다', async () => {
   let now = 1_000_000;
-  const room = GameRoom.create({ code: '111111', mode: 'solo', now, seed: 5, settings: { level: 'pro' } });
+  const room = GameRoom.create({ code: '111111', mode: 'solo', now, seed: 5, settings: { level: 'pro' }, forcedArcs: ['nuvakan', 'semorium'] });
   const player = room.join(null, now).token;
   room.start(now);
   room.tick(room.s.phaseEndsAt!);

@@ -215,7 +215,9 @@ test('종목 풀 60개, 업종 12개 × 5종목, 판마다 기본 10종목', () 
     const must = new Set([...targets, ...moved]);
     const primary = new Set(arcs.flatMap(a => a.stages.map(st => stockOf(st.targets[0]).group)));
     const withPeer = [...primary].filter(g => codes.some(x => !must.has(x) && stockOf(x).group === g));
-    assert.equal(withPeer.length, Math.min(primary.size, STOCKS_PER_GAME - must.size), `${seed}`);
+    /* 같은 업종 사건이 두 개 겹쳐 그 업종 5종목이 모두 사건에 쓰이면 넣을 짝이 남지 않습니다 */
+    const canPeer = [...primary].filter(g => STOCKS.some(x => x.group === g && !must.has(x.code)));
+    assert.equal(withPeer.length, Math.min(canPeer.length, STOCKS_PER_GAME - must.size), `${seed}`);
     /* 이번 판 종목에만 개별 변동을 정합니다 */
     assert.ok(p.rounds.every(r => Object.keys(r.stockBp).every(c => codes.includes(c as `G${number}`))));
   }

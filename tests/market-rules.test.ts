@@ -10,7 +10,7 @@ const stageTargets = (room: GameRoom, stageId: string): StockCode[] => stageById
 
 const T0 = 3_000_000;
 function trading(seed = 7) {
-  const room = GameRoom.create({ code: '424242', mode: 'friend', now: T0, seed, settings: { level: 'pro' } });
+  const room = GameRoom.create({ code: '424242', mode: 'friend', now: T0, seed, settings: { level: 'pro' }, forcedArcs: ['nuvakan', 'semorium'] });
   const a = room.join(null, T0).token; room.join(null, T0 + 1);
   room.start(T0);
   while (room.s.phase !== 'trade') room.tick(room.s.phaseEndsAt!);

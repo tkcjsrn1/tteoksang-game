@@ -6,6 +6,8 @@ import { FESTIVAL_MAX_PLAYERS, ROOM_OPTIONS, GROUPS, lowerLimit, stockOf, STOCKS
 import type { StockCode } from '../shared/types';
 
 const T0 = 1_000_000;
+/** G01·G02·G03·G06을 쓰는 테스트용 사건. 사건이 늘어도 시드에 따라 종목이 빠지지 않게 고정합니다 */
+const CLASSIC_ARCS = ['nuvakan', 'semorium', 'tarmel'];
 function setup(opts: Partial<Parameters<typeof GameRoom.create>[0]> = {}) {
   const room = GameRoom.create({ code: '123456', mode: 'friend', now: T0, seed: 7, settings: { level: 'pro' }, ...opts });
   const a = room.join(null, T0).token, b = room.join(null, T0 + 1).token;
@@ -54,7 +56,7 @@ test('시작 후 처음 온 사람은 관전자이고 기존 참가자는 토큰
   assert.equal(v.portfolio, null);
 });
 test('접속이 끊겨도 걸어 둔 지정가 예약은 시세가 닿으면 체결된다', () => {
-  const { room, a } = setup();
+  const { room, a } = setup({ forcedArcs: CLASSIC_ARCS });
   toTrade(room);
   const live = room.s.live!, path = live.paths.G06;
   const k = path.findIndex((p, i) => i > 0 && p < path[0]);
@@ -66,7 +68,7 @@ test('접속이 끊겨도 걸어 둔 지정가 예약은 시세가 닿으면 체
   assert.equal(room.player(a)!.fills[0].price, path[k]);
 });
 test('마감 시각과 같거나 늦은 주문은 거절하고, 직전 주문은 받는다', () => {
-  const { room, a } = setup();
+  const { room, a } = setup({ forcedArcs: CLASSIC_ARCS });
   toTrade(room);
   const end = room.s.phaseEndsAt!;
   assert.equal(room.placeOrder(a, 'late-1', 'G01', 'buy', 1, end - 1).ok, true);
@@ -88,7 +90,7 @@ test('같은 요청이 다시 와도 주문과 체결은 하나다. 정산을 �
   assert.equal(p.cash, cash); assert.equal(p.fills.length, fills); assert.deepEqual(room.s.prices, prices);
 });
 test('지정가 예약: 변경에 실패하면 원래 예약을 유지하고, 성공하면 예약금을 다시 잡고, 취소하면 풀린다', () => {
-  const { room, a } = setup();
+  const { room, a } = setup({ forcedArcs: CLASSIC_ARCS });
   const end = toTrade(room);
   const p = room.player(a)!;
   const low = room.markPrice('G01') - 500;   // 지금 시세보다 낮아 바로 체결되지 않음
@@ -129,7 +131,7 @@ test('끝까지 시세가 닿지 않은 예약은 마감 때 자동 취소되고
   assert.equal(p.cash, cash);
 });
 test('시장가: 산 주식은 바로 팔 수 있고, 판 돈으로 바로 살 수 있다. 없는 주식은 못 판다', () => {
-  const { room, a } = setup();
+  const { room, a } = setup({ forcedArcs: CLASSIC_ARCS });
   const end = toTrade(room);
   const p = room.player(a)!;
   const r1 = room.placeOrder(a, 'b1', 'G01', 'buy', 100, end);
@@ -465,7 +467,7 @@ test('행동 리포트: 기록이 부족하면 안내 문구, 충분하면 계�
   assert.ok(full.every(m => m.formula && m.minObservations));
 });
 test('저장한 상태에서 그대로 복구한다', () => {
-  const { room, a } = setup();
+  const { room, a } = setup({ forcedArcs: CLASSIC_ARCS });
   const end = toTrade(room);
   room.placeOrder(a, 'keep', 'G01', 'buy', 5, end);
   const low = room.markPrice('G02') - 300;

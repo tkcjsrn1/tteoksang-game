@@ -583,6 +583,133 @@ export const ARCS: Arc[] = [
         { id: 'game-wide', weight: 65, beat: true, actual: '네 지역 출시와 최소 보장금 확정', gap: '두 지역이 더 열리고 최소 수입을 확보', label: '해외 출시 확대', impacts: [{ code: 'G56', bp: 430, reason: '판매 지역과 계약으로 보장된 수입이 늘어남' }] },
         { id: 'game-narrow', weight: 35, beat: false, actual: '한 지역에서 먼저 출시하고 판매량으로만 정산', gap: '출시 지역이 기대보다 적음', label: '해외 출시 축소', impacts: [{ code: 'G56', bp: -430, reason: '초기 매출을 낼 시장이 작아짐' }] }
       ] }
+  ] },
+  /* ---- 2026-11 추가: 사건이 하나뿐이던 업종 6곳에 두 번째 사건 ---- */
+  { id: 'satpartner', title: '위성 인터넷 제휴 사건', stages: [
+    { id: 'sp2-1', step: 1, targets: ['G31'], signal: { G31: 1 }, clueDir: -1, concept: '제휴 소식은 우리 회사 혼자인지, 여럿 중 하나인지에 따라 값이 크게 다릅니다.',
+      headline: '레오링크, 해외 통신사와 위성 인터넷 제휴 협상', facts: '해외 통신사와 서비스 제휴 협상이 막바지에 들어섰습니다.', expectation: '시장은 레오링크 혼자 3년 동안 독점으로 공급한다고 봅니다.', remaining: '독점 공급인지 여부', clue: '해외 통신사가 다른 위성 업체 2곳과도 시험 접속을 하고 있다고 밝혔습니다.',
+      outcomes: [
+        { id: 'sp2-only', weight: 35, beat: true, actual: '3년 독점 공급 계약', gap: '기대대로 혼자 공급', label: '독점 제휴', impacts: [{ code: 'G31', bp: 540, reason: '해외 가입자를 혼자 받게 됨' }, { code: 'G33', bp: 150, reason: '해외용 안테나 주문이 늘어남' }] },
+        { id: 'sp2-shared', weight: 65, beat: false, actual: '3개 업체가 나눠 공급', gap: '기대한 독점이 아니라 셋 중 하나', label: '공동 공급에 그침', impacts: [{ code: 'G31', bp: -580, reason: '공급 단가를 놓고 다른 업체와 경쟁해야 함' }] }
+      ] },
+    { id: 'sp2-2', step: 2, targets: ['G31', 'G34'], signal: { G31: -1 }, clueDir: 1, concept: '갑작스러운 사고 뉴스는 피해 범위가 확인되면 과잉 반응이 되돌려지기도 합니다.',
+      headline: '레오링크 위성 일부, 태양 폭풍으로 통신 끊김', facts: '강한 태양 활동으로 위성 몇 기의 신호가 한동안 끊겼습니다.', expectation: '시장은 위성이 고장 났을까 걱정합니다.', remaining: '위성이 손상됐는지 여부', clue: '회사가 “위성이 스스로 보호 모드로 들어갔다가 돌아오는 중”이라고 공지했습니다.',
+      outcomes: [
+        { id: 'sp2-safe', weight: 70, beat: true, actual: '모든 위성 정상 복구', gap: '걱정보다 좋은 결과', label: '정상 복구', impacts: [{ code: 'G31', bp: 600, reason: '고장 걱정이 걷힘' }, { code: 'G34', bp: 150, reason: '보호 모드를 지켜본 궤도 추적 소프트웨어가 주목받음' }] },
+        { id: 'sp2-broken', weight: 30, beat: false, actual: '위성 1기 부품 손상', gap: '걱정이 현실이 됨', label: '위성 1기 손상', impacts: [{ code: 'G31', bp: -700, reason: '손상된 위성을 대신할 위성을 다시 올려야 함' }, { code: 'G34', bp: -120, reason: '관리할 위성 수가 줄어듦' }] }
+      ] },
+    { id: 'sp2-3', step: 3, targets: ['G31'], signal: { G31: 1 }, clueDir: 1, concept: '협력사의 출하 공시는 본업 실적을 먼저 보여 주는 선행 지표가 될 수 있습니다.',
+      headline: '레오링크, 분기 가입자 수 발표 예정', facts: '이번 분기에 새 요금제를 내놓았습니다.', expectation: '시장 기대치는 새 가입자 20만 명입니다.', remaining: '실제 가입자 수', clue: '지상국 장비 업체 아스트라가 가입자 연결 장비 출하를 30% 늘렸다고 공시했습니다.',
+      outcomes: [
+        { id: 'sp2-big', weight: 55, beat: true, actual: '새 가입자 26만 명', gap: '기대보다 6만 명 많음', label: '기대를 넘은 가입자', impacts: [{ code: 'G31', bp: 600, reason: '기대 20만 명을 30% 넘김' }, { code: 'G32', bp: 200, reason: '연결 장비 추가 주문' }] },
+        { id: 'sp2-meet', weight: 20, beat: true, actual: '새 가입자 20만 명', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G31', bp: 120, reason: '이미 주가에 반영된 숫자' }] },
+        { id: 'sp2-few', weight: 25, beat: false, actual: '새 가입자 13만 명', gap: '기대 20만 명보다 7만 명 적음', label: '기대에 못 미친 가입자', impacts: [{ code: 'G31', bp: -520, reason: '새 요금제 효과가 기대보다 작음' }, { code: 'G32', bp: -150, reason: '연결 장비 주문도 줄어듦' }] }
+      ] }
+  ] },
+  { id: 'farmstore', title: '수직농장 마트 입점 사건', stages: [
+    { id: 'fa2-1', step: 1, targets: ['G36'], signal: { G36: 1 }, clueDir: -1, concept: '입점 소식도 규모와 속도가 기대보다 작으면 실망 매물이 나옵니다.',
+      headline: '그로벤, 전국 대형마트 입점 협상 막바지', facts: '수도권 20개 매장에서 시범 판매를 마쳤습니다.', expectation: '시장은 전국 300개 매장에 한꺼번에 들어간다고 봅니다.', remaining: '처음 들어가는 매장 수', clue: '대형마트가 “새 상품은 지역별로 차례차례 들인다”는 원칙을 공지했습니다.',
+      outcomes: [
+        { id: 'fa2-all', weight: 35, beat: true, actual: '전국 300개 매장 동시 입점', gap: '기대대로 한꺼번에 입점', label: '전국 동시 입점', impacts: [{ code: 'G36', bp: 560, reason: '판매처가 한 번에 15배로 늘어남' }, { code: 'G37', bp: 150, reason: '생산을 늘리려 양액 제어 장비를 더 들임' }] },
+        { id: 'fa2-step', weight: 65, beat: false, actual: '수도권 60개 매장부터 차례로 입점', gap: '기대한 300개의 5분의 1', label: '단계 입점에 그침', impacts: [{ code: 'G36', bp: -600, reason: '매출이 늘어나는 속도가 기대보다 느림' }] }
+      ] },
+    { id: 'fa2-2', step: 2, targets: ['G36', 'G37'], signal: { G36: -1 }, clueDir: 1, concept: '불만 뉴스는 원인이 한 곳으로 좁혀지면 걱정이 빠르게 줄어듭니다.',
+      headline: '그로벤 잎채소, 일부 매장서 품질 불만 접수', facts: '시든 상품이 섞였다는 불만이 3개 매장에서 나왔습니다.', expectation: '시장은 전 매장 리콜까지 걱정합니다.', remaining: '원인과 범위', clue: '회사가 “냉장 트럭 한 대의 온도 기록이 끊겼다”고 원인을 밝혔습니다.',
+      outcomes: [
+        { id: 'fa2-truck', weight: 70, beat: true, actual: '트럭 한 대 문제로 확인, 해당 물량만 교환', gap: '걱정보다 가벼운 조치', label: '일부 교환으로 마무리', impacts: [{ code: 'G36', bp: 600, reason: '농장 품질 문제가 아니었음이 확인됨' }, { code: 'G37', bp: 120, reason: '양액 설비 문제가 아님이 확인됨' }] },
+        { id: 'fa2-recall', weight: 30, beat: false, actual: '전 매장 상품 리콜', gap: '걱정이 현실이 됨', label: '전 매장 리콜', impacts: [{ code: 'G36', bp: -700, reason: '회수 비용과 브랜드 신뢰 손상' }, { code: 'G37', bp: -150, reason: '농장 점검으로 설비 주문이 미뤄짐' }] }
+      ] },
+    { id: 'fa2-3', step: 3, targets: ['G36'], signal: { G36: 1 }, clueDir: 1, concept: '매출이 늘어도 영업이익이 기대에 못 미치면 주가는 내릴 수 있습니다.',
+      headline: '그로벤, 분기 영업이익 발표 앞둬', facts: '매출은 지난 분기보다 40% 늘었다고 미리 밝혔습니다.', expectation: '시장 기대치는 영업이익 15억 원입니다.', remaining: '실제 영업이익', clue: '새 농장 2곳에 전기요금 할인 계약이 이번 분기부터 적용됐다는 공시가 있었습니다.',
+      outcomes: [
+        { id: 'fa2-beat', weight: 55, beat: true, actual: '영업이익 21억 원', gap: '기대보다 6억 원 많음', label: '기대를 넘은 영업이익', impacts: [{ code: 'G36', bp: 600, reason: '전기요금이 줄어 마진이 커짐' }, { code: 'G38', bp: 180, reason: '절전 조명 추가 주문' }] },
+        { id: 'fa2-meet', weight: 20, beat: true, actual: '영업이익 15억 원', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G36', bp: 110, reason: '이미 주가에 반영된 숫자' }] },
+        { id: 'fa2-miss', weight: 25, beat: false, actual: '영업이익 8억 원', gap: '기대 15억 원의 절반 수준', label: '기대에 못 미친 영업이익', impacts: [{ code: 'G36', bp: -520, reason: '입점 수수료와 물류비가 늘어 이익이 줄어듦' }] }
+      ] }
+  ] },
+  { id: 'carecert', title: '보행보조 로봇 해외 인증 사건', stages: [
+    { id: 'ca2-1', step: 1, targets: ['G41'], signal: { G41: 1 }, clueDir: -1, concept: '인증 신청과 인증 통과 사이에는 시간이 걸리고, 그 시간도 가격에 들어갑니다.',
+      headline: '케어민, 해외 의료기기 인증 심사 신청', facts: '해외 3개국 판매를 목표로 심사 서류를 냈습니다.', expectation: '시장은 반년 안에 인증을 받는다고 봅니다.', remaining: '실제 심사 기간', clue: '같은 종류 기기의 지난해 평균 심사 기간이 14개월이었다는 업계 자료가 나왔습니다.',
+      outcomes: [
+        { id: 'ca2-fast', weight: 35, beat: true, actual: '5개월 만에 인증 통과', gap: '기대대로 반년 안에 통과', label: '빠른 인증', impacts: [{ code: 'G41', bp: 540, reason: '해외 매출이 잡히는 시점이 앞당겨짐' }, { code: 'G42', bp: 140, reason: '함께 쓰는 이송 로봇도 해외 문의가 늘어남' }] },
+        { id: 'ca2-slow', weight: 65, beat: false, actual: '추가 자료 요청으로 심사 1년 넘게 이어짐', gap: '기대보다 반년 이상 늦음', label: '인증 지연', impacts: [{ code: 'G41', bp: -580, reason: '해외 매출이 내후년으로 밀림' }] }
+      ] },
+    { id: 'ca2-2', step: 2, targets: ['G41', 'G44'], signal: { G41: -1 }, clueDir: 1, concept: '장기 계약은 가격 경쟁이 와도 매출을 지켜 주는 방패가 됩니다.',
+      headline: '경쟁사 저가 보행보조기 출시, 케어민 가격 경쟁 우려', facts: '경쟁사가 비슷한 기능의 제품을 30% 싸게 내놓았습니다.', expectation: '시장은 케어민의 마진이 크게 줄 것으로 봅니다.', remaining: '고객이 얼마나 옮겨 가는지', clue: '요양시설 고객 대부분이 케어민과 3년 장기 계약을 맺고 있다는 사업보고서 내용이 다시 주목받았습니다.',
+      outcomes: [
+        { id: 'ca2-hold', weight: 70, beat: true, actual: '기존 고객 이탈 거의 없음', gap: '걱정보다 작은 타격', label: '고객 유지', impacts: [{ code: 'G41', bp: 600, reason: '계약 기간 동안 매출이 지켜짐' }, { code: 'G44', bp: 140, reason: '함께 납품하는 재활 기기도 그대로 유지' }] },
+        { id: 'ca2-lose', weight: 30, beat: false, actual: '신규 고객 대부분이 경쟁사 선택', gap: '걱정이 현실이 됨', label: '신규 고객 이탈', impacts: [{ code: 'G41', bp: -700, reason: '가격을 내려야 해 마진이 줄어듦' }, { code: 'G44', bp: -120, reason: '묶음 납품 물량도 줄어듦' }] }
+      ] },
+    { id: 'ca2-3', step: 3, targets: ['G41'], signal: { G41: 1 }, clueDir: 1, concept: '가이던스는 회사가 스스로 내놓는 기대치라, 시장 기대와의 차이가 주가를 움직입니다.',
+      headline: '케어민, 내년 실적 전망(가이던스) 발표 예정', facts: '국내 본사업 예산이 확정됐습니다.', expectation: '시장 기대치는 내년 매출 30% 성장입니다.', remaining: '회사가 내놓을 성장률', clue: '부품 협력사들이 내년 생산 인력을 40% 늘리는 계획을 공지했습니다.',
+      outcomes: [
+        { id: 'ca2-high', weight: 55, beat: true, actual: '내년 매출 45% 성장 전망', gap: '기대보다 15%p 높음', label: '기대를 넘은 가이던스', impacts: [{ code: 'G41', bp: 580, reason: '본사업 물량이 기대보다 큼' }, { code: 'G45', bp: 180, reason: '돌봄 연계 서비스 가입도 함께 늘어날 전망' }] },
+        { id: 'ca2-meet', weight: 20, beat: true, actual: '내년 매출 30% 성장 전망', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G41', bp: 100, reason: '이미 주가에 반영된 숫자' }] },
+        { id: 'ca2-low', weight: 25, beat: false, actual: '내년 매출 15% 성장 전망', gap: '기대의 절반', label: '기대에 못 미친 가이던스', impacts: [{ code: 'G41', bp: -500, reason: '본사업 단가가 기대보다 낮음' }] }
+      ] }
+  ] },
+  { id: 'metalprice', title: '회수 금속 가격 사건', stages: [
+    { id: 're2-1', step: 1, targets: ['G46'], signal: { G46: 1 }, clueDir: -1, concept: '물량이 늘어도 파는 값이 떨어지면 이익은 늘지 않을 수 있습니다.',
+      headline: '리메탈, 폐배터리 회수 물량 사상 최대', facts: '이번 분기 회수 물량이 지난해보다 2배로 늘었습니다.', expectation: '시장은 이익도 2배가 된다고 봅니다.', remaining: '회수한 금속을 파는 값', clue: '국제 금속 가격이 이번 분기에 25% 떨어졌다는 통계가 나왔습니다.',
+      outcomes: [
+        { id: 're2-double', weight: 35, beat: true, actual: '분기 이익 2배', gap: '기대대로 물량만큼 이익 증가', label: '이익 2배', impacts: [{ code: 'G46', bp: 540, reason: '물량 증가가 그대로 이익이 됨' }, { code: 'G50', bp: 150, reason: '폐배터리 공급처도 함께 주목받음' }] },
+        { id: 're2-flat', weight: 65, beat: false, actual: '분기 이익 제자리', gap: '물량은 2배였지만 이익은 그대로', label: '판매 가격 하락', impacts: [{ code: 'G46', bp: -600, reason: '금속 값이 떨어져 늘어난 물량을 상쇄함' }, { code: 'G50', bp: -150, reason: '폐배터리 매입 단가도 내려갈 전망' }] }
+      ] },
+    { id: 're2-2', step: 2, targets: ['G46', 'G48'], signal: { G46: -1 }, clueDir: 1, concept: '업종 전체에 닥친 악재도 회사마다 받는 충격의 크기는 다릅니다.',
+      headline: '금속 가격 하락에 재활용 업체 실적 우려', facts: '재활용 업종 전체 마진이 줄 것이라는 보고서가 나왔습니다.', expectation: '시장은 리메탈 이익도 크게 줄 것으로 봅니다.', remaining: '값을 미리 정해 둔 계약의 비중', clue: '리메탈이 IR에서 “매출의 70%가 1년 동안 값을 고정한 장기 계약”이라고 밝혔습니다.',
+      outcomes: [
+        { id: 're2-fixed', weight: 70, beat: true, actual: '이익 감소 폭 5%에 그침', gap: '걱정보다 작은 타격', label: '장기 계약으로 방어', impacts: [{ code: 'G46', bp: 600, reason: '값을 고정해 둔 계약이 하락을 막음' }, { code: 'G48', bp: 120, reason: '선별 설비 투자 계획도 그대로 유지' }] },
+        { id: 're2-hit', weight: 30, beat: false, actual: '이익 30% 감소', gap: '걱정이 현실이 됨', label: '이익 급감', impacts: [{ code: 'G46', bp: -700, reason: '계약을 갱신하며 값이 크게 내려감' }, { code: 'G48', bp: -150, reason: '설비 투자를 미룸' }] }
+      ] },
+    { id: 're2-3', step: 3, targets: ['G46'], signal: { G46: 1 }, clueDir: 1, concept: '가동률이 오르면 고정비를 나눠 지는 물량이 늘어 이익이 빠르게 커집니다.',
+      headline: '리메탈, 새 정련로 가동률 공개 예정', facts: '지난달부터 새 정련로를 돌리기 시작했습니다.', expectation: '시장 기대치는 가동률 60%입니다.', remaining: '실제 가동률', clue: '폐배터리 업체 지온테크가 리메탈에 넘기는 물량을 2배로 늘리는 계약을 공시했습니다.',
+      outcomes: [
+        { id: 're2-full', weight: 55, beat: true, actual: '가동률 80%', gap: '기대보다 20%p 높음', label: '기대를 넘은 가동률', impacts: [{ code: 'G46', bp: 600, reason: '고정비를 넘기고 남는 몫이 커짐' }, { code: 'G50', bp: 200, reason: '공급 물량이 2배로 확정됨' }] },
+        { id: 're2-meet', weight: 20, beat: true, actual: '가동률 60%', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G46', bp: 120, reason: '이미 주가에 반영된 숫자' }] },
+        { id: 're2-low', weight: 25, beat: false, actual: '가동률 40%', gap: '기대 60%보다 20%p 낮음', label: '기대에 못 미친 가동률', impacts: [{ code: 'G46', bp: -520, reason: '새 설비의 고정비를 채우지 못함' }] }
+      ] }
+  ] },
+  { id: 'chipsupply', title: '산업칩 공급 사건', stages: [
+    { id: 'chip2-1', step: 1, targets: ['G51'], signal: { G51: 1 }, clueDir: -1, concept: '수주 기대는 혼자 받는지, 여럿이 나눠 받는지에 따라 크기가 달라집니다.',
+      headline: '대형 설비업체 공장 증설, 레브칸 대량 수주 기대', facts: '설비업체가 내년에 공장 3곳을 새로 짓겠다고 발표했습니다.', expectation: '시장은 레브칸이 제어 칩을 전부 공급한다고 봅니다.', remaining: '칩을 공급할 업체 수', clue: '설비업체가 “핵심 부품은 2곳 이상에서 나눠 받는다”는 구매 원칙을 밝혔습니다.',
+      outcomes: [
+        { id: 'chip2-sole', weight: 35, beat: true, actual: '레브칸 단독 수주', gap: '기대대로 전부 공급', label: '단독 수주', impacts: [{ code: 'G51', bp: 560, reason: '증설 물량을 혼자 받음' }, { code: 'G55', bp: 150, reason: '연결 기판 주문도 함께 늘어남' }] },
+        { id: 'chip2-split', weight: 65, beat: false, actual: '2개 업체가 반씩 나눠 수주', gap: '기대한 전량의 절반', label: '나눠 받은 수주', impacts: [{ code: 'G51', bp: -600, reason: '기대의 절반만 매출로 잡힘' }] }
+      ] },
+    { id: 'chip2-2', step: 2, targets: ['G51', 'G53'], signal: { G51: -1 }, clueDir: 1, concept: '공급 차질 뉴스는 회사가 미리 쌓아 둔 물량을 확인하면 크기를 가늠할 수 있습니다.',
+      headline: '레브칸 소재 협력사 공장 화재', facts: '칩 소재를 대는 협력사 공장 한 곳에서 불이 났습니다.', expectation: '시장은 레브칸 생산이 몇 달 멈출 것으로 봅니다.', remaining: '남은 소재로 버틸 수 있는 기간', clue: '레브칸 사업보고서에 “핵심 소재는 4개월치를 미리 쌓아 둔다”고 적혀 있습니다.',
+      outcomes: [
+        { id: 'chip2-stock', weight: 70, beat: true, actual: '쌓아 둔 소재로 생산 계속', gap: '걱정보다 가벼운 영향', label: '생산 차질 없음', impacts: [{ code: 'G51', bp: 600, reason: '생산 중단 걱정이 걷힘' }, { code: 'G53', bp: 140, reason: '포장 공정 일정도 그대로 유지' }] },
+        { id: 'chip2-halt', weight: 30, beat: false, actual: '생산 6주 중단', gap: '걱정이 현실이 됨', label: '생산 중단', impacts: [{ code: 'G51', bp: -700, reason: '납품이 밀려 위약금까지 생길 수 있음' }, { code: 'G53', bp: -180, reason: '포장할 칩이 없어 일감이 줄어듦' }] }
+      ] },
+    { id: 'chip2-3', step: 3, targets: ['G51'], signal: { G51: 1 }, clueDir: 1, concept: '수율이 오르면 같은 원료로 더 많이 팔 수 있어 마진이 커집니다.',
+      headline: '레브칸, 분기 수율 개선 결과 발표 예정', facts: '이번 분기부터 새 생산 방식을 적용했습니다.', expectation: '시장 기대치는 수율 85%입니다.', remaining: '실제 수율', clue: '검사 장비 업체 포르델이 IR에서 “레브칸 라인의 불량 판정이 절반으로 줄었다”고 말했습니다.',
+      outcomes: [
+        { id: 'chip2-high', weight: 55, beat: true, actual: '수율 93%', gap: '기대보다 8%p 높음', label: '기대를 넘은 수율', impacts: [{ code: 'G51', bp: 620, reason: '불량이 줄어 마진이 커짐' }, { code: 'G52', bp: 200, reason: '검사 장비 효과가 확인돼 추가 주문' }] },
+        { id: 'chip2-meet', weight: 20, beat: true, actual: '수율 85%', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G51', bp: 120, reason: '이미 주가에 반영된 숫자' }] },
+        { id: 'chip2-low', weight: 25, beat: false, actual: '수율 76%', gap: '기대 85%보다 9%p 낮음', label: '기대에 못 미친 수율', impacts: [{ code: 'G51', bp: -540, reason: '새 생산 방식이 아직 자리 잡지 못함' }] }
+      ] }
+  ] },
+  { id: 'gamelaunch', title: '협동 게임 흥행 사건', stages: [
+    { id: 'game2-1', step: 1, targets: ['G56'], signal: { G56: 1 }, clueDir: -1, concept: '인기 순위와 매출은 다릅니다. 돈을 내는 이용자가 얼마나 되는지가 중요합니다.',
+      headline: '루베칸 신작, 출시 첫 주 인기 순위 1위', facts: '출시 일주일 만에 내려받기 300만 건을 넘었습니다.', expectation: '시장은 첫 달 매출 200억 원을 기대합니다.', remaining: '돈을 내는 이용자 비율', clue: '이용자 게시판에 “돈을 안 써도 끝까지 즐길 수 있다”는 후기가 많이 올라왔습니다.',
+      outcomes: [
+        { id: 'game2-pay', weight: 35, beat: true, actual: '첫 달 매출 210억 원', gap: '기대보다 조금 많음', label: '흥행이 매출로 이어짐', impacts: [{ code: 'G56', bp: 540, reason: '인기가 그대로 매출이 됨' }, { code: 'G57', bp: 150, reason: '서버 운영 물량이 늘어남' }] },
+        { id: 'game2-free', weight: 65, beat: false, actual: '첫 달 매출 90억 원', gap: '기대 200억 원의 절반 아래', label: '인기만큼 돈을 쓰지 않음', impacts: [{ code: 'G56', bp: -600, reason: '돈을 내는 이용자 비율이 낮음' }] }
+      ] },
+    { id: 'game2-2', step: 2, targets: ['G56', 'G58'], signal: { G56: -1 }, clueDir: 1, concept: '사람이 떠났다는 소식보다, 이미 준비된 일이 얼마나 남았는지가 중요할 수 있습니다.',
+      headline: '루베칸, 신작 핵심 개발자 3명 퇴사', facts: '신작을 만든 팀의 리더급 3명이 회사를 떠났습니다.', expectation: '시장은 업데이트가 멈출까 걱정합니다.', remaining: '다음 업데이트 일정', clue: '회사가 “다음 3개월 업데이트는 이미 완성해 검수 중”이라고 밝혔습니다.',
+      outcomes: [
+        { id: 'game2-ready', weight: 70, beat: true, actual: '업데이트 일정 그대로 진행', gap: '걱정보다 작은 영향', label: '일정 유지', impacts: [{ code: 'G56', bp: 600, reason: '업데이트가 멈출 걱정이 걷힘' }, { code: 'G58', bp: 120, reason: '업데이트 번역·검수 물량이 확인됨' }] },
+        { id: 'game2-stop', weight: 30, beat: false, actual: '업데이트 두 달 연기', gap: '걱정이 현실이 됨', label: '업데이트 연기', impacts: [{ code: 'G56', bp: -700, reason: '이용자가 빠져나갈 수 있음' }, { code: 'G58', bp: -120, reason: '번역·검수 일감이 미뤄짐' }] }
+      ] },
+    { id: 'game2-3', step: 3, targets: ['G56'], signal: { G56: 1 }, clueDir: 1, concept: '서버를 늘렸다는 협력사 공시는 이용자가 늘었다는 선행 지표가 될 수 있습니다.',
+      headline: '루베칸, 신작 첫 분기 매출 공시 예정', facts: '해외 서버를 연 지 두 달이 지났습니다.', expectation: '시장 기대치는 분기 매출 350억 원입니다.', remaining: '실제 분기 매출', clue: '게임 서버 업체 텔루반이 루베칸용 서버를 1.5배로 늘렸다고 공시했습니다.',
+      outcomes: [
+        { id: 'game2-beat', weight: 55, beat: true, actual: '분기 매출 430억 원', gap: '기대보다 80억 원 많음', label: '기대를 넘은 매출', impacts: [{ code: 'G56', bp: 600, reason: '해외 이용자가 기대보다 많음' }, { code: 'G57', bp: 200, reason: '서버 추가 계약' }] },
+        { id: 'game2-meet', weight: 20, beat: true, actual: '분기 매출 350억 원', gap: '기대와 같음', label: '기대에 부합', impacts: [{ code: 'G56', bp: 110, reason: '이미 주가에 반영된 숫자' }] },
+        { id: 'game2-miss', weight: 25, beat: false, actual: '분기 매출 260억 원', gap: '기대보다 90억 원 적음', label: '기대에 못 미친 매출', impacts: [{ code: 'G56', bp: -520, reason: '해외 반응이 국내보다 약함' }] }
+      ] }
   ] }
 ];
 
@@ -674,5 +801,7 @@ export const cardById = new Map(CARDS.map(c => [c.id, c] as const));
     결말과는 관계없이 기사 분위기(signal) 방향으로 움직이고, 장 마감 가격은 지금처럼 결말로 정해집니다. */
 export const SHOCK_STAGES: ReadonlySet<string> = new Set([
   'co-1', 'rumor-1', 'rumor-2b', 'px-1', 'th-1', 'game-1', 'chip-3',   // 급등 쪽
-  're-2', 'ca-2', 'pat-1', 'rc-3', 'sp-2', 'game-2', 'raw-1', 'cr-1'   // 급락 쪽
+  're-2', 'ca-2', 'pat-1', 'rc-3', 'sp-2', 'game-2', 'raw-1', 'cr-1',  // 급락 쪽
+  /* 2026-11 추가 사건에서: 대량 수주 기대(급등), 태양 폭풍·공장 화재·핵심 개발자 퇴사(급락) */
+  'chip2-1', 'sp2-2', 'chip2-2', 'game2-2'
 ]);
