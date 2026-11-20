@@ -234,6 +234,13 @@ await step('시장가 매수: 바로 체결', async () => {
   ok(/매수$/.test((await go.textContent()) ?? ''), '시장가 버튼 문구가 "…매수"가 아님');
   await go.click();
   await page.getByText(/체결 · 매수/).first().waitFor({ timeout: 5_000 });
+  /* 장중 주문 창: 매수 버튼이 스크롤 없이 첫 화면 안에 있어야 합니다(장이 30~90초라서) */
+  {
+    const go = page.locator('.sheet button.go');
+    const top = await page.locator('.sheet').evaluate(el => { el.scrollTop = 0; return true; });
+    const box = await go.boundingBox();
+    ok(top && !!box && box.y + box.height <= page.viewportSize()!.height, `장중 주문 버튼이 첫 화면 밖에 있음(y=${box?.y})`);
+  }
   /* 시장 탭 '내 보유 종목': 오른쪽 큰 숫자는 1주 가격이 아니라 평가금액(수량 × 지금 가격) */
   const mine = page.getByRole('region', { name: '내 보유 종목' });
   await mine.waitFor({ state: 'attached' });
@@ -308,7 +315,15 @@ await step('발표 일정: 결과 공개 뒤 다음 라운드 예정 종목만 �
 });
 
 await step('라운드 결과: 등락 막대와 봉 재생', async () => {
-  await page.locator('.replay').first().waitFor({ timeout: 40_000 });
+  /* 결과 화면은 핵심(기대 vs 실제, 배운 점)만 펼쳐 두고, 막대·봉 재생은 '왜?'를 눌러 봅니다 */
+  const why = page.locator('details.more summary', { hasText: '는 왜?' }).first();
+  await why.waitFor({ timeout: 40_000 });
+  ok(await page.locator('.vs').first().isVisible() && await page.locator('.lesson-box').first().isVisible(), '기대 vs 실제·배운 점이 펼쳐져 있지 않음');
+  ok(!(await page.locator('.replay').first().isVisible()), '봉 재생이 처음부터 펼쳐져 있음');
+  const before = await page.evaluate(() => document.documentElement.scrollHeight);
+  ok(before < 2600, `결과 화면이 너무 김(${before}px)`);
+  for (const s of await page.locator('details.more summary', { hasText: '는 왜?' }).all()) await s.click();
+  await page.locator('.replay').first().waitFor();
   const bars = await page.locator('.bar-row .bar i').evaluateAll(els => els.map(e => {
     const r = e.getBoundingClientRect(), pr = e.parentElement!.getBoundingClientRect();
     return { pos: getComputedStyle(e).position, inside: r.left >= pr.left - 1 && r.right <= pr.right + 1, w: r.width };
@@ -319,6 +334,8 @@ await step('라운드 결과: 등락 막대와 봉 재생', async () => {
   ok(await page.locator('.rank-moves li').count() === 4, '순위 변화 4줄이 아님');
   ok(await page.locator('.sectors .avatar svg, .board .avatar svg').count() >= 1, '기업 로고 없음');
   ok(await page.getByText(/1초 시세를 빠르게 다시/).count(), '실제 시세 재생 안내 없음');
+  const all = page.locator('details.more summary', { hasText: /종목별 결과 전체/ });
+  if (await all.count()) await all.click();
   await page.locator('main .board button.row').filter({ hasText: tutorialStock }).first().click();
   const resultStock = page.getByRole('dialog', { name: tutorialStock });
   await resultStock.locator('.live-chart .chart-breaking').waitFor();
@@ -371,6 +388,7 @@ await step('용어 설명 창 열고 닫기', async () => {
   ok(await sheet.count() === 1, '조금 끌었는데 용어 창이 닫힘');
   await drag(220);
   await sheet.waitFor({ state: 'detached' });
+  ok(await page.evaluate(() => (window.getSelection()?.toString() ?? '').trim() === ''), '창을 끌었더니 글자가 선택됨');
   /* 휴대폰 뒤로가기와 PC Esc는 창만 닫고 화면은 그대로 둡니다 */
   const here = page.url();
   await page.locator('button.gl-term').first().click();

@@ -204,11 +204,18 @@ export function NewsLog({ view }: { view: RoomView }) {
   return <div className="panel"><h2 className="h">뉴스</h2>{view.news.slice().reverse().map(r => <div key={r.round}><p className="round-tag">라운드 {r.round}</p>{r.cards.map(c => <NewsBody key={c.card.stageId} card={c.card} result={c.result} />)}</div>)}</div>;
 }
 
+/** 결과 화면에 바로 보여 줄 '많이 움직인 종목' 수. 나머지는 펼쳐서 봅니다 */
+const MOVERS_TOP = 3;
 export function Recap({ view, onOpen, send }: { view: RoomView; onOpen: (c: StockCode) => void; send?: (m: ClientMsg) => void }) {
   const r = view.lastResult;
   const now = view.news[view.news.length - 1];
   const movers = view.stocks.slice().sort((a, b) => Math.abs(b.lastChangeBp ?? 0) - Math.abs(a.lastChangeBp ?? 0));
   const delta = useCountUp(r?.delta ?? 0, 900);
+  const moverRow = (s: StockView) => <button key={s.code} className="row" onClick={() => onOpen(s.code)}>
+    <StockAvatar code={s.code} name={s.name} />
+    <span className="row-main"><b>{s.name}{s.history[s.history.length - 1]?.limit && <span className={`stamp ${s.history[s.history.length - 1]!.limit === 'upper' ? 'up' : 'down'}`}>{s.history[s.history.length - 1]!.limit === 'upper' ? '상한가' : '하한가'}</span>}</b><small>{s.history[s.history.length - 1]?.summary}</small></span>
+    <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.lastChangeBp ?? 0)}>{s.lastChangeBp === null ? '—' : `${arrow(s.lastChangeBp)} ${pctBp(s.lastChangeBp)}`}</small></span>
+  </button>;
   /* 폭죽: 내가 가진 종목이 상한가를 쳤거나, 이번 라운드에 1위로 올라섰을 때 */
   const held = new Set(view.portfolio?.holdings.map(h => h.code) ?? []);
   const fire = view.stocks.some(s => held.has(s.code) && s.history[s.history.length - 1]?.round === view.round && s.history[s.history.length - 1]?.limit === 'upper')
@@ -225,13 +232,12 @@ export function Recap({ view, onOpen, send }: { view: RoomView; onOpen: (c: Stoc
       return <RecapNews key={c.card.stageId} card={c.card} result={c.result} stock={st} shock={shockInfo(view, c.card, st)} />; })}
     {view.card?.feedback && <div className="card-box"><h3>{view.card.title}</h3><p><Rich text={view.card.feedback} /></p><p className="hint">학습 개념: <Rich text={view.card.concept} /></p></div>}
     {view.leaderboard.length > 1 && <RankMoves view={view} />}
-    <div className="panel flush">
-      <div className="list-head"><span>종목별 결과 · 눌러서 이유 보기</span></div>
-      <div className="board">{movers.map(s => <button key={s.code} className="row" onClick={() => onOpen(s.code)}>
-        <StockAvatar code={s.code} name={s.name} />
-        <span className="row-main"><b>{s.name}{s.history[s.history.length - 1]?.limit && <span className={`stamp ${s.history[s.history.length - 1]!.limit === 'upper' ? 'up' : 'down'}`}>{s.history[s.history.length - 1]!.limit === 'upper' ? '상한가' : '하한가'}</span>}</b><small>{s.history[s.history.length - 1]?.summary}</small></span>
-        <span className="row-price"><b className="num">{s.price.toLocaleString('ko-KR')}원</b><small className={dir(s.lastChangeBp ?? 0)}>{s.lastChangeBp === null ? '—' : `${arrow(s.lastChangeBp)} ${pctBp(s.lastChangeBp)}`}</small></span>
-      </button>)}</div>
+    <div className="panel flush" aria-label="종목별 결과">
+      <div className="list-head"><span>많이 움직인 종목 · 눌러서 이유 보기</span></div>
+      <div className="board">{movers.slice(0, MOVERS_TOP).map(moverRow)}</div>
+      {movers.length > MOVERS_TOP && <details className="more pad"><summary>종목별 결과 전체 {movers.length}개 보기</summary>
+        <div className="board">{movers.slice(MOVERS_TOP).map(moverRow)}</div>
+      </details>}
     </div>
     <SchedulePanel view={view} />
     <div className="panel"><button className="ghost" onClick={() => navigate(lessonLink(view))}>이 변동을 읽는 법 (차트 연습실)</button></div>
@@ -300,6 +306,15 @@ export function RecapNews({ card, result, stock, shock }: { card: NewsCard; resu
     { label: '종목 변동', bp: b.stockBp }
   ] : [];
   const scale = Math.max(100, ...parts.map(p => Math.abs(p.bp)));
+  const bars = b && <div className="bars" aria-label={`${stock.name} 등락 ${pctBp(b.changeBp)}의 구성`}>
+    <p className="hint">{stock.name} {pctBp(b.changeBp)}는 이렇게 만들어졌어요</p>
+    {parts.map(p => {
+      const w = Math.abs(p.bp) / scale * 48;
+      return <div key={p.label} className="bar-row"><span>{p.label}</span>
+        <span className="bar"><i style={{ left: `${p.bp >= 0 ? 50 : 50 - w}%`, width: `${Math.max(w, 1)}%`, background: p.bp >= 0 ? 'var(--up)' : 'var(--down)', transformOrigin: p.bp >= 0 ? 'left' : 'right' }} /></span>
+        <span className={dir(p.bp)}>{bpText(p.bp)}</span></div>;
+    })}
+  </div>;
   return (
     <div className="panel">
       <p className="news-meta"><span className="chip soft">{card.arcTitle}</span></p>
@@ -309,16 +324,6 @@ export function RecapNews({ card, result, stock, shock }: { card: NewsCard; resu
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--chev)" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
         <div className={mainBp >= 0 ? 'hit' : 'miss'}><small>실제 결과</small><b className={dir(mainBp)}><Rich text={result.actual} /></b></div>
       </div>
-      {b && <div className="bars" aria-label={`${stock.name} 등락 ${pctBp(b.changeBp)}의 구성`}>
-        <p className="hint">{stock.name} {pctBp(b.changeBp)}는 이렇게 만들어졌어요</p>
-        {parts.map(p => {
-          const w = Math.abs(p.bp) / scale * 48;
-          return <div key={p.label} className="bar-row"><span>{p.label}</span>
-            <span className="bar"><i style={{ left: `${p.bp >= 0 ? 50 : 50 - w}%`, width: `${Math.max(w, 1)}%`, background: p.bp >= 0 ? 'var(--up)' : 'var(--down)', transformOrigin: p.bp >= 0 ? 'left' : 'right' }} /></span>
-            <span className={dir(p.bp)}>{bpText(p.bp)}</span></div>;
-        })}
-      </div>}
-      {b && <CandleReplay b={b} name={stock.name} ticks={stock.ticks} />}
       {shock && <p className="shock-line">
         <b>⚡ 대형 속보 복기</b> 속보 직후 {won(shock.after)} → 종가 {won(shock.close)} <b className={dir(bpOf(shock.after, shock.close))}>{pctBp(bpOf(shock.after, shock.close))}</b>
         {shock.myAvg !== null
@@ -326,7 +331,10 @@ export function RecapNews({ card, result, stock, shock }: { card: NewsCard; resu
           : ' · 속보 뒤에 따라 사지 않았어요'}
       </p>}
       <p className="lesson-box"><b>배운 점</b> <Rich text={result.concept} /></p>
-      <details className="more"><summary>기업별 영향 자세히</summary>
+      {/* 결과 시간은 15~30초라 핵심(기대 vs 실제, 배운 점)만 펼치고, 왜 이만큼 움직였는지는 눌러서 봅니다 */}
+      <details className="more"><summary>{b ? `${stock.name} ${pctBp(b.changeBp)}는 왜? · 막대·봉 재생·기업별 영향` : '기업별 영향 자세히'}</summary>
+        {bars}
+        {b && <CandleReplay b={b} name={stock.name} ticks={stock.ticks} />}
         <ul className="impact">{result.impacts.map((i, k) => <li key={k}><span className={dir(i.bp)}>{i.code} {arrow(i.bp)} {pctBp(i.bp)}</span> <Rich text={i.reason} /></li>)}</ul>
       </details>
     </div>
