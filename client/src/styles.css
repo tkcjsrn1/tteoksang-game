@@ -255,7 +255,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 /* 손잡이: 보이는 막대는 40×4px이지만 손가락으로 잡기 쉽게 시트 폭 전체·24px 높이를 끌 수 있습니다(위아래 음수 여백으로 간격은 예전과 같음) */
 .sheet-grip { align-self: stretch; flex: none; height: 24px; margin: -10px 0 -10px; display: flex; align-items: center; justify-content: center; touch-action: none; cursor: grab; }
 .sheet-grip::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: #D1D6DB; }
-.sheet-head { touch-action: none; }
+/* 손잡이·제목 줄을 마우스로 끌 때 글자가 파랗게 선택되지 않게 */
+.sheet-head { touch-action: none; user-select: none; -webkit-user-select: none; }
+.sheet-grip { user-select: none; -webkit-user-select: none; }
 .sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .sheet-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
 .bigpx { font-size: 26px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
@@ -736,6 +738,10 @@ h1.d-phase { margin: 0; font: inherit; }
 .hold-value small.up { color: var(--up); }
 .hold-value small.down { color: var(--down); }
 
+/* 장중 주문 창: 버튼 바로 위에 낼 돈(받을 돈)을 크게 한 줄로. 자세한 비용은 버튼 아래 */
+.order-total { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 0; font-size: 15px; }
+.order-total b { font-size: 18px; font-weight: 800; }
+.sheet-sub { margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
 /* 결과 화면: 종목별 결과 전체 보기(가장자리 없는 판 안의 펼치기) */
 .more.pad { padding: 4px 20px 12px; }
 .panel > details.more > summary { font-weight: 600; color: var(--fg-2); }
